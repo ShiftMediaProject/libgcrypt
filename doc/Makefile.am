@@ -45,16 +45,16 @@ yat2m: yat2m.c
 	$(CC_FOR_BUILD) -o $@ $(srcdir)/yat2m.c
 
 .fig.png:
-	fig2dev -L png `test -f '$<' || echo '$(srcdir)/'`$< $@
+	$(FIG2DEV) -L png `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
 
 .fig.jpg:
-	fig2dev -L jpg `test -f '$<' || echo '$(srcdir)/'`$< $@
+	$(FIG2DEV) -L jpg `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
 
 .fig.eps:
-	fig2dev -L eps `test -f '$<' || echo '$(srcdir)/'`$< $@
+	$(FIG2DEV) -L eps `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
 
 .fig.pdf:
-	fig2dev -L pdf `test -f '$<' || echo '$(srcdir)/'`$< $@
+	$(FIG2DEV) -L pdf `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
 
 yat2m-stamp: $(myman_sources)
 	@rm -f yat2m-stamp.tmp

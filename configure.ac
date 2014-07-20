@@ -1357,6 +1357,11 @@ fi
 AC_SUBST(DL_LIBS)
 
 #
+# Find fig2dev
+#
+AC_PATH_PROG([FIG2DEV], [fig2dev], [false])
+
+#
 # Check whether we need to link with a pthreads library.
 #
 if test "x$LIBTHREAD" != x; then
