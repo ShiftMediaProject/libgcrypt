@@ -97,7 +97,7 @@ MA 02111-1307, USA. */
 #ifdef __riscos__
 #pragma continue_after_hash_error
 #else /* !__riscos__ */
-#if defined (__GNUC__) && !defined (NO_ASM)
+#if ( defined (__GNUC__) || defined(__INTEL_COMPILER) ) && !defined (NO_ASM)
 
 /* We sometimes need to clobber "cc" with gcc2, but that would not be
    understood by gcc1.	Use cpp to avoid major code duplication.  */

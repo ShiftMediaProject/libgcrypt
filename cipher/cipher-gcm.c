@@ -572,7 +572,11 @@ ghash (gcry_cipher_hd_t c, byte *result, const byte *buf,
 #ifdef GCM_USE_INTEL_PCLMUL
   else if (c->u_mode.gcm.use_intel_pclmul)
     {
+#ifdef __INTEL_COMPILER
+      static const __declspec( align( 16 ) ) unsigned char be_mask[16] =
+#else
       static const unsigned char be_mask[16] __attribute__ ((aligned (16))) =
+#endif
         { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
 
       /* Preload hash and H1. */

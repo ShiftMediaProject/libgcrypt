@@ -1269,7 +1269,7 @@ static void
 stribog_final (void *context)
 {
   STRIBOG_CONTEXT *hd = context;
-  u64 Z[8] = {};
+  u64 Z[8] = {0};
   int i;
 
   _gcry_md_block_write (context, NULL, 0); /* flush */ ;

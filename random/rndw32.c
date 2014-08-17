@@ -829,10 +829,10 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
      and milliseconds since Windows was started.  */
 
   {
-    byte buffer[20*sizeof(ulong)], *bufptr;
+    byte buffer[20*sizeof(intptr_t)], *bufptr;
 
     bufptr = buffer;
-#define ADD(f)  do { ulong along = (ulong)(f);                  \
+#define ADD(f)  do { intptr_t along = (intptr_t)(f);            \
                      memcpy (bufptr, &along, sizeof (along) );  \
                      bufptr += sizeof (along);                  \
                    } while (0)
@@ -888,7 +888,7 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
   {
     HANDLE handle;
     FILETIME creationTime, exitTime, kernelTime, userTime;
-    DWORD minimumWorkingSetSize, maximumWorkingSetSize;
+    ULONG_PTR minimumWorkingSetSize, maximumWorkingSetSize;
 
     handle = GetCurrentThread ();
     GetThreadTimes (handle, &creationTime, &exitTime,

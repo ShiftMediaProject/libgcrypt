@@ -120,7 +120,7 @@
 #include "cipher.h"
 #include "bufhelp.h"
 
-#if defined(__GNUC__) && defined(__GNU_LIBRARY__)
+#if ( defined(__GNUC__) && defined(__GNU_LIBRARY__) ) || defined(_MSC_VER)
 #define working_memcmp memcmp
 #else
 /*

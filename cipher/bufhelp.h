@@ -48,7 +48,7 @@
 static inline void
 buf_cpy(void *_dst, const void *_src, size_t len)
 {
-#if __GNUC__ >= 4 && (defined(__x86_64__) || defined(__i386__))
+#if ( __GNUC__ >= 4 && (defined(__x86_64__) || defined(__i386__)) ) || defined(_MSC_VER)
   /* For AMD64 and i386, memcpy is faster.  */
   memcpy(_dst, _src, len);
 #else

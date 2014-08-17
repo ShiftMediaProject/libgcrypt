@@ -42,7 +42,7 @@ static unsigned int
 do_cbc_mac (gcry_cipher_hd_t c, const unsigned char *inbuf, size_t inlen,
             int do_padding)
 {
-  const unsigned int blocksize = 16;
+#define blocksize 16
   gcry_cipher_encrypt_t enc_fn = c->spec->encrypt;
   unsigned char tmp[blocksize];
   unsigned int burn = 0;
