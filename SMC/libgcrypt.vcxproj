@@ -1,0 +1,1265 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugDLLStaticDeps|Win32">
+      <Configuration>DebugDLLStaticDeps</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDLLStaticDeps|x64">
+      <Configuration>DebugDLLStaticDeps</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDLL|Win32">
+      <Configuration>DebugDLL</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDLL|x64">
+      <Configuration>DebugDLL</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDLLStaticDeps|Win32">
+      <Configuration>ReleaseDLLStaticDeps</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDLLStaticDeps|x64">
+      <Configuration>ReleaseDLLStaticDeps</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDLL|Win32">
+      <Configuration>ReleaseDLL</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDLL|x64">
+      <Configuration>ReleaseDLL</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseLTO|Win32">
+      <Configuration>ReleaseLTO</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseLTO|x64">
+      <Configuration>ReleaseLTO</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\cipher\bithelp.h" />
+    <ClInclude Include="..\cipher\bufhelp.h" />
+    <ClInclude Include="..\cipher\camellia.h" />
+    <ClInclude Include="..\cipher\cipher-internal.h" />
+    <ClInclude Include="..\cipher\cipher-selftest.h" />
+    <ClInclude Include="..\cipher\ecc-common.h" />
+    <ClInclude Include="..\cipher\gost.h" />
+    <ClInclude Include="..\cipher\hash-common.h" />
+    <ClInclude Include="..\cipher\kdf-internal.h" />
+    <ClInclude Include="..\cipher\mac-internal.h" />
+    <ClInclude Include="..\cipher\pubkey-internal.h" />
+    <ClInclude Include="..\cipher\rijndael-tables.h" />
+    <ClInclude Include="..\cipher\rmd.h" />
+    <ClInclude Include="..\compat\libcompat.h" />
+    <ClInclude Include="..\mpi\ec-internal.h" />
+    <ClInclude Include="..\mpi\generic\mpi-asm-defs.h" />
+    <ClInclude Include="..\mpi\longlong.h" />
+    <ClInclude Include="..\mpi\mpi-inline.h" />
+    <ClInclude Include="..\mpi\mpi-internal.h" />
+    <ClInclude Include="..\random\rand-internal.h" />
+    <ClInclude Include="..\random\random.h" />
+    <ClInclude Include="..\src\ath.h" />
+    <ClInclude Include="..\src\cipher-proto.h" />
+    <ClInclude Include="..\src\cipher.h" />
+    <ClInclude Include="..\src\context.h" />
+    <ClInclude Include="..\src\ec-context.h" />
+    <ClInclude Include="..\src\g10lib.h" />
+    <ClInclude Include="..\src\gcrypt-int.h" />
+    <ClInclude Include="..\src\hmac256.h" />
+    <ClInclude Include="..\src\hwf-common.h" />
+    <ClInclude Include="..\src\mpi.h" />
+    <ClInclude Include="..\src\secmem.h" />
+    <ClInclude Include="..\src\stdmem.h" />
+    <ClInclude Include="..\src\types.h" />
+    <ClInclude Include="..\src\visibility.h" />
+    <ClInclude Include="config.h" />
+    <ClInclude Include="gcrypt.h" />
+    <ClInclude Include="mpi\asm-syntax.h" />
+    <ClInclude Include="mpi\mod-source-info.h" />
+    <ClInclude Include="mpi\mpi-asm-defs.h" />
+    <ClInclude Include="mpi\sysdep.h" />
+    <ClInclude Include="version.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\cipher\arcfour.c" />
+    <ClCompile Include="..\cipher\blowfish.c" />
+    <ClCompile Include="..\cipher\camellia-glue.c" />
+    <ClCompile Include="..\cipher\camellia.c" />
+    <ClCompile Include="..\cipher\cast5.c" />
+    <ClCompile Include="..\cipher\cipher-aeswrap.c" />
+    <ClCompile Include="..\cipher\cipher-cbc.c" />
+    <ClCompile Include="..\cipher\cipher-ccm.c" />
+    <ClCompile Include="..\cipher\cipher-cfb.c" />
+    <ClCompile Include="..\cipher\cipher-cmac.c" />
+    <ClCompile Include="..\cipher\cipher-ctr.c" />
+    <ClCompile Include="..\cipher\cipher-gcm.c" />
+    <ClCompile Include="..\cipher\cipher-ofb.c" />
+    <ClCompile Include="..\cipher\cipher-selftest.c" />
+    <ClCompile Include="..\cipher\cipher.c" />
+    <ClCompile Include="..\cipher\crc.c" />
+    <ClCompile Include="..\cipher\des.c" />
+    <ClCompile Include="..\cipher\dsa-common.c" />
+    <ClCompile Include="..\cipher\dsa.c" />
+    <ClCompile Include="..\cipher\ecc-curves.c" />
+    <ClCompile Include="..\cipher\ecc-ecdsa.c" />
+    <ClCompile Include="..\cipher\ecc-eddsa.c" />
+    <ClCompile Include="..\cipher\ecc-gost.c" />
+    <ClCompile Include="..\cipher\ecc-misc.c" />
+    <ClCompile Include="..\cipher\ecc.c" />
+    <ClCompile Include="..\cipher\elgamal.c" />
+    <ClCompile Include="..\cipher\gost28147.c" />
+    <ClCompile Include="..\cipher\gostr3411-94.c" />
+    <ClCompile Include="..\cipher\hash-common.c" />
+    <ClCompile Include="..\cipher\hmac-tests.c" />
+    <ClCompile Include="..\cipher\idea.c" />
+    <ClCompile Include="..\cipher\kdf.c" />
+    <ClCompile Include="..\cipher\mac-cmac.c" />
+    <ClCompile Include="..\cipher\mac-gmac.c" />
+    <ClCompile Include="..\cipher\mac-hmac.c" />
+    <ClCompile Include="..\cipher\mac.c" />
+    <ClCompile Include="..\cipher\md.c" />
+    <ClCompile Include="..\cipher\md4.c" />
+    <ClCompile Include="..\cipher\md5.c" />
+    <ClCompile Include="..\cipher\primegen.c" />
+    <ClCompile Include="..\cipher\pubkey-util.c" />
+    <ClCompile Include="..\cipher\pubkey.c" />
+    <ClCompile Include="..\cipher\rfc2268.c" />
+    <ClCompile Include="..\cipher\rijndael.c" />
+    <ClCompile Include="..\cipher\rmd160.c" />
+    <ClCompile Include="..\cipher\rsa-common.c" />
+    <ClCompile Include="..\cipher\rsa.c" />
+    <ClCompile Include="..\cipher\salsa20.c" />
+    <ClCompile Include="..\cipher\scrypt.c" />
+    <ClCompile Include="..\cipher\seed.c" />
+    <ClCompile Include="..\cipher\serpent.c" />
+    <ClCompile Include="..\cipher\sha1.c" />
+    <ClCompile Include="..\cipher\sha256.c" />
+    <ClCompile Include="..\cipher\sha512.c" />
+    <ClCompile Include="..\cipher\stribog.c" />
+    <ClCompile Include="..\cipher\tiger.c" />
+    <ClCompile Include="..\cipher\twofish.c" />
+    <ClCompile Include="..\cipher\whirlpool.c" />
+    <ClCompile Include="..\compat\compat.c" />
+    <ClCompile Include="..\mpi\ec-ed25519.c" />
+    <ClCompile Include="..\mpi\ec.c" />
+    <ClCompile Include="..\mpi\generic\mpih-add1.c" />
+    <ClCompile Include="..\mpi\generic\mpih-lshift.c" />
+    <ClCompile Include="..\mpi\generic\mpih-mul1.c" />
+    <ClCompile Include="..\mpi\generic\mpih-mul2.c" />
+    <ClCompile Include="..\mpi\generic\mpih-mul3.c" />
+    <ClCompile Include="..\mpi\generic\mpih-rshift.c" />
+    <ClCompile Include="..\mpi\generic\mpih-sub1.c" />
+    <ClCompile Include="..\mpi\mpi-add.c" />
+    <ClCompile Include="..\mpi\mpi-bit.c" />
+    <ClCompile Include="..\mpi\mpi-cmp.c" />
+    <ClCompile Include="..\mpi\mpi-div.c" />
+    <ClCompile Include="..\mpi\mpi-gcd.c" />
+    <ClCompile Include="..\mpi\mpi-inline.c" />
+    <ClCompile Include="..\mpi\mpi-inv.c" />
+    <ClCompile Include="..\mpi\mpi-mod.c" />
+    <ClCompile Include="..\mpi\mpi-mpow.c" />
+    <ClCompile Include="..\mpi\mpi-mul.c" />
+    <ClCompile Include="..\mpi\mpi-pow.c" />
+    <ClCompile Include="..\mpi\mpi-scan.c" />
+    <ClCompile Include="..\mpi\mpicoder.c" />
+    <ClCompile Include="..\mpi\mpih-div.c" />
+    <ClCompile Include="..\mpi\mpih-mul.c" />
+    <ClCompile Include="..\mpi\mpiutil.c" />
+    <ClCompile Include="..\random\random-csprng.c" />
+    <ClCompile Include="..\random\random-fips.c" />
+    <ClCompile Include="..\random\random-system.c" />
+    <ClCompile Include="..\random\random.c" />
+    <ClCompile Include="..\random\rndhw.c" />
+    <ClCompile Include="..\random\rndw32.c" />
+    <ClCompile Include="..\src\ath.c" />
+    <ClCompile Include="..\src\context.c" />
+    <ClCompile Include="..\src\fips.c" />
+    <ClCompile Include="..\src\global.c" />
+    <ClCompile Include="..\src\hmac256.c" />
+    <ClCompile Include="..\src\hwf-x86.c" />
+    <ClCompile Include="..\src\hwfeatures.c" />
+    <ClCompile Include="..\src\misc.c" />
+    <ClCompile Include="..\src\missing-string.c" />
+    <ClCompile Include="..\src\secmem.c" />
+    <ClCompile Include="..\src\sexp.c" />
+    <ClCompile Include="..\src\stdmem.c" />
+    <ClCompile Include="..\src\visibility.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="versioninfo.rc">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="libgcrypt.def" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{5D7A23EF-09DE-4C75-8ED1-F783BAACFC7E}</ProjectGuid>
+    <RootNamespace>libgcrypt</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcryptd</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|Win32'">
+    <OutDir>..\..\..\msvc32\</OutDir>
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|x64'">
+    <IntDir>$(SolutionDir)\obj\$(Configuration)\$(Platform)\$(ProjectName)\</IntDir>
+    <TargetName>libgcrypt</TargetName>
+    <OutDir>..\..\..\msvc64\</OutDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX86</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLL|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDLLStaticDeps|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+      <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX86</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+      <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX86</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+      <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLTO|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+      <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)\lib\$(TargetName)$(TargetExt)</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Lib>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLL|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDLLStaticDeps|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <OmitFramePointers>true</OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <PreprocessorDefinitions>HAVE_CONFIG_H;inline=__inline;snprintf=_snprintf;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <OutputFile>$(OutDir)\bin\$(TargetName)$(TargetExt)</OutputFile>
+      <ProgramDatabaseFile>$(OutDir)\bin\$(TargetName).pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
+      <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
+      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutDir)\include
+copy .\gcrypt.h $(OutDir)\include\
+mkdir $(OutDir)\licenses
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>if exist ..\config.h (
+del ..\config.h
+)
+if exist ..\src\gcrypt.h (
+del ..\src\gcrypt.h
+)
+if exist ..\mpi\asm-syntax.h (
+del ..\mpi\asm-syntax.h
+)
+if exist ..\mpi\mod-source-info.h (
+del ..\mpi\mod-source-info.h
+)
+if exist ..\mpi\mpi-asm-defs.h (
+del ..\mpi\mpi-asm-defs.h
+)
+if exist ..\mpi\sysdep.h (
+del ..\mpi\sysdep.h
+)
+if exist $(OutDir)\include\gcrypt.h (
+del $(OutDir)\include\gcrypt.h
+)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>
