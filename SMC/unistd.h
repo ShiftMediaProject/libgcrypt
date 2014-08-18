@@ -43,16 +43,6 @@ typedef unsigned short mode_t;
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 
-#ifndef S_ISREG
-#define S_ISREG(m)	(((m)&S_IFREG)==S_IFREG)
-#endif
-#ifndef S_IRUSR
-#define S_IRUSR		0x0100
-#endif
-#ifndef S_IWUSR
-#define S_IWUSR		0x0080
-#endif
-
 #endif
 
 #endif
