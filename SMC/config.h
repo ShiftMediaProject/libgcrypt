@@ -174,7 +174,7 @@
 /* #undef HAVE_GETRUSAGE */
 
 /* Define to 1 if you have the `gettimeofday' function. */
-/* #undef HAVE_GETTIMEOFDAY */
+#define HAVE_GETTIMEOFDAY 1
 
 /* Defined if underlying assembler is compatible with Intel syntax assembly
    implementations */
