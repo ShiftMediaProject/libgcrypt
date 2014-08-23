@@ -14,8 +14,8 @@
 
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,6,1,3423
- PRODUCTVERSION 1,6,1,3423
+ FILEVERSION 1,6,2,3616
+ PRODUCTVERSION 1,6,2,3616
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x21L
@@ -40,7 +40,7 @@ BEGIN
             VALUE "OriginalFilename", "libgcrypt.dll\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "libgcrypt\0"
-            VALUE "ProductVersion", "1.6.1\0"
+            VALUE "ProductVersion", "1.6.2\0"
             VALUE "SpecialBuild", "2014-07-20T03:53+0000\0"
         END
     END
