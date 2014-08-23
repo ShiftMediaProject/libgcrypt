@@ -30,7 +30,7 @@ min_automake_version="1.10"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [6])
-m4_define(mym4_version_micro, [1])
+m4_define(mym4_version_micro, [2])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=20
 LIBGCRYPT_LT_AGE=0
-LIBGCRYPT_LT_REVISION=1
+LIBGCRYPT_LT_REVISION=2
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -440,7 +440,7 @@ AC_MSG_RESULT([$enabled_digests])
 
 # Implementation of the --enable-kdfs switch.
 AC_ARG_ENABLE(kdfs,
-      AC_HELP_STRING([--enable-kfds=kdfs],
+      AC_HELP_STRING([--enable-kdfs=kdfs],
 		     [select the KDFs to include]),
       [enabled_kdfs=`echo $enableval | tr ',:' '  ' | tr '[A-Z]' '[a-z]'`],
       [enabled_kdfs=""])
@@ -1273,8 +1273,10 @@ AC_CACHE_CHECK([whether compiler is configured for ARMv6 or newer architecture],
        [if test "$mpi_cpu_arch" != "arm" ; then
           gcry_cv_cc_arm_arch_is_v6="n/a"
         else
-          AC_EGREP_CPP(yes,
-          [#if defined(__arm__) && \
+          gcry_cv_cc_arm_arch_is_v6=no
+          AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[
+           #if defined(__arm__) && \
              ((defined(__ARM_ARCH) && __ARM_ARCH >= 6) \
              || defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) \
              || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) \
@@ -1282,9 +1284,13 @@ AC_CACHE_CHECK([whether compiler is configured for ARMv6 or newer architecture],
              || defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) \
              || defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) \
              || defined(__ARM_ARCH_7EM__))
-            yes
+             /* empty */
+           #else
+             /* fail compile if not ARMv6. */
+             not_armv6 not_armv6 = (not_armv6)not_armv6;
            #endif
-          ], gcry_cv_cc_arm_arch_is_v6=yes, gcry_cv_cc_arm_arch_is_v6=no)
+          ]])],
+          [gcry_cv_cc_arm_arch_is_v6=yes])
         fi])
 if test "$gcry_cv_cc_arm_arch_is_v6" = "yes" ; then
    AC_DEFINE(HAVE_ARM_ARCH_V6,1,
