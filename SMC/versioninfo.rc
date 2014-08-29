@@ -1,4 +1,4 @@
-/* versioninfo.rc.in - for libgcrypt
+/* versioninfo.rc - for libgcrypt
  *    Copyright (C) 2005, 2006 g10 Code GmbH
  *
  * This file is free software; as a special exception the author gives
@@ -13,9 +13,13 @@
 /* This file is processed by configure to create versioninfo.rc */
 
 
+
+
+
+
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,6,2,3616
- PRODUCTVERSION 1,6,2,3616
+ FILEVERSION 1,6,2,43379
+ PRODUCTVERSION 1,6,2,43379
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x21L
@@ -33,7 +37,7 @@ BEGIN
             VALUE "Comments", "Provided under the terms of the GNU Lesser General Public License (LGPLv2.1+).\0"
             VALUE "CompanyName", "g10 Code GmbH\0"
             VALUE "FileDescription", "Libgcrypt - The GNU Crypto Library\0"
-            VALUE "FileVersion", "20.0.1.0d5f149\0"
+            VALUE "FileVersion", "20.0.2.a973a24\0"
             VALUE "InternalName", "libgcrypt\0"
             VALUE "LegalCopyright", "Copyright © 2012 Free Software Foundation, Inc.\0"
             VALUE "LegalTrademarks", "\0"
@@ -41,7 +45,7 @@ BEGIN
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "libgcrypt\0"
             VALUE "ProductVersion", "1.6.2\0"
-            VALUE "SpecialBuild", "2014-07-20T03:53+0000\0"
+            VALUE "SpecialBuild", "2014-08-29T15:35+0000\0"
         END
     END
 END

@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  *
- * File: @configure_input@
+ * File: gcrypt.h
  */
 
 #ifndef _GCRYPT_H
@@ -44,6 +44,7 @@
 #else
 # include <sys/socket.h>
 # include <sys/time.h>
+
 #endif /*!_WIN32*/
 
 typedef int gcry_socklen_t;
@@ -101,7 +102,7 @@ extern "C" {
 
 #define _GCRY_GCC_ATTR_PRINTF(f,a)  __attribute__ ((format (printf,f,a)))
 
-#if _GCRT_GCC_VERSION >= 40000
+#if _GCRY_GCC_VERSION >= 40000
 #define _GCRY_GCC_ATTR_SENTINEL(a) __attribute__ ((sentinel(a)))
 #endif
 
@@ -1676,7 +1677,7 @@ int gcry_is_secure (const void *a) _GCRY_GCC_ATTR_PURE;
 #endif
 #endif /* _GCRYPT_H */
 /*
-@emacs_local_vars_begin@
-@emacs_local_vars_read_only@
-@emacs_local_vars_end@
+
+
+
 */

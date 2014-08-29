@@ -8,12 +8,6 @@
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
 
-/* GIT commit id revision used to build this package */
-#define BUILD_REVISION "0d5f149"
-
-/* The time this package was configured for a build */
-#define BUILD_TIMESTAMP __TIMESTAMP__
-
 /* configure did not test for endianess */
 /* #undef DISABLED_ENDIAN_CHECK */
 
