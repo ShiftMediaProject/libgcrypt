@@ -218,7 +218,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="libgcrypt.def" />
+    <None Include="..\src\libgcrypt.def" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5D7A23EF-09DE-4C75-8ED1-F783BAACFC7E}</ProjectGuid>
@@ -556,7 +556,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -610,7 +610,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -663,7 +663,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -716,7 +716,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-errord.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -1045,7 +1045,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -1110,7 +1110,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -1175,7 +1175,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\bin\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -1240,7 +1240,7 @@ del $(OutDir)\include\gcrypt.h
       <SubSystem>Windows</SubSystem>
       <ImportLibrary>$(OutDir)\bin\$(TargetName).lib</ImportLibrary>
       <ProfileGuidedDatabase>$(OutDir)\bin\$(TargetName).pgd</ProfileGuidedDatabase>
-      <ModuleDefinitionFile>libgcrypt.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OutDir)\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>

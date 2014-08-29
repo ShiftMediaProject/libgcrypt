@@ -486,7 +486,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="libgcrypt.def">
+    <None Include="..\src\libgcrypt.def">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
