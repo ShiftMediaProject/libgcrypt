@@ -15,7 +15,7 @@ struct timezone
     int  tz_dsttime;     /* type of dst correction */
 };
 
-__inline int gettimeofday(struct timeval * tp, struct timezone * tzp)
+static __inline int gettimeofday(struct timeval * tp, struct timezone * tzp)
 {
     FILETIME    file_time;
     SYSTEMTIME  system_time;
