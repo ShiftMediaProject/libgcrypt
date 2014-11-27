@@ -81,13 +81,3 @@ tests/rsacvt
 tests/t-mpi-bit
 tests/tsexp
 tests/version
-
-*.obj
-*.log
-*.tlog
-*.pdb
-*.ildb
-*.suo
-*.sdf
-[Oo]bj/
-*.exe
