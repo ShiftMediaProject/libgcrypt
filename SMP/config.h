@@ -5,9 +5,6 @@
 /* Enable gpg-error's strerror macro for W32CE.  */
 #define GPG_ERR_ENABLE_ERRNO_MACROS 1
 
-/* Define if building universal (internal helper macro) */
-/* #undef AC_APPLE_UNIVERSAL_BUILD */
-
 /* configure did not test for endianess */
 /* #undef DISABLED_ENDIAN_CHECK */
 
@@ -318,34 +315,6 @@
 /* List of available public key cipher algorithms */
 #define LIBGCRYPT_PUBKEY_CIPHERS "dsa:elgamal:rsa:ecc"
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
-/* #undef LT_OBJDIR ".libs/" */
-
-/* Define to use the (obsolete) malloc guarding feature */
-/* #undef M_GUARD */
-
-/* defined to the name of the strong random device */
-/* #undef NAME_OF_DEV_RANDOM "/dev/random" */
-
-/* defined to the name of the weaker random device */
-/* #undef NAME_OF_DEV_URANDOM "/dev/urandom" */
-
-/* Name of this package */
-#define PACKAGE "libgcrypt"
-
-/* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "http://bugs.gnupg.org"
-
-/* Define to the full name of this package. */
-#define PACKAGE_NAME "libgcrypt"
-
-/* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "libgcrypt"
-
-/* Define to the home page for this package. */
-#define PACKAGE_URL ""
-
 #include "version.h"
 
 /* A human readable text with the name of the OS */
@@ -491,27 +460,6 @@
    made weak. */
 /* #undef USE_SOLARIS_THREADS_WEAK */
 
-/* Enable extensions on AIX 3, Interix.  */
-#ifndef _ALL_SOURCE
-# define _ALL_SOURCE 1
-#endif
-/* Enable GNU extensions on systems that have them.  */
-#ifndef _GNU_SOURCE
-# define _GNU_SOURCE 1
-#endif
-/* Enable threading extensions on Solaris.  */
-#ifndef _POSIX_PTHREAD_SEMANTICS
-# define _POSIX_PTHREAD_SEMANTICS 1
-#endif
-/* Enable extensions on HP NonStop.  */
-#ifndef _TANDEM_SOURCE
-# define _TANDEM_SOURCE 1
-#endif
-/* Enable general extensions on Solaris.  */
-#ifndef __EXTENSIONS__
-# define __EXTENSIONS__ 1
-#endif
-
 
 /* Defined if this module should be included */
 #define USE_TIGER 1
@@ -528,75 +476,13 @@
 /* Defined if compiled symbols have a leading underscore */
 /* #undef WITH_SYMBOL_UNDERSCORE */
 
-/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
-   significant byte first (like Motorola and SPARC, unlike Intel). */
-#if defined AC_APPLE_UNIVERSAL_BUILD
-# if defined __BIG_ENDIAN__
-#  define WORDS_BIGENDIAN 1
-# endif
-#else
-# ifndef WORDS_BIGENDIAN
-/* #  undef WORDS_BIGENDIAN */
-# endif
-#endif
-
-/* Define to 1 if on MINIX. */
-/* #undef _MINIX */
-
-/* Define to 2 if the system does not provide POSIX.1 features except with
-   this defined. */
-/* #undef _POSIX_1_SOURCE */
-
-/* Define to 1 if you need to in order for `stat' and other things to work. */
-/* #undef _POSIX_SOURCE */
-
 /* To allow the use of Libgcrypt in multithreaded programs we have to use
     special features from the library. */
 #ifndef _REENTRANT
 # define _REENTRANT 1
 #endif
 
-
-/* Define to supported assembler block keyword, if plain 'asm' was not
-   supported */
-/* #undef asm */
-
-/* Define to empty if `const' does not conform to ANSI C. */
-/* #undef const */
-
-/* Define to `__inline__' or `__inline' if that's what the C compiler
-   calls it, or to nothing if 'inline' is not supported under any name.  */
-#ifndef __cplusplus
-/* #undef inline */
-#endif
-
-/* Define to `int' if <sys/types.h> does not define. */
-/* #undef pid_t */
-
-/* Define to `unsigned int' if <sys/types.h> does not define. */
-/* #undef size_t */
-
-/* type to use in place of socklen_t if not defined */
-/* #undef socklen_t */
-
-/* Define to the type of an unsigned integer type wide enough to hold a
-   pointer, if such a type exists, and if the system does not define it. */
-/* #undef uintptr_t */
-
-
 #define _GCRYPT_IN_LIBGCRYPT 1
-
-/* If the configure check for endianness has been disabled, get it from
-   OS macros.  This is intended for making fat binary builds on OS X.  */
-#ifdef DISABLED_ENDIAN_CHECK
-# if defined(__BIG_ENDIAN__)
-#  define WORDS_BIGENDIAN 1
-# elif defined(__LITTLE_ENDIAN__)
-/* #  undef WORDS_BIGENDIAN */
-# else
-#  error "No endianness found"
-# endif
-#endif /*DISABLED_ENDIAN_CHECK*/
 
 /* We basically use the original Camellia source.  Make sure the symbols
    properly prefixed.  */
