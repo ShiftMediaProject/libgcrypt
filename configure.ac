@@ -21,7 +21,7 @@
 # (Process this file with autoconf to produce a configure script.)
 AC_REVISION($Revision$)
 AC_PREREQ(2.60)
-min_automake_version="1.10"
+min_automake_version="1.14"
 
 # To build a release you need to create a tag with the version number
 # (git tag -s libgcrypt-n.m.k) and run "./autogen.sh --force".  Please
@@ -30,7 +30,7 @@ min_automake_version="1.10"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [6])
-m4_define(mym4_version_micro, [2])
+m4_define(mym4_version_micro, [3])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=20
 LIBGCRYPT_LT_AGE=0
-LIBGCRYPT_LT_REVISION=2
+LIBGCRYPT_LT_REVISION=3
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -74,7 +74,7 @@ VERSION=$PACKAGE_VERSION
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_SRCDIR([src/libgcrypt.vers])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([serial-tests dist-bzip2])
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_LIBOBJ_DIR([compat])
