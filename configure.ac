@@ -30,7 +30,7 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [6])
-m4_define(mym4_version_micro, [3])
+m4_define(mym4_version_micro, [4])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=20
 LIBGCRYPT_LT_AGE=0
-LIBGCRYPT_LT_REVISION=3
+LIBGCRYPT_LT_REVISION=4
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -2058,11 +2058,10 @@ cat <<G10EOF
                  Entropy Gathering Daemon (EGD)
 
    which provides a entropy source for the whole system.  It is written
-   in Perl and available at the GnuPG FTP servers.  To enable EGD you
-   should rerun configure with the option "--enable-static-rnd=egd".
-   For more information consult the GnuPG webpages:
+   in Perl and available at the GnuPG FTP servers.  For more information
+   consult the GnuPG site:
 
-             http://www.gnupg.org/download.html#egd
+          https://gnupg.org/related_software/swlist.html#egd
 
 G10EOF
 fi

@@ -44,6 +44,29 @@
 #endif
 
 
+/* Return an allocated buffers of size CONTEXT_SIZE with an alignment
+   of 16.  The caller must free that buffer using the address returned
+   at R_MEM.  Returns NULL and sets ERRNO on failure.  */
+void *
+_gcry_cipher_selftest_alloc_ctx (const int context_size, unsigned char **r_mem)
+{
+  int offs;
+  unsigned int ctx_aligned_size, memsize;
+
+  ctx_aligned_size = context_size + 15;
+  ctx_aligned_size -= ctx_aligned_size & 0xf;
+
+  memsize = ctx_aligned_size + 16;
+
+  *r_mem = xtrycalloc (1, memsize);
+  if (!*r_mem)
+    return NULL;
+
+  offs = (16 - ((uintptr_t)*r_mem & 15)) & 15;
+  return (void*)(*r_mem + offs);
+}
+
+
 /* Run the self-tests for <block cipher>-CBC-<block size>, tests bulk CBC
    decryption.  Returns NULL on success. */
 const char *
@@ -104,6 +127,8 @@ _gcry_selftest_helper_cbc (const char *cipher, gcry_cipher_setkey_t setkey_func,
       syslog (LOG_USER|LOG_WARNING, "Libgcrypt warning: "
               "%s-CBC-%d test failed (plaintext mismatch)", cipher,
 	      blocksize * 8);
+#else
+      (void)cipher; /* Not used.  */
 #endif
       return "selftest for CBC failed - see syslog for details";
     }
@@ -220,6 +245,8 @@ _gcry_selftest_helper_cfb (const char *cipher, gcry_cipher_setkey_t setkey_func,
       syslog (LOG_USER|LOG_WARNING, "Libgcrypt warning: "
               "%s-CFB-%d test failed (plaintext mismatch)", cipher,
 	      blocksize * 8);
+#else
+      (void)cipher; /* Not used.  */
 #endif
       return "selftest for CFB failed - see syslog for details";
     }
@@ -344,6 +371,8 @@ _gcry_selftest_helper_ctr (const char *cipher, gcry_cipher_setkey_t setkey_func,
       syslog (LOG_USER|LOG_WARNING, "Libgcrypt warning: "
               "%s-CTR-%d test failed (plaintext mismatch)", cipher,
 	      blocksize * 8);
+#else
+      (void)cipher; /* Not used.  */
 #endif
       return "selftest for CTR failed - see syslog for details";
     }
