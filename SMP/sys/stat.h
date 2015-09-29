@@ -1,11 +1,36 @@
+/*
+ * MSVC sys/stat.h compatibility header.
+ * Copyright (c) 2015 Matthew Oliver
+ *
+ * This file is part of Shift Media Project.
+ *
+ * Shift Media Project is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * Shift Media Project is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with the code; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
-#ifndef _STAT_H_
-#define _STAT_H_
-
-#include <../include/sys/stat.h>
+#ifndef _SMP_SYS_STAT_H_
+#define _SMP_SYS_STAT_H_
 
 #ifndef _MSC_VER
-#error "Use this header only with Microsoft Visual C++ compilers!"
+#   include_next <sys/stat.h>
+#else
+
+#include <crtversion.h>
+#if _VC_CRT_MAJOR_VERSION >= 14
+#   include <../ucrt/sys/stat.h>
+#else
+#   include <../include/sys/stat.h>
 #endif
 
 #ifndef S_ISBLK
@@ -52,7 +77,7 @@
 #define	_S_IXGRP        (_S_IXUSR >> 3)
 #define	_S_IWGRP        (_S_IWUSR >> 3)
 #define	_S_IRGRP        (_S_IRUSR >> 3)
-#define	_S_IRWXO        (_S_IRWXG >> 3) 
+#define	_S_IRWXO        (_S_IRWXG >> 3)
 #define	_S_IXOTH        (_S_IXGRP >> 3)
 #define	_S_IWOTH        (_S_IWGRP >> 3)
 #define	_S_IROTH        (_S_IRGRP  >> 3)
@@ -72,4 +97,6 @@
 #define	S_IWOTH        _S_IWOTH
 #define	S_IROTH        _S_IROTH
 
-#endif
+#endif /* _MSC_VER */
+
+#endif /* _SMP_SYS_STAT_H_ */
