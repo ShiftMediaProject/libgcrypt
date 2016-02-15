@@ -57,7 +57,7 @@ gcry_err_make_from_errno (gcry_err_source_t source, int err)
   return _gcry_err_make_from_errno (source, err);
 }
 
-gcry_err_code_t
+gcry_error_t
 gcry_error_from_errno (int err)
 {
   return _gcry_error_from_errno (err);
@@ -292,7 +292,7 @@ gcry_mpi_copy (const gcry_mpi_t a)
 void
 gcry_mpi_snatch (gcry_mpi_t w, const gcry_mpi_t u)
 {
-  return _gcry_mpi_snatch (w, u);
+  _gcry_mpi_snatch (w, u);
 }
 
 gcry_mpi_t

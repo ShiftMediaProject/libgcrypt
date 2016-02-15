@@ -1106,16 +1106,27 @@ _gcry_mpi_ec_mul_point (mpi_point_t result,
   unsigned int i, loops;
   mpi_point_struct p1, p2, p1inv;
 
-  if (ctx->model == MPI_EC_TWISTEDEDWARDS)
+  if (ctx->model == MPI_EC_TWISTEDEDWARDS
+      || (ctx->model == MPI_EC_WEIERSTRASS
+          && mpi_is_secure (scalar)))
     {
       /* Simple left to right binary method.  GECC Algorithm 3.27 */
       unsigned int nbits;
       int j;
 
       nbits = mpi_get_nbits (scalar);
-      mpi_set_ui (result->x, 0);
-      mpi_set_ui (result->y, 1);
-      mpi_set_ui (result->z, 1);
+      if (ctx->model == MPI_EC_WEIERSTRASS)
+        {
+          mpi_set_ui (result->x, 1);
+          mpi_set_ui (result->y, 1);
+          mpi_set_ui (result->z, 0);
+        }
+      else
+        {
+          mpi_set_ui (result->x, 0);
+          mpi_set_ui (result->y, 1);
+          mpi_set_ui (result->z, 1);
+        }
 
       if (mpi_is_secure (scalar))
         {
@@ -1205,6 +1216,10 @@ _gcry_mpi_ec_mul_point (mpi_point_t result,
   point_init (&p2);
   point_init (&p1inv);
 
+  /* Invert point: y = p - y mod p  */
+  point_set (&p1inv, &p1);
+  ec_subm (p1inv.y, ctx->p, p1inv.y, ctx);
+
   for (i=loops-2; i > 0; i--)
     {
       _gcry_mpi_ec_dup_point (result, result, ctx);
@@ -1216,9 +1231,6 @@ _gcry_mpi_ec_mul_point (mpi_point_t result,
       if (mpi_test_bit (h, i) == 0 && mpi_test_bit (k, i) == 1)
         {
           point_set (&p2, result);
-          /* Invert point: y = p - y mod p  */
-          point_set (&p1inv, &p1);
-          ec_subm (p1inv.y, ctx->p, p1inv.y, ctx);
           _gcry_mpi_ec_add_points (result, &p2, &p1inv, ctx);
         }
     }

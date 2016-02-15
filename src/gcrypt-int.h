@@ -276,7 +276,7 @@ _gcry_err_code_to_errno (gcry_err_code_t code)
 
 /* Return an error value with the error source SOURCE and the system
    error ERR.  */
-static inline gcry_err_code_t
+static inline gcry_error_t
 _gcry_err_make_from_errno (gpg_err_source_t source, int err)
 {
   return gpg_err_make_from_errno (source, err);
@@ -284,7 +284,7 @@ _gcry_err_make_from_errno (gpg_err_source_t source, int err)
 
 
 /* Return an error value with the system error ERR.  */
-static inline gcry_err_code_t
+static inline gcry_error_t
 _gcry_error_from_errno (int err)
 {
   return gpg_error (gpg_err_code_from_errno (err));
@@ -415,15 +415,9 @@ gcry_mpi_point_t _gcry_mpi_point_set (gcry_mpi_point_t point,
 gcry_mpi_point_t _gcry_mpi_point_snatch_set (gcry_mpi_point_t point,
                                             gcry_mpi_t x, gcry_mpi_t y,
                                             gcry_mpi_t z);
-gpg_error_t _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
-                             gcry_sexp_t keyparam, const char *curvename);
 gcry_mpi_t _gcry_mpi_ec_get_mpi (const char *name, gcry_ctx_t ctx, int copy);
 gcry_mpi_point_t _gcry_mpi_ec_get_point (const char *name,
                                         gcry_ctx_t ctx, int copy);
-gpg_error_t _gcry_mpi_ec_set_mpi (const char *name, gcry_mpi_t newvalue,
-                                 gcry_ctx_t ctx);
-gpg_error_t _gcry_mpi_ec_set_point (const char *name, gcry_mpi_point_t newvalue,
-                                   gcry_ctx_t ctx);
 int _gcry_mpi_ec_get_affine (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_point_t point,
                              mpi_ec_t ctx);
 void _gcry_mpi_ec_dup (gcry_mpi_point_t w, gcry_mpi_point_t u, gcry_ctx_t ctx);

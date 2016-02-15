@@ -972,8 +972,8 @@ dsa_check_secret_key (gcry_sexp_t keyparms)
   DSA_secret_key sk = {NULL, NULL, NULL, NULL, NULL};
 
   rc = _gcry_sexp_extract_param (keyparms, NULL, "pqgyx",
-                                 &sk.p, &sk.q, &sk.g, &sk.y, &sk.x,
-                                 NULL);
+                                  &sk.p, &sk.q, &sk.g, &sk.y, &sk.x,
+                                  NULL);
   if (rc)
     goto leave;
 
