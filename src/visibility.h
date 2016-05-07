@@ -110,6 +110,7 @@ MARK_VISIBLEX (gcry_md_is_secure)
 MARK_VISIBLEX (gcry_md_map_name)
 MARK_VISIBLEX (gcry_md_open)
 MARK_VISIBLEX (gcry_md_read)
+MARK_VISIBLEX (gcry_md_extract)
 MARK_VISIBLEX (gcry_md_reset)
 MARK_VISIBLEX (gcry_md_setkey)
 MARK_VISIBLEX (gcry_md_write)
@@ -137,6 +138,7 @@ MARK_VISIBLEX (gcry_cipher_open)
 MARK_VISIBLEX (gcry_mac_algo_info)
 MARK_VISIBLEX (gcry_mac_algo_name)
 MARK_VISIBLEX (gcry_mac_map_name)
+MARK_VISIBLEX (gcry_mac_get_algo)
 MARK_VISIBLEX (gcry_mac_get_algo_maclen)
 MARK_VISIBLEX (gcry_mac_get_algo_keylen)
 MARK_VISIBLEX (gcry_mac_open)
@@ -217,8 +219,10 @@ MARK_VISIBLEX (gcry_mpi_copy)
 MARK_VISIBLEX (gcry_mpi_div)
 MARK_VISIBLEX (gcry_mpi_dump)
 MARK_VISIBLEX (gcry_mpi_ec_add)
+MARK_VISIBLEX (gcry_mpi_ec_sub)
 MARK_VISIBLEX (gcry_mpi_ec_curve_point)
 MARK_VISIBLEX (gcry_mpi_ec_dup)
+MARK_VISIBLEX (gcry_mpi_ec_decode_point)
 MARK_VISIBLEX (gcry_mpi_ec_get_affine)
 MARK_VISIBLEX (gcry_mpi_ec_mul)
 MARK_VISIBLEX (gcry_mpi_ec_new)
@@ -372,6 +376,7 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_md_map_name            _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_open                _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_read                _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_md_extract             _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_reset               _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_setkey              _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_write               _gcry_USE_THE_UNDERSCORED_FUNCTION
@@ -380,6 +385,7 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_mac_algo_info          _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mac_algo_name          _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mac_map_name           _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_mac_get_algo           _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mac_get_algo_maclen    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mac_get_algo_keylen    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mac_open               _gcry_USE_THE_UNDERSCORED_FUNCTION
@@ -484,8 +490,10 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 
 #define gcry_mpi_abs                _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_add             _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_mpi_ec_sub             _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_curve_point     _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_dup             _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_mpi_ec_decode_point    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_get_affine      _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_get_mpi         _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_mpi_ec_get_point       _gcry_USE_THE_UNDERSCORED_FUNCTION

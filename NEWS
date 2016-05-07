@@ -1,88 +1,165 @@
-Noteworthy changes in version 1.6.5 (2016-02-09) [C20/A0/R5]
+Noteworthy changes in version 1.7.0 (2016-04-15)  [C21/A1/R0]
 ------------------------------------------------
 
- * Mitigate side-channel attack on ECDH with Weierstrass curves
-   [CVE-2015-7511].  See http://www.cs.tau.ac.IL/~tromer/ecdh/ for
-   details.
+ * New algorithms and modes:
 
- * Fix build problem on Solaris.
+   - SHA3-224, SHA3-256, SHA3-384, SHA3-512, and MD2 hash algorithms.
 
+   - SHAKE128 and SHAKE256 extendable-output hash algorithms.
 
-Noteworthy changes in version 1.6.4 (2015-09-08) [C20/A0/R4]
-------------------------------------------------
+   - ChaCha20 stream cipher.
 
- * Speed up the random number generator by requiring less extra
-   seeding.
+   - Poly1305 message authentication algorithm
 
- * New flag "no-keytest" for ECC key generation.  Due to a bug in the
-   parser that flag will also be accepted but ignored by older version
-   of Libgcrypt.
+   - ChaCha20-Poly1305 Authenticated Encryption with Associated Data
+     mode.
 
- * Always verify a created RSA signature to avoid private key leaks
-   due to hardware failures.
+   - OCB mode.
 
- * Fix alignment bug in the AESNI code on Windows > 7.
+   - HMAC-MD2 for use by legacy applications.
 
- * Support FreeBSD 10 and later.
+ * New curves for ECC:
 
- * Other minor bug fixes.
+   - Curve25519.
 
+   - sec256k1.
 
-Noteworthy changes in version 1.6.3 (2015-02-27) [C20/A0/R3]
-------------------------------------------------
+   - GOST R 34.10-2001 and GOST R 34.10-2012.
 
- * Use ciphertext blinding for Elgamal decryption [CVE-2014-3591].
-   See http://www.cs.tau.ac.il/~tromer/radioexp/ for details.
+ * Performance:
 
- * Fixed data-dependent timing variations in modular exponentiation
-   [related to CVE-2015-0837, Last-Level Cache Side-Channel Attacks
-   are Practical].
+   - Improved performance of KDF functions.
 
- * Improved asm support for older toolchains.
+   - Assembler optimized implementations of Blowfish and Serpent on
+     ARM.
 
+   - Assembler optimized implementation of 3DES on x86.
 
-Noteworthy changes in version 1.6.2 (2014-08-21) [C20/A0/R2]
-------------------------------------------------
+   - Improved AES using the SSSE3 based vector permutation method by
+     Mike Hamburg.
 
- * Map deprecated RSA algo number to the RSA algo number for better
-   backward compatibility.
+   - AVX/BMI is used for SHA-1 and SHA-256 on x86.  This is for SHA-1
+     about 20% faster than SSSE3 and more than 100% faster than the
+     generic C implementation.
 
- * Support a 0x40 compression prefix for EdDSA.
+   - 40% speedup for SHA-512 and 72% for SHA-1 on ARM Cortex-A8.
 
- * Improve ARM hardware feature detection and building.
+   - 60-90% speedup for Whirlpool on x86.
 
- * Fix powerpc-apple-darwin detection
+   - 300% speedup for RIPE MD-160.
 
- * Fix building for the x32 ABI platform.
+   - Up to 11 times speedup for CRC functions on x86.
 
- * Support building using the latest mingw-w64 toolchain.
+ * Other features:
 
- * Fix some possible NULL deref bugs.
+   - Improved ECDSA and FIPS 186-4 compliance.
 
+   - Support for Montgomery curves.
 
-Noteworthy changes in version 1.6.1 (2014-01-29) [C20/A0/R1]
-------------------------------------------------
+   - gcry_cipher_set_sbox to tweak S-boxes of the gost28147 cipher
+     algorithm.
 
- * Added emulation for broken Whirlpool code prior to 1.6.0.
+   - gcry_mpi_ec_sub to subtract two points on a curve.
 
- * Improved performance of KDF functions.
+   - gcry_mpi_ec_decode_point to decode an MPI into a point object.
 
- * Improved ECDSA compliance.
+   - Emulation for broken Whirlpool code prior to 1.6.0.  [from 1.6.1]
 
- * Fixed locking for Windows and non-ELF Pthread systems (regression
-   in 1.6.0)
+   - Flag "pkcs1-raw" to enable PCKS#1 padding with a user supplied
+     hash part.
 
- * Fixed message digest lookup by OID (regression in 1.6.0).
+   - Parameter "saltlen" to set a non-default salt length for RSA PSS.
 
- * Fixed a build problem on NetBSD.
+   - A SP800-90A conforming DRNG replaces the former X9.31 alternative
+     random number generator.
 
- * Fixed memory leaks in ECC code.
+   - Map deprecated RSA algo number to the RSA algo number for better
+     backward compatibility. [from 1.6.2]
 
- * Fixed some asm build problems and feature detection bugs.
+   - Use ciphertext blinding for Elgamal decryption [CVE-2014-3591].
+     See http://www.cs.tau.ac.il/~tromer/radioexp/ for details.
+     [from 1.6.3]
+
+   - Fixed data-dependent timing variations in modular exponentiation
+     [related to CVE-2015-0837, Last-Level Cache Side-Channel Attacks
+      are Practical]. [from 1.6.3]
+
+   - Flag "no-keytest" for ECC key generation.  Due to a bug in
+     the parser that flag will also be accepted but ignored by older
+     version of Libgcrypt. [from 1.6.4]
+
+   - Speed up the random number generator by requiring less extra
+     seeding. [from 1.6.4]
+
+   - Always verify a created RSA signature to avoid private key leaks
+     due to hardware failures. [from 1.6.4]
+
+   - Mitigate side-channel attack on ECDH with Weierstrass curves
+     [CVE-2015-7511].  See http://www.cs.tau.ac.IL/~tromer/ecdh/ for
+     details. [from 1.6.5]
+
+ * Internal changes:
+
+   - Moved locking out to libgpg-error.
+
+   - Support of the SYSROOT envvar in the build system.
+
+   - Refactor some code.
+
+   - The availability of a 64 bit integer type is now mandatory.
+
+ * Bug fixes:
+
+   - Fixed message digest lookup by OID (regression in 1.6.0).
+
+   - Fixed a build problem on NetBSD
+
+   - Fixed memory leaks in ECC code.
+
+   - Fixed some asm build problems and feature detection bugs.
 
  * Interface changes relative to the 1.6.0 release:
- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- GCRY_MD_FLAG_BUGEMU1            NEW (minor API change).
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   gcry_cipher_final               NEW macro.
+   GCRY_CIPHER_MODE_CFB8           NEW constant.
+   GCRY_CIPHER_MODE_OCB            NEW.
+   GCRY_CIPHER_MODE_POLY1305       NEW.
+   gcry_cipher_set_sbox            NEW macro.
+   gcry_mac_get_algo               NEW.
+   GCRY_MAC_HMAC_MD2               NEW.
+   GCRY_MAC_HMAC_SHA3_224          NEW.
+   GCRY_MAC_HMAC_SHA3_256          NEW.
+   GCRY_MAC_HMAC_SHA3_384          NEW.
+   GCRY_MAC_HMAC_SHA3_512          NEW.
+   GCRY_MAC_POLY1305               NEW.
+   GCRY_MAC_POLY1305_AES           NEW.
+   GCRY_MAC_POLY1305_CAMELLIA      NEW.
+   GCRY_MAC_POLY1305_SEED          NEW.
+   GCRY_MAC_POLY1305_SERPENT       NEW.
+   GCRY_MAC_POLY1305_TWOFISH       NEW.
+   gcry_md_extract                 NEW.
+   GCRY_MD_FLAG_BUGEMU1            NEW [from 1.6.1].
+   GCRY_MD_GOSTR3411_CP            NEW.
+   GCRY_MD_SHA3_224                NEW.
+   GCRY_MD_SHA3_256                NEW.
+   GCRY_MD_SHA3_384                NEW.
+   GCRY_MD_SHA3_512                NEW.
+   GCRY_MD_SHAKE128                NEW.
+   GCRY_MD_SHAKE256                NEW.
+   gcry_mpi_ec_decode_point        NEW.
+   gcry_mpi_ec_sub                 NEW.
+   GCRY_PK_EDDSA                   NEW constant.
+   GCRYCTL_GET_TAGLEN              NEW.
+   GCRYCTL_SET_SBOX                NEW.
+   GCRYCTL_SET_TAGLEN              NEW.
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Version 1.6.5 (2016-02-09) [C20/A0/R5]
+Version 1.6.4 (2015-09-08) [C20/A0/R4]
+Version 1.6.3 (2015-02-27) [C20/A0/R3]
+Version 1.6.2 (2014-08-21) [C20/A0/R2]
+Version 1.6.1 (2014-01-29) [C20/A0/R1]
 
 
 Noteworthy changes in version 1.6.0 (2013-12-16) [C20/A0/R0]
@@ -119,7 +196,7 @@ Noteworthy changes in version 1.6.0 (2013-12-16) [C20/A0/R0]
  * Mitigated the Yarom/Falkner flush+reload side-channel attack on RSA
    secret keys.  See <http://eprint.iacr.org/2013/448> [CVE-2013-4242].
 
- * Added support for Deterministic DSA as per RFC-6969.
+ * Added support for Deterministic DSA as per RFC-6979.
 
  * Added support for curve Ed25519.
 

@@ -31,7 +31,47 @@
 #include "g10lib.h"
 #include "cipher.h"
 
+/* USE_AMD64_ASM indicates whether to use AMD64 assembly code. */
+#undef USE_AMD64_ASM
+#if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+    defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_AMD64_ASM 1
+#endif
+
 static const char *selftest(void);
+
+#ifdef USE_AMD64_ASM
+
+typedef struct {
+    u32 sbox[256];
+    u32 idx_i, idx_j;
+} ARCFOUR_context;
+
+void _gcry_arcfour_amd64(void *key, size_t len, const byte *indata,
+			 byte *outdata);
+
+static void
+encrypt_stream (void *context,
+                byte *outbuf, const byte *inbuf, size_t length)
+{
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+  const void *fn = _gcry_arcfour_amd64;
+  /* Call SystemV ABI function without storing non-volatile XMM registers,
+   * as target function does not use vector instruction sets. */
+  asm volatile ("callq *%0\n\t"
+                : "+a" (fn),
+                  "+D" (context),
+                  "+S" (length),
+                  "+d" (inbuf),
+                  "+c" (outbuf)
+                :
+                : "cc", "memory", "r8", "r9", "r10", "r11");
+#else
+  _gcry_arcfour_amd64 (context, length, inbuf, outbuf );
+#endif
+}
+
+#else /*!USE_AMD64_ASM*/
 
 typedef struct {
     byte sbox[256];
@@ -95,6 +135,8 @@ encrypt_stream (void *context,
   do_encrypt_stream (ctx, outbuf, inbuf, length );
   _gcry_burn_stack (64);
 }
+
+#endif /*!USE_AMD64_ASM*/
 
 
 static gcry_err_code_t

@@ -26,8 +26,8 @@
 #include <errno.h>
 
 #include "g10lib.h"
+#include "../src/gcrypt-testapi.h"
 #include "cipher.h"
-#include "ath.h"
 #include "./cipher-internal.h"
 
 
@@ -83,6 +83,9 @@ static gcry_cipher_spec_t *cipher_list[] =
 #endif
 #if USE_GOST28147
      &_gcry_cipher_spec_gost28147,
+#endif
+#if USE_CHACHA20
+     &_gcry_cipher_spec_chacha20,
 #endif
     NULL
   };
@@ -394,15 +397,11 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
     switch (mode)
       {
       case GCRY_CIPHER_MODE_CCM:
-#ifdef HAVE_U64_TYPEDEF
 	if (spec->blocksize != GCRY_CCM_BLOCK_LEN)
 	  err = GPG_ERR_INV_CIPHER_MODE;
 	if (!spec->encrypt || !spec->decrypt)
 	  err = GPG_ERR_INV_CIPHER_MODE;
 	break;
-#else
-        err = GPG_ERR_NOT_SUPPORTED;
-#endif
 
       case GCRY_CIPHER_MODE_ECB:
       case GCRY_CIPHER_MODE_CBC:
@@ -413,6 +412,24 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
       case GCRY_CIPHER_MODE_CMAC:
       case GCRY_CIPHER_MODE_GCM:
 	if (!spec->encrypt || !spec->decrypt)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	break;
+
+      case GCRY_CIPHER_MODE_POLY1305:
+	if (!spec->stencrypt || !spec->stdecrypt || !spec->setiv)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	else if (spec->algo != GCRY_CIPHER_CHACHA20)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	break;
+
+      case GCRY_CIPHER_MODE_OCB:
+        /* Note that our implementation allows only for 128 bit block
+           length algorithms.  Lower block lengths would be possible
+           but we do not implement them because they limit the
+           security too much.  */
+	if (!spec->encrypt || !spec->decrypt)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	else if (spec->blocksize != (128/8))
 	  err = GPG_ERR_INV_CIPHER_MODE;
 	break;
 
@@ -436,7 +453,8 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
   /* Perform selftest here and mark this with a flag in cipher_table?
      No, we should not do this as it takes too long.  Further it does
      not make sense to exclude algorithms with failing selftests at
-     runtime: If a selftest fails there is something seriously wrong with the system and thus we better die immediately. */
+     runtime: If a selftest fails there is something seriously wrong
+     with the system and thus we better die immediately. */
 
   if (! err)
     {
@@ -460,11 +478,11 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
           size_t off = 0;
 
 #ifdef NEED_16BYTE_ALIGNED_CONTEXT
-          if ( ((unsigned long)h & 0x0f) )
+          if ( ((uintptr_t)h & 0x0f) )
             {
               /* The malloced block is not aligned on a 16 byte
                  boundary.  Correct for this.  */
-              off = 16 - ((unsigned long)h & 0x0f);
+              off = 16 - ((uintptr_t)h & 0x0f);
               h = (void*)((char*)h + off);
             }
 #endif /*NEED_16BYTE_ALIGNED_CONTEXT*/
@@ -489,6 +507,8 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
               h->bulk.cbc_enc = _gcry_aes_cbc_enc;
               h->bulk.cbc_dec = _gcry_aes_cbc_dec;
               h->bulk.ctr_enc = _gcry_aes_ctr_enc;
+              h->bulk.ocb_crypt = _gcry_aes_ocb_crypt;
+              h->bulk.ocb_auth  = _gcry_aes_ocb_auth;
               break;
 #endif /*USE_AES*/
 #ifdef USE_BLOWFISH
@@ -512,8 +532,17 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
               h->bulk.cbc_dec = _gcry_camellia_cbc_dec;
               h->bulk.cfb_dec = _gcry_camellia_cfb_dec;
               h->bulk.ctr_enc = _gcry_camellia_ctr_enc;
+              h->bulk.ocb_crypt = _gcry_camellia_ocb_crypt;
+              h->bulk.ocb_auth  = _gcry_camellia_ocb_auth;
               break;
 #endif /*USE_CAMELLIA*/
+#ifdef USE_DES
+            case GCRY_CIPHER_3DES:
+              h->bulk.cbc_dec =  _gcry_3des_cbc_dec;
+              h->bulk.cfb_dec =  _gcry_3des_cfb_dec;
+              h->bulk.ctr_enc =  _gcry_3des_ctr_enc;
+              break;
+#endif /*USE_DES*/
 #ifdef USE_SERPENT
 	    case GCRY_CIPHER_SERPENT128:
 	    case GCRY_CIPHER_SERPENT192:
@@ -521,6 +550,8 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
               h->bulk.cbc_dec = _gcry_serpent_cbc_dec;
               h->bulk.cfb_dec = _gcry_serpent_cfb_dec;
               h->bulk.ctr_enc = _gcry_serpent_ctr_enc;
+              h->bulk.ocb_crypt = _gcry_serpent_ocb_crypt;
+              h->bulk.ocb_auth  = _gcry_serpent_ocb_auth;
               break;
 #endif /*USE_SERPENT*/
 #ifdef USE_TWOFISH
@@ -529,12 +560,26 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
               h->bulk.cbc_dec = _gcry_twofish_cbc_dec;
               h->bulk.cfb_dec = _gcry_twofish_cfb_dec;
               h->bulk.ctr_enc = _gcry_twofish_ctr_enc;
+              h->bulk.ocb_crypt = _gcry_twofish_ocb_crypt;
+              h->bulk.ocb_auth  = _gcry_twofish_ocb_auth;
               break;
 #endif /*USE_TWOFISH*/
 
             default:
               break;
             }
+
+          /* Setup defaults depending on the mode.  */
+          switch (mode)
+            {
+            case GCRY_CIPHER_MODE_OCB:
+              h->u_mode.ocb.taglen = 16; /* Bytes.  */
+              break;
+
+            default:
+              break;
+            }
+
 	}
     }
 
@@ -602,6 +647,10 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
           _gcry_cipher_gcm_setkey (c);
           break;
 
+        case GCRY_CIPHER_MODE_POLY1305:
+          _gcry_cipher_poly1305_setkey (c);
+          break;
+
         default:
           break;
         };
@@ -618,10 +667,6 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
 static gcry_err_code_t
 cipher_setiv (gcry_cipher_hd_t c, const byte *iv, size_t ivlen)
 {
-  /* GCM has its own IV handler */
-  if (c->mode == GCRY_CIPHER_MODE_GCM)
-    return _gcry_cipher_gcm_setiv (c, iv, ivlen);
-
   /* If the cipher has its own IV handler, we use only this one.  This
      is currently used for stream ciphers requiring a nonce.  */
   if (c->spec->setiv)
@@ -690,11 +735,19 @@ cipher_reset (gcry_cipher_hd_t c)
       }
       break;
 
-#ifdef HAVE_U64_TYPEDEF
+    case GCRY_CIPHER_MODE_POLY1305:
+      memset (&c->u_mode.poly1305, 0, sizeof c->u_mode.poly1305);
+      break;
+
     case GCRY_CIPHER_MODE_CCM:
       memset (&c->u_mode.ccm, 0, sizeof c->u_mode.ccm);
       break;
-#endif
+
+    case GCRY_CIPHER_MODE_OCB:
+      memset (&c->u_mode.ocb, 0, sizeof c->u_mode.ocb);
+      /* Setup default taglen.  */
+      c->u_mode.ocb.taglen = 16;
+      break;
 
     default:
       break; /* u_mode unused by other modes. */
@@ -800,6 +853,15 @@ cipher_encrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
 
     case GCRY_CIPHER_MODE_GCM:
       rc = _gcry_cipher_gcm_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_POLY1305:
+      rc = _gcry_cipher_poly1305_encrypt (c, outbuf, outbuflen,
+					  inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_OCB:
+      rc = _gcry_cipher_ocb_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
     case GCRY_CIPHER_MODE_STREAM:
@@ -910,6 +972,15 @@ cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
       rc = _gcry_cipher_gcm_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
+    case GCRY_CIPHER_MODE_POLY1305:
+      rc = _gcry_cipher_poly1305_decrypt (c, outbuf, outbuflen,
+					  inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_OCB:
+      rc = _gcry_cipher_ocb_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
     case GCRY_CIPHER_MODE_STREAM:
       c->spec->stdecrypt (&c->context.c,
                           outbuf, (byte*)/*arggg*/inbuf, inbuflen);
@@ -991,6 +1062,18 @@ _gcry_cipher_setiv (gcry_cipher_hd_t hd, const void *iv, size_t ivlen)
         rc = _gcry_cipher_ccm_set_nonce (hd, iv, ivlen);
         break;
 
+      case GCRY_CIPHER_MODE_GCM:
+        rc =  _gcry_cipher_gcm_setiv (hd, iv, ivlen);
+        break;
+
+      case GCRY_CIPHER_MODE_POLY1305:
+        rc =  _gcry_cipher_poly1305_setiv (hd, iv, ivlen);
+        break;
+
+      case GCRY_CIPHER_MODE_OCB:
+        rc = _gcry_cipher_ocb_set_nonce (hd, iv, ivlen);
+        break;
+
       default:
         rc = cipher_setiv (hd, iv, ivlen);
         break;
@@ -1041,6 +1124,14 @@ _gcry_cipher_authenticate (gcry_cipher_hd_t hd, const void *abuf,
       rc = _gcry_cipher_gcm_authenticate (hd, abuf, abuflen);
       break;
 
+    case GCRY_CIPHER_MODE_POLY1305:
+      rc = _gcry_cipher_poly1305_authenticate (hd, abuf, abuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_OCB:
+      rc = _gcry_cipher_ocb_authenticate (hd, abuf, abuflen);
+      break;
+
     default:
       log_error ("gcry_cipher_authenticate: invalid mode %d\n", hd->mode);
       rc = GPG_ERR_INV_CIPHER_MODE;
@@ -1068,6 +1159,14 @@ _gcry_cipher_gettag (gcry_cipher_hd_t hd, void *outtag, size_t taglen)
 
     case GCRY_CIPHER_MODE_GCM:
       rc = _gcry_cipher_gcm_get_tag (hd, outtag, taglen);
+      break;
+
+    case GCRY_CIPHER_MODE_POLY1305:
+      rc = _gcry_cipher_poly1305_get_tag (hd, outtag, taglen);
+      break;
+
+    case GCRY_CIPHER_MODE_OCB:
+      rc = _gcry_cipher_ocb_get_tag (hd, outtag, taglen);
       break;
 
     default:
@@ -1099,6 +1198,14 @@ _gcry_cipher_checktag (gcry_cipher_hd_t hd, const void *intag, size_t taglen)
       rc = _gcry_cipher_gcm_check_tag (hd, intag, taglen);
       break;
 
+    case GCRY_CIPHER_MODE_POLY1305:
+      rc = _gcry_cipher_poly1305_check_tag (hd, intag, taglen);
+      break;
+
+    case GCRY_CIPHER_MODE_OCB:
+      rc = _gcry_cipher_ocb_check_tag (hd, intag, taglen);
+      break;
+
     default:
       log_error ("gcry_cipher_checktag: invalid mode %d\n", hd->mode);
       rc = GPG_ERR_INV_CIPHER_MODE;
@@ -1118,6 +1225,12 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
     {
     case GCRYCTL_RESET:
       cipher_reset (h);
+      break;
+
+    case GCRYCTL_FINALIZE:
+      if (!h || buffer || buflen)
+	return GPG_ERR_INV_ARG;
+      h->marks.finalize = 1;
       break;
 
     case GCRYCTL_CFB_SYNC:
@@ -1145,7 +1258,6 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
       break;
 
     case GCRYCTL_SET_CCM_LENGTHS:
-#ifdef HAVE_U64_TYPEDEF
       {
         u64 params[3];
         size_t encryptedlen;
@@ -1167,9 +1279,29 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
 
         rc = _gcry_cipher_ccm_set_lengths (h, encryptedlen, aadlen, authtaglen);
       }
-#else
-      rc = GPG_ERR_NOT_SUPPORTED;
-#endif
+      break;
+
+    case GCRYCTL_SET_TAGLEN:
+      if (!h || !buffer || buflen != sizeof(int) )
+	return GPG_ERR_INV_ARG;
+      switch (h->mode)
+        {
+        case GCRY_CIPHER_MODE_OCB:
+          switch (*(int*)buffer)
+            {
+            case 8: case 12: case 16:
+              h->u_mode.ocb.taglen = *(int*)buffer;
+              break;
+            default:
+              rc = GPG_ERR_INV_LENGTH; /* Invalid tag length. */
+              break;
+            }
+          break;
+
+        default:
+          rc =GPG_ERR_INV_CIPHER_MODE;
+          break;
+        }
       break;
 
     case GCRYCTL_DISABLE_ALGO:
@@ -1180,7 +1312,7 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
       disable_cipher_algo( *(int*)buffer );
       break;
 
-    case 61:  /* Disable weak key detection (private).  */
+    case PRIV_CIPHERCTL_DISABLE_WEAK_KEY:  /* (private)  */
       if (h->spec->set_extra_info)
         rc = h->spec->set_extra_info
           (&h->context.c, CIPHER_INFO_NO_WEAK_KEY, NULL, 0);
@@ -1188,7 +1320,7 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
         rc = GPG_ERR_NOT_SUPPORTED;
       break;
 
-    case 62: /* Return current input vector (private).  */
+    case PRIV_CIPHERCTL_GET_INPUT_VECTOR: /* (private)  */
       /* This is the input block as used in CFB and OFB mode which has
          initially been set as IV.  The returned format is:
            1 byte  Actual length of the block in bytes.
@@ -1212,6 +1344,14 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
         }
       break;
 
+    case GCRYCTL_SET_SBOX:
+      if (h->spec->set_extra_info)
+        rc = h->spec->set_extra_info
+          (&h->context.c, GCRYCTL_SET_SBOX, buffer, buflen);
+      else
+        rc = GPG_ERR_NOT_SUPPORTED;
+      break;
+
     default:
       rc = GPG_ERR_INV_OP;
     }
@@ -1221,24 +1361,55 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
 
 
 /* Return information about the cipher handle H.  CMD is the kind of
-   information requested.  BUFFER and NBYTES are reserved for now.
-
-   There are no values for CMD yet defined.
-
-   The function always returns GPG_ERR_INV_OP.
-
+ * information requested.
+ *
+ * CMD may be one of:
+ *
+ *  GCRYCTL_GET_TAGLEN:
+ *      Return the length of the tag for an AE algorithm mode.  An
+ *      error is returned for modes which do not support a tag.
+ *      BUFFER must be given as NULL.  On success the result is stored
+ *      at NBYTES.  The taglen is returned in bytes.
+ *
+ * The function returns 0 on success or an error code.
  */
 gcry_err_code_t
 _gcry_cipher_info (gcry_cipher_hd_t h, int cmd, void *buffer, size_t *nbytes)
 {
   gcry_err_code_t rc = 0;
 
-  (void)h;
-  (void)buffer;
-  (void)nbytes;
-
   switch (cmd)
     {
+    case GCRYCTL_GET_TAGLEN:
+      if (!h || buffer || !nbytes)
+	rc = GPG_ERR_INV_ARG;
+      else
+	{
+          switch (h->mode)
+            {
+            case GCRY_CIPHER_MODE_OCB:
+              *nbytes = h->u_mode.ocb.taglen;
+              break;
+
+            case GCRY_CIPHER_MODE_CCM:
+              *nbytes = h->u_mode.ccm.authlen;
+              break;
+
+            case GCRY_CIPHER_MODE_GCM:
+              *nbytes = GCRY_GCM_BLOCK_LEN;
+              break;
+
+            case GCRY_CIPHER_MODE_POLY1305:
+              *nbytes = POLY1305_TAGLEN;
+              break;
+
+            default:
+              rc = GPG_ERR_INV_CIPHER_MODE;
+              break;
+            }
+        }
+      break;
+
     default:
       rc = GPG_ERR_INV_OP;
     }
@@ -1364,6 +1535,17 @@ _gcry_cipher_get_algo_blklen (int algo)
 gcry_err_code_t
 _gcry_cipher_init (void)
 {
+  if (fips_mode())
+    {
+      /* disable algorithms that are disallowed in fips */
+      int idx;
+      gcry_cipher_spec_t *spec;
+
+      for (idx = 0; (spec = cipher_list[idx]); idx++)
+        if (!spec->flags.fips)
+          spec->flags.disabled = 1;
+    }
+
   return 0;
 }
 

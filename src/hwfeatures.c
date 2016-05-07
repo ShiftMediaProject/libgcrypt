@@ -42,19 +42,21 @@ static struct
   const char *desc;
 } hwflist[] =
   {
-    { HWF_PADLOCK_RNG, "padlock-rng" },
-    { HWF_PADLOCK_AES, "padlock-aes" },
-    { HWF_PADLOCK_SHA, "padlock-sha" },
-    { HWF_PADLOCK_MMUL,"padlock-mmul"},
-    { HWF_INTEL_CPU,   "intel-cpu" },
-    { HWF_INTEL_BMI2,  "intel-bmi2" },
-    { HWF_INTEL_SSSE3, "intel-ssse3" },
-    { HWF_INTEL_PCLMUL,"intel-pclmul" },
-    { HWF_INTEL_AESNI, "intel-aesni" },
-    { HWF_INTEL_RDRAND,"intel-rdrand" },
-    { HWF_INTEL_AVX,   "intel-avx" },
-    { HWF_INTEL_AVX2,  "intel-avx2" },
-    { HWF_ARM_NEON,    "arm-neon" }
+    { HWF_PADLOCK_RNG,     "padlock-rng" },
+    { HWF_PADLOCK_AES,     "padlock-aes" },
+    { HWF_PADLOCK_SHA,     "padlock-sha" },
+    { HWF_PADLOCK_MMUL,    "padlock-mmul"},
+    { HWF_INTEL_CPU,       "intel-cpu" },
+    { HWF_INTEL_FAST_SHLD, "intel-fast-shld" },
+    { HWF_INTEL_BMI2,      "intel-bmi2" },
+    { HWF_INTEL_SSSE3,     "intel-ssse3" },
+    { HWF_INTEL_SSE4_1,    "intel-sse4.1" },
+    { HWF_INTEL_PCLMUL,    "intel-pclmul" },
+    { HWF_INTEL_AESNI,     "intel-aesni" },
+    { HWF_INTEL_RDRAND,    "intel-rdrand" },
+    { HWF_INTEL_AVX,       "intel-avx" },
+    { HWF_INTEL_AVX2,      "intel-avx2" },
+    { HWF_ARM_NEON,        "arm-neon" }
   };
 
 /* A bit vector with the hardware features which shall not be used.

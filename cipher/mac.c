@@ -1,5 +1,5 @@
 /* mac.c  -  message authentication code dispatcher
- * Copyright © 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -41,6 +41,12 @@ static gcry_mac_spec_t *mac_list[] = {
   &_gcry_mac_type_spec_hmac_sha512,
   &_gcry_mac_type_spec_hmac_sha384,
 #endif
+#if USE_SHA3
+  &_gcry_mac_type_spec_hmac_sha3_224,
+  &_gcry_mac_type_spec_hmac_sha3_256,
+  &_gcry_mac_type_spec_hmac_sha3_384,
+  &_gcry_mac_type_spec_hmac_sha3_512,
+#endif
 #ifdef USE_GOST_R_3411_94
   &_gcry_mac_type_spec_hmac_gost3411_94,
 #endif
@@ -75,14 +81,17 @@ static gcry_mac_spec_t *mac_list[] = {
 #if USE_AES
   &_gcry_mac_type_spec_cmac_aes,
   &_gcry_mac_type_spec_gmac_aes,
+  &_gcry_mac_type_spec_poly1305mac_aes,
 #endif
 #if USE_TWOFISH
   &_gcry_mac_type_spec_cmac_twofish,
   &_gcry_mac_type_spec_gmac_twofish,
+  &_gcry_mac_type_spec_poly1305mac_twofish,
 #endif
 #if USE_SERPENT
   &_gcry_mac_type_spec_cmac_serpent,
   &_gcry_mac_type_spec_gmac_serpent,
+  &_gcry_mac_type_spec_poly1305mac_serpent,
 #endif
 #if USE_RFC2268
   &_gcry_mac_type_spec_cmac_rfc2268,
@@ -90,10 +99,12 @@ static gcry_mac_spec_t *mac_list[] = {
 #if USE_SEED
   &_gcry_mac_type_spec_cmac_seed,
   &_gcry_mac_type_spec_gmac_seed,
+  &_gcry_mac_type_spec_poly1305mac_seed,
 #endif
 #if USE_CAMELLIA
   &_gcry_mac_type_spec_cmac_camellia,
   &_gcry_mac_type_spec_gmac_camellia,
+  &_gcry_mac_type_spec_poly1305mac_camellia,
 #endif
 #ifdef USE_IDEA
   &_gcry_mac_type_spec_cmac_idea,
@@ -101,9 +112,27 @@ static gcry_mac_spec_t *mac_list[] = {
 #if USE_GOST28147
   &_gcry_mac_type_spec_cmac_gost28147,
 #endif
+  &_gcry_mac_type_spec_poly1305mac,
   NULL,
 };
 
+/* Explicitly initialize this module.  */
+gcry_err_code_t
+_gcry_mac_init (void)
+{
+  if (fips_mode())
+    {
+      /* disable algorithms that are disallowed in fips */
+      int idx;
+      gcry_mac_spec_t *spec;
+
+      for (idx = 0; (spec = mac_list[idx]); idx++)
+        if (!spec->flags.fips)
+          spec->flags.disabled = 1;
+    }
+
+  return 0;
+}
 
 
 /* Return the spec structure for the MAC algorithm ALGO.  For an
@@ -367,6 +396,13 @@ gcry_err_code_t
 _gcry_mac_verify (gcry_mac_hd_t hd, const void *buf, size_t buflen)
 {
   return mac_verify (hd, buf, buflen);
+}
+
+
+int
+_gcry_mac_get_algo (gcry_mac_hd_t hd)
+{
+  return hd->algo;
 }
 
 

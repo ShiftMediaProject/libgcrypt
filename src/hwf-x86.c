@@ -81,7 +81,7 @@ get_cpuid(unsigned int in, unsigned int *eax, unsigned int *ebx,
      "cpuid\n\t"
      "movl %%ebx, %1\n\t"
      "popl %%ebx\n\t"            /* Restore GOT register. */
-     : "=a" (regs[0]), "=r" (regs[1]), "=c" (regs[2]), "=d" (regs[3])
+     : "=a" (regs[0]), "=D" (regs[1]), "=c" (regs[2]), "=d" (regs[3])
      : "0" (in), "1" (0), "2" (0), "3" (0)
      : "cc"
      );
@@ -100,11 +100,11 @@ get_cpuid(unsigned int in, unsigned int *eax, unsigned int *ebx,
 static unsigned int
 get_xgetbv(void)
 {
-  unsigned int t_eax;
+  unsigned int t_eax, t_edx;
 
   asm volatile
     ("xgetbv\n\t"
-     : "=a" (t_eax)
+     : "=a" (t_eax), "=d" (t_edx)
      : "c" (0)
     );
 
@@ -151,11 +151,11 @@ get_cpuid(unsigned int in, unsigned int *eax, unsigned int *ebx,
 static unsigned int
 get_xgetbv(void)
 {
-  unsigned int t_eax;
+  unsigned int t_eax, t_edx;
 
   asm volatile
     ("xgetbv\n\t"
-     : "=a" (t_eax)
+     : "=a" (t_eax), "=d" (t_edx)
      : "c" (0)
     );
 
@@ -174,6 +174,7 @@ detect_x86_gnuc (void)
   unsigned int features;
   unsigned int os_supports_avx_avx2_registers = 0;
   unsigned int max_cpuid_level;
+  unsigned int fms, family, model;
   unsigned int result = 0;
 
   (void)os_supports_avx_avx2_registers;
@@ -236,8 +237,37 @@ detect_x86_gnuc (void)
   /* Detect Intel features, that might also be supported by other
      vendors.  */
 
-  /* Get CPU info and Intel feature flags (ECX).  */
-  get_cpuid(1, NULL, NULL, &features, NULL);
+  /* Get CPU family/model/stepping (EAX) and Intel feature flags (ECX).  */
+  get_cpuid(1, &fms, NULL, &features, NULL);
+
+  family = ((fms & 0xf00) >> 8) + ((fms & 0xff00000) >> 20);
+  model = ((fms & 0xf0) >> 4) + ((fms & 0xf0000) >> 12);
+
+  if ((result & HWF_INTEL_CPU) && family == 6)
+    {
+      /* These Intel Core processor models have SHLD/SHRD instruction that
+       * can do integer rotation faster actual ROL/ROR instructions. */
+      switch (model)
+	{
+	case 0x2A:
+	case 0x2D:
+	case 0x3A:
+	case 0x3C:
+	case 0x3F:
+	case 0x45:
+	case 0x46:
+	case 0x3D:
+	case 0x4F:
+	case 0x56:
+	case 0x47:
+	case 0x4E:
+	case 0x5E:
+	case 0x55:
+	case 0x66:
+	  result |= HWF_INTEL_FAST_SHLD;
+	  break;
+	}
+    }
 
 #ifdef ENABLE_PCLMUL_SUPPORT
   /* Test bit 1 for PCLMUL.  */
@@ -247,6 +277,9 @@ detect_x86_gnuc (void)
   /* Test bit 9 for SSSE3.  */
   if (features & 0x00000200)
      result |= HWF_INTEL_SSSE3;
+  /* Test bit 19 for SSE4.1.  */
+  if (features & 0x00080000)
+     result |= HWF_INTEL_SSE4_1;
 #ifdef ENABLE_AESNI_SUPPORT
   /* Test bit 25 for AES-NI.  */
   if (features & 0x02000000)

@@ -189,24 +189,28 @@ int _gcry_log_verbosity( int level );
 /* Compatibility macro.  */
 #define log_mpidump _gcry_log_printmpi
 
+/* Tokeninze STRING and return a malloced array.  */
+char **_gcry_strtokenize (const char *string, const char *delim);
+
 
 /*-- src/hwfeatures.c --*/
-/* (Do not change these values unless synced with the asm code.)  */
-#define HWF_PADLOCK_RNG  1
-#define HWF_PADLOCK_AES  2
-#define HWF_PADLOCK_SHA  4
-#define HWF_PADLOCK_MMUL 8
+#define HWF_PADLOCK_RNG     (1 << 0)
+#define HWF_PADLOCK_AES     (1 << 1)
+#define HWF_PADLOCK_SHA     (1 << 2)
+#define HWF_PADLOCK_MMUL    (1 << 3)
 
-#define HWF_INTEL_CPU    16
-#define HWF_INTEL_BMI2   32
-#define HWF_INTEL_SSSE3  64
-#define HWF_INTEL_PCLMUL 128
-#define HWF_INTEL_AESNI  256
-#define HWF_INTEL_RDRAND 512
-#define HWF_INTEL_AVX    1024
-#define HWF_INTEL_AVX2   2048
+#define HWF_INTEL_CPU       (1 << 4)
+#define HWF_INTEL_FAST_SHLD (1 << 5)
+#define HWF_INTEL_BMI2      (1 << 6)
+#define HWF_INTEL_SSSE3     (1 << 7)
+#define HWF_INTEL_SSE4_1    (1 << 8)
+#define HWF_INTEL_PCLMUL    (1 << 9)
+#define HWF_INTEL_AESNI     (1 << 10)
+#define HWF_INTEL_RDRAND    (1 << 11)
+#define HWF_INTEL_AVX       (1 << 12)
+#define HWF_INTEL_AVX2      (1 << 13)
 
-#define HWF_ARM_NEON     4096
+#define HWF_ARM_NEON        (1 << 14)
 
 
 gpg_err_code_t _gcry_disable_hw_feature (const char *name);
@@ -258,6 +262,9 @@ gpg_err_code_t _gcry_generate_fips186_3_prime
                   gcry_mpi_t *r_q, gcry_mpi_t *r_p,
                   int *r_counter,
                   void **r_seed, size_t *r_seedlen, int *r_hashalgo);
+
+gpg_err_code_t _gcry_fips186_4_prime_check (const gcry_mpi_t x,
+                                            unsigned int bits);
 
 
 /* Replacements of missing functions (missing-string.c).  */
@@ -314,25 +321,30 @@ void __gcry_burn_stack (unsigned int bytes);
                   } while(0)
 #define wipememory(_ptr,_len) wipememory2(_ptr,0,_len)
 
-#ifdef HAVE_U64_TYPEDEF
-  #define FASTWIPE_T u64
-  #define FASTWIPE_MULT (U64_C(0x0101010101010101))
-#else
-  #define FASTWIPE_T u32
-  #define FASTWIPE_MULT (0x01010101U)
-#endif
+#define FASTWIPE_T u64
+#define FASTWIPE_MULT (U64_C(0x0101010101010101))
 
 /* Following architectures can handle unaligned accesses fast.  */
-#if defined(__i386__) || defined(__x86_64__) || \
-    defined(__powerpc__) || defined(__powerpc64__) || \
-    (defined(__arm__) && defined(__ARM_FEATURE_UNALIGNED)) || \
-    defined(__aarch64__)
+#if defined(HAVE_GCC_ATTRIBUTE_PACKED) && \
+    defined(HAVE_GCC_ATTRIBUTE_ALIGNED) && \
+    (defined(__i386__) || defined(__x86_64__) || \
+     defined(__powerpc__) || defined(__powerpc64__) || \
+     (defined(__arm__) && defined(__ARM_FEATURE_UNALIGNED)) || \
+     defined(__aarch64__))
 #define fast_wipememory2_unaligned_head(_ptr,_set,_len) /*do nothing*/
+typedef struct fast_wipememory_s
+{
+  FASTWIPE_T a;
+} __attribute__((packed, aligned(1))) fast_wipememory_t;
 #else
 #define fast_wipememory2_unaligned_head(_vptr,_vset,_vlen) do { \
               while((size_t)(_vptr)&(sizeof(FASTWIPE_T)-1) && _vlen) \
                 { *_vptr=(_vset); _vptr++; _vlen--; } \
                   } while(0)
+typedef struct fast_wipememory_s
+{
+  FASTWIPE_T a;
+} fast_wipememory_t;
 #endif
 
 /* fast_wipememory2 may leave tail bytes unhandled, in which case tail bytes
@@ -344,8 +356,9 @@ void __gcry_burn_stack (unsigned int bytes);
                 break; \
               _vset_long *= FASTWIPE_MULT; \
               do { \
-                volatile FASTWIPE_T *_vptr_long = (volatile void *)_vptr; \
-                *_vptr_long = _vset_long; \
+                volatile fast_wipememory_t *_vptr_long = \
+                  (volatile void *)_vptr; \
+                _vptr_long->a = _vset_long; \
                 _vlen -= sizeof(FASTWIPE_T); \
                 _vptr += sizeof(FASTWIPE_T); \
               } while (_vlen >= sizeof(FASTWIPE_T)); \
@@ -366,6 +379,7 @@ void __gcry_burn_stack (unsigned int bytes);
 
 gcry_err_code_t _gcry_cipher_init (void);
 gcry_err_code_t _gcry_md_init (void);
+gcry_err_code_t _gcry_mac_init (void);
 gcry_err_code_t _gcry_pk_init (void);
 gcry_err_code_t _gcry_secmem_module_init (void);
 gcry_err_code_t _gcry_mpi_init (void);

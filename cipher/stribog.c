@@ -1080,7 +1080,7 @@ static const u64 stribog_table[8][256] =
     U64_C(0x72d14d3493b2e388), U64_C(0xd6a30f258c153427) },
 };
 
-static const u64 C16[13][16] =
+static const u64 C16[12][8] =
 {
   { U64_C(0xdd806559f2a64507), U64_C(0x05767436cc744d23),
     U64_C(0xa2422a08a460d315), U64_C(0x4b7ce09192676901),
@@ -1194,7 +1194,7 @@ static inline void g (u64 *h, u64 *m, u64 *N)
 
 
 static unsigned int
-transform64 (void *context, const unsigned char *inbuf_arg);
+transform (void *context, const unsigned char *inbuf_arg, size_t datalen);
 
 
 static void
@@ -1207,7 +1207,7 @@ stribog_init_512 (void *context, unsigned int flags)
   memset (hd, 0, sizeof (*hd));
 
   hd->bctx.blocksize = 64;
-  hd->bctx.bwrite = transform64;
+  hd->bctx.bwrite = transform;
 }
 
 static void
@@ -1220,7 +1220,7 @@ stribog_init_256 (void *context, unsigned int flags)
 }
 
 static void
-transform (STRIBOG_CONTEXT *hd, const unsigned char *data, unsigned count)
+transform_bits (STRIBOG_CONTEXT *hd, const unsigned char *data, unsigned count)
 {
   u64 M[8];
   u64 l;
@@ -1251,13 +1251,28 @@ transform (STRIBOG_CONTEXT *hd, const unsigned char *data, unsigned count)
 }
 
 static unsigned int
-transform64 (void *context, const unsigned char *inbuf_arg)
+transform_blk (void *context, const unsigned char *inbuf_arg)
 {
   STRIBOG_CONTEXT *hd = context;
 
-  transform (hd, inbuf_arg, 64 * 8);
+  transform_bits (hd, inbuf_arg, 64 * 8);
 
   return /* burn_stack */ 768;
+}
+
+static unsigned int
+transform ( void *c, const unsigned char *data, size_t nblks )
+{
+  unsigned int burn;
+
+  do
+    {
+      burn = transform_blk (c, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
 }
 
 /*
@@ -1279,7 +1294,7 @@ stribog_final (void *context)
   hd->bctx.buf[i++] = 1;
   while (i < 64)
     hd->bctx.buf[i++] = 0;
-  transform (hd, hd->bctx.buf, hd->bctx.count * 8);
+  transform_bits (hd, hd->bctx.buf, hd->bctx.count * 8);
 
   g (hd->h, hd->N, Z);
   g (hd->h, hd->Sigma, Z);
@@ -1311,6 +1326,7 @@ gcry_md_spec_t _gcry_digest_spec_stribog_256 =
     GCRY_MD_STRIBOG256, {0, 0},
     "STRIBOG256", NULL, 0, NULL, 32,
     stribog_init_256, _gcry_md_block_write, stribog_final, stribog_read_256,
+    NULL,
     sizeof (STRIBOG_CONTEXT)
   };
 
@@ -1319,5 +1335,6 @@ gcry_md_spec_t _gcry_digest_spec_stribog_512 =
     GCRY_MD_STRIBOG512, {0, 0},
     "STRIBOG512", NULL, 0, NULL, 64,
     stribog_init_512, _gcry_md_block_write, stribog_final, stribog_read_512,
+    NULL,
     sizeof (STRIBOG_CONTEXT)
   };

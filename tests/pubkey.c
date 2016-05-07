@@ -165,6 +165,33 @@ show_sexp (const char *prefix, gcry_sexp_t a)
   gcry_free (buf);
 }
 
+/* from ../cipher/pubkey-util.c */
+gpg_err_code_t
+_gcry_pk_util_get_nbits (gcry_sexp_t list, unsigned int *r_nbits)
+{
+  char buf[50];
+  const char *s;
+  size_t n;
+
+  *r_nbits = 0;
+
+  list = gcry_sexp_find_token (list, "nbits", 0);
+  if (!list)
+    return 0; /* No NBITS found.  */
+
+  s = gcry_sexp_nth_data (list, 1, &n);
+  if (!s || n >= DIM (buf) - 1 )
+    {
+      /* NBITS given without a cdr.  */
+      gcry_sexp_release (list);
+      return GPG_ERR_INV_OBJ;
+    }
+  memcpy (buf, s, n);
+  buf[n] = 0;
+  *r_nbits = (unsigned int)strtoul (buf, NULL, 0);
+  gcry_sexp_release (list);
+  return 0;
+}
 
 /* Convert STRING consisting of hex characters into its binary
    representation and return it as an allocated buffer. The valid
@@ -354,7 +381,7 @@ get_keys_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   int rc;
 
   rc = gcry_sexp_new (&key_spec,
-		      "(genkey (rsa (nbits 4:1024)))", 0, 1);
+		      "(genkey (rsa (nbits 4:2048)))", 0, 1);
   if (rc)
     die ("error creating S-expression: %s\n", gcry_strerror (rc));
   rc = gcry_pk_genkey (&key, key_spec);
@@ -386,7 +413,7 @@ get_keys_x931_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   int rc;
 
   rc = gcry_sexp_new (&key_spec,
-		      "(genkey (rsa (nbits 4:1024)(use-x931)))", 0, 1);
+		      "(genkey (rsa (nbits 4:2048)(use-x931)))", 0, 1);
   if (rc)
     die ("error creating S-expression: %s\n", gcry_strerror (rc));
   rc = gcry_pk_genkey (&key, key_spec);
@@ -456,8 +483,8 @@ get_dsa_key_new (gcry_sexp_t *pkey, gcry_sexp_t *skey, int transient_key)
 
   rc = gcry_sexp_new (&key_spec,
                       transient_key
-                      ? "(genkey (dsa (nbits 4:1024)(transient-key)))"
-                      : "(genkey (dsa (nbits 4:1024)))",
+                      ? "(genkey (dsa (nbits 4:2048)(transient-key)))"
+                      : "(genkey (dsa (nbits 4:2048)))",
                       0, 1);
   if (rc)
     die ("error creating S-expression: %s\n", gcry_strerror (rc));
@@ -490,7 +517,7 @@ get_dsa_key_fips186_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   int rc;
 
   rc = gcry_sexp_new
-    (&key_spec, "(genkey (dsa (nbits 4:1024)(use-fips186)))",  0, 1);
+    (&key_spec, "(genkey (dsa (nbits 4:2048)(use-fips186)))",  0, 1);
   if (rc)
     die ("error creating S-expression: %s\n", gcry_strerror (rc));
   rc = gcry_pk_genkey (&key, key_spec);
@@ -557,6 +584,7 @@ get_dsa_key_with_domain_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   *skey = sec_key;
 }
 
+#if 0
 static void
 get_dsa_key_fips186_with_domain_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
 {
@@ -598,7 +626,7 @@ get_dsa_key_fips186_with_domain_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   *pkey = pub_key;
   *skey = sec_key;
 }
-
+#endif /*0*/
 
 static void
 get_dsa_key_fips186_with_seed_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
@@ -610,7 +638,7 @@ get_dsa_key_fips186_with_seed_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
     (&key_spec,
      "(genkey"
      "  (dsa"
-     "    (nbits 4:1024)"
+     "    (nbits 4:2048)"
      "    (use-fips186)"
      "    (transient-key)"
      "    (derive-parms"
@@ -722,12 +750,14 @@ check_run (void)
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
 
+  /* We need new test vectors for get_dsa_key_fips186_with_domain_new.  */
   if (verbose)
-    fprintf (stderr, "Generating DSA key with given domain (FIPS 186).\n");
-  get_dsa_key_fips186_with_domain_new (&pkey, &skey);
-  /* Fixme:  Add a check function for DSA keys.  */
-  gcry_sexp_release (pkey);
-  gcry_sexp_release (skey);
+    fprintf (stderr, "Generating DSA key with given domain (FIPS 186)"
+             " - skipped.\n");
+  /* get_dsa_key_fips186_with_domain_new (&pkey, &skey); */
+  /* /\* Fixme:  Add a check function for DSA keys.  *\/ */
+  /* gcry_sexp_release (pkey); */
+  /* gcry_sexp_release (skey); */
 
   if (verbose)
     fprintf (stderr, "Generating DSA key with given seed (FIPS 186).\n");
@@ -903,8 +933,8 @@ check_x931_derived_key (int what)
     }
   };
   gpg_error_t err;
-  gcry_sexp_t key_spec, key, pub_key, sec_key;
-  gcry_mpi_t d_expected, d_have;
+  gcry_sexp_t key_spec = NULL, key = NULL, pub_key = NULL, sec_key = NULL;
+  gcry_mpi_t d_expected = NULL, d_have = NULL;
 
   if (what < 0 && what >= sizeof testtable)
     die ("invalid WHAT value\n");
@@ -913,10 +943,25 @@ check_x931_derived_key (int what)
   if (err)
     die ("error creating S-expression [%d]: %s\n", what, gpg_strerror (err));
 
+  {
+    unsigned nbits;
+    err = _gcry_pk_util_get_nbits(key_spec, &nbits);
+    if (err)
+      die ("nbits not found\n");
+    if (gcry_fips_mode_active() && nbits < 2048)
+      {
+        info("RSA key test with %d bits skipped in fips mode\n", nbits);
+        goto leave;
+      }
+  }
+
   err = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (err)
-    die ("error generating RSA key [%d]: %s\n", what, gpg_strerror (err));
+    {
+      fail ("error generating RSA key [%d]: %s\n", what, gpg_strerror (err));
+      goto leave;
+    }
 
   pub_key = gcry_sexp_find_token (key, "public-key", 0);
   if (!pub_key)
@@ -942,6 +987,7 @@ check_x931_derived_key (int what)
       show_sexp (NULL, sec_key);
       die ("parameter d does match expected value [%d]\n", what);
     }
+leave:
   gcry_mpi_release (d_expected);
   gcry_mpi_release (d_have);
 
@@ -1197,7 +1243,8 @@ main (int argc, char **argv)
     check_x931_derived_key (i);
 
   check_ecc_sample_key ();
-  check_ed25519ecdsa_sample_key ();
+  if (!gcry_fips_mode_active ())
+    check_ed25519ecdsa_sample_key ();
 
   return !!error_count;
 }

@@ -1,7 +1,7 @@
 # Configure.ac script for Libgcrypt
 # Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006,
 #               2007, 2008, 2009, 2011 Free Software Foundation, Inc.
-# Copyright (C) 2012, 2013  g10 Code GmbH
+# Copyright (C) 2012, 2013, 2014, 2015, 2016  g10 Code GmbH
 #
 # This file is part of Libgcrypt.
 #
@@ -29,8 +29,8 @@ min_automake_version="1.14"
 # commit and push so that the git magic is able to work.  See below
 # for the LT versions.
 m4_define(mym4_version_major, [1])
-m4_define(mym4_version_minor, [6])
-m4_define(mym4_version_micro, [5])
+m4_define(mym4_version_minor, [7])
+m4_define(mym4_version_micro, [0])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -54,9 +54,9 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (Interfaces removed:    CURRENT++, AGE=0, REVISION=0)
 #   (Interfaces added:      CURRENT++, AGE++, REVISION=0)
 #   (No interfaces changed:                   REVISION++)
-LIBGCRYPT_LT_CURRENT=20
-LIBGCRYPT_LT_AGE=0
-LIBGCRYPT_LT_REVISION=5
+LIBGCRYPT_LT_CURRENT=21
+LIBGCRYPT_LT_AGE=1
+LIBGCRYPT_LT_REVISION=0
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -67,7 +67,7 @@ LIBGCRYPT_CONFIG_API_VERSION=1
 
 # If you change the required gpg-error version, please remove
 # unnecessary error code defines in src/gcrypt-int.h.
-NEED_GPG_ERROR_VERSION=1.11
+NEED_GPG_ERROR_VERSION=1.13
 
 PACKAGE=$PACKAGE_NAME
 VERSION=$PACKAGE_VERSION
@@ -81,6 +81,8 @@ AC_CONFIG_LIBOBJ_DIR([compat])
 AC_CANONICAL_HOST
 AM_MAINTAINER_MODE
 AM_SILENT_RULES
+
+AC_ARG_VAR(SYSROOT,[locate config scripts also below that directory])
 
 AH_TOP([
 #ifndef _GCRYPT_CONFIG_H_INCLUDED
@@ -186,7 +188,7 @@ LIBGCRYPT_CONFIG_HOST="$host"
 
 # Definitions for symmetric ciphers.
 available_ciphers="arcfour blowfish cast5 des aes twofish serpent rfc2268 seed"
-available_ciphers="$available_ciphers camellia idea salsa20 gost28147"
+available_ciphers="$available_ciphers camellia idea salsa20 gost28147 chacha20"
 enabled_ciphers=""
 
 # Definitions for public-key ciphers.
@@ -194,13 +196,12 @@ available_pubkey_ciphers="dsa elgamal rsa ecc"
 enabled_pubkey_ciphers=""
 
 # Definitions for message digests.
-available_digests="crc gostr3411-94 md4 md5 rmd160 sha1 sha256"
-available_digests_64="sha512 tiger whirlpool stribog"
+available_digests="crc gostr3411-94 md2 md4 md5 rmd160 sha1 sha256"
+available_digests="$available_digests sha512 sha3 tiger whirlpool stribog"
 enabled_digests=""
 
 # Definitions for kdfs (optional ones)
-available_kdfs="s2k pkdf2"
-available_kdfs_64="scrypt"
+available_kdfs="s2k pkdf2 scrypt"
 enabled_kdfs=""
 
 # Definitions for random modules.
@@ -341,6 +342,7 @@ AC_CHECK_SIZEOF(unsigned short, 2)
 AC_CHECK_SIZEOF(unsigned int, 4)
 AC_CHECK_SIZEOF(unsigned long, 4)
 AC_CHECK_SIZEOF(unsigned long long, 0)
+AC_CHECK_SIZEOF(void *, 0)
 
 AC_TYPE_UINTPTR_T
 
@@ -350,17 +352,27 @@ if test "$ac_cv_sizeof_unsigned_short" = "0" \
     AC_MSG_WARN([Hmmm, something is wrong with the sizes - using defaults]);
 fi
 
+# Ensure that we have UINT64_C before we bother to check for uint64_t
+AC_CACHE_CHECK([for UINT64_C],[gnupg_cv_uint64_c_works],
+   AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <inttypes.h>]],
+       [[uint64_t foo=UINT64_C(42);]])],
+     gnupg_cv_uint64_c_works=yes,gnupg_cv_uint64_c_works=no))
+if test "$gnupg_cv_uint64_c_works" = "yes" ; then
+   AC_CHECK_SIZEOF(uint64_t)
+fi
+
 # Do we have any 64-bit data types?
 if test "$ac_cv_sizeof_unsigned_int" != "8" \
    && test "$ac_cv_sizeof_unsigned_long" != "8" \
    && test "$ac_cv_sizeof_unsigned_long_long" != "8" \
    && test "$ac_cv_sizeof_uint64_t" != "8"; then
-    AC_MSG_WARN([No 64-bit types.  Disabling TIGER/192, SCRYPT, SHA-384, \
- SHA-512 and GOST R 34.11-12])
-else
-  available_digests="$available_digests $available_digests_64"
-  available_kdfs="$available_kdfs $available_kdfs_64"
+    AC_MSG_ERROR([[
+***
+*** No 64-bit integer type available.
+*** It is not possible to build Libgcrypt on this platform.
+***]])
 fi
+
 
 # If not specified otherwise, all available algorithms will be
 # included.
@@ -368,6 +380,8 @@ default_ciphers="$available_ciphers"
 default_pubkey_ciphers="$available_pubkey_ciphers"
 default_digests="$available_digests"
 default_kdfs="$available_kdfs"
+# Blacklist MD2 by default
+default_digests=`echo $default_digests | sed -e 's/md2//g'`
 
 # Substitutions to set generated files in a Emacs buffer to read-only.
 AC_SUBST(emacs_local_vars_begin, ['Local Variables:'])
@@ -717,25 +731,14 @@ fi
 AC_SUBST(PTH_CFLAGS)
 AC_SUBST(PTH_LIBS)
 
-
 #
-# See which thread system we have
+# Check whether pthreads is available
 #
-# Windows has always thread support; thus we don't bother to test for
-# it as it may lead to false results when cross building.
-if test "$have_w32_system" = yes; then
-  AC_DEFINE([USE_WINDOWS_THREADS], [1])
-  LIBTHREAD=
-  LTLIBTHREAD=
-  LIBMULTITHREAD=
-  LTLIBMULTITHREAD=
-  THREADLIB_CPPFLAGS=""
-  AC_SUBST([LIBTHREAD])
-  AC_SUBST([LTLIBTHREAD])
-  AC_SUBST([LIBMULTITHREAD])
-  AC_SUBST([LTLIBMULTITHREAD])
-else
-  gl_LOCK
+if test "$have_w32_system" != yes; then
+  AC_CHECK_LIB(pthread,pthread_create,have_pthread=yes)
+  if test "$have_pthread" = yes; then
+    AC_DEFINE(HAVE_PTHREAD, 1 ,[Define if we have pthread.])
+  fi
 fi
 
 
@@ -820,6 +823,21 @@ AC_CACHE_CHECK(for __builtin_bswap64,
 if test "$gcry_cv_have_builtin_bswap64" = "yes" ; then
    AC_DEFINE(HAVE_BUILTIN_BSWAP64,1,
              [Defined if compiler has '__builtin_bswap64' intrinsic])
+fi
+
+
+#
+# Check for __builtin_ctz intrinsic.
+#
+AC_CACHE_CHECK(for __builtin_ctz,
+       [gcry_cv_have_builtin_ctz],
+       [gcry_cv_have_builtin_ctz=no
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([],
+          [unsigned int x = 0; int y = __builtin_ctz(x); return y;])],
+          [gcry_cv_have_builtin_ctz=yes])])
+if test "$gcry_cv_have_builtin_ctz" = "yes" ; then
+   AC_DEFINE(HAVE_BUILTIN_CTZ, 1,
+             [Defined if compiler has '__builtin_ctz' intrinsic])
 fi
 
 
@@ -936,6 +954,26 @@ AC_CACHE_CHECK([whether the GCC style aligned attribute is supported],
 if test "$gcry_cv_gcc_attribute_aligned" = "yes" ; then
    AC_DEFINE(HAVE_GCC_ATTRIBUTE_ALIGNED,1,
      [Defined if a GCC style "__attribute__ ((aligned (n))" is supported])
+fi
+
+
+#
+# Check whether the compiler supports the GCC style packed attribute
+#
+AC_CACHE_CHECK([whether the GCC style packed attribute is supported],
+       [gcry_cv_gcc_attribute_packed],
+       [gcry_cv_gcc_attribute_packed=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[struct foolong_s { long b; } __attribute__ ((packed));
+            struct foo_s { char a; struct foolong_s b; }
+              __attribute__ ((packed));
+            enum bar {
+              FOO = 1 / (sizeof(struct foo_s) == (sizeof(char) + sizeof(long))),
+            };]])],
+          [gcry_cv_gcc_attribute_packed=yes])])
+if test "$gcry_cv_gcc_attribute_packed" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_PACKED,1,
+     [Defined if a GCC style "__attribute__ ((packed))" is supported])
 fi
 
 
@@ -1088,6 +1126,93 @@ fi
 ####                                     ####
 #############################################
 
+
+# Following tests depend on warnings to cause compile to fail, so set -Werror
+# temporarily.
+_gcc_cflags_save=$CFLAGS
+CFLAGS="$CFLAGS -Werror"
+
+
+#
+# Check whether compiler supports 'ms_abi' function attribute.
+#
+AC_CACHE_CHECK([whether compiler supports 'ms_abi' function attribute],
+       [gcry_cv_gcc_attribute_ms_abi],
+       [gcry_cv_gcc_attribute_ms_abi=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[int __attribute__ ((ms_abi)) proto(int);]])],
+          [gcry_cv_gcc_attribute_ms_abi=yes])])
+if test "$gcry_cv_gcc_attribute_ms_abi" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_MS_ABI,1,
+     [Defined if compiler supports "__attribute__ ((ms_abi))" function attribute])
+fi
+
+
+#
+# Check whether compiler supports 'sysv_abi' function attribute.
+#
+AC_CACHE_CHECK([whether compiler supports 'sysv_abi' function attribute],
+       [gcry_cv_gcc_attribute_sysv_abi],
+       [gcry_cv_gcc_attribute_sysv_abi=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[int __attribute__ ((sysv_abi)) proto(int);]])],
+          [gcry_cv_gcc_attribute_sysv_abi=yes])])
+if test "$gcry_cv_gcc_attribute_sysv_abi" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_SYSV_ABI,1,
+     [Defined if compiler supports "__attribute__ ((sysv_abi))" function attribute])
+fi
+
+
+#
+# Check whether default calling convention is 'ms_abi'.
+#
+if test "$gcry_cv_gcc_attribute_ms_abi" = "yes" ; then
+   AC_CACHE_CHECK([whether default calling convention is 'ms_abi'],
+          [gcry_cv_gcc_default_abi_is_ms_abi],
+          [gcry_cv_gcc_default_abi_is_ms_abi=no
+           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+             [[void *test(void) {
+                 void *(*def_func)(void) = test;
+                 void *__attribute__((ms_abi))(*msabi_func)(void);
+                 /* warning on SysV abi targets, passes on Windows based targets */
+                 msabi_func = def_func;
+                 return msabi_func;
+             }]])],
+             [gcry_cv_gcc_default_abi_is_ms_abi=yes])])
+   if test "$gcry_cv_gcc_default_abi_is_ms_abi" = "yes" ; then
+      AC_DEFINE(HAVE_GCC_DEFAULT_ABI_IS_MS_ABI,1,
+        [Defined if default calling convention is 'ms_abi'])
+   fi
+fi
+
+
+#
+# Check whether default calling convention is 'sysv_abi'.
+#
+if test "$gcry_cv_gcc_attribute_sysv_abi" = "yes" ; then
+   AC_CACHE_CHECK([whether default calling convention is 'sysv_abi'],
+          [gcry_cv_gcc_default_abi_is_sysv_abi],
+          [gcry_cv_gcc_default_abi_is_sysv_abi=no
+           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+             [[void *test(void) {
+                 void *(*def_func)(void) = test;
+                 void *__attribute__((sysv_abi))(*sysvabi_func)(void);
+                 /* warning on MS ABI targets, passes on SysV ABI targets */
+                 sysvabi_func = def_func;
+                 return sysvabi_func;
+             }]])],
+             [gcry_cv_gcc_default_abi_is_sysv_abi=yes])])
+   if test "$gcry_cv_gcc_default_abi_is_sysv_abi" = "yes" ; then
+      AC_DEFINE(HAVE_GCC_DEFAULT_ABI_IS_SYSV_ABI,1,
+        [Defined if default calling convention is 'sysv_abi'])
+   fi
+fi
+
+
+# Restore flags.
+CFLAGS=$_gcc_cflags_save;
+
+
 #
 # Check whether GCC inline assembler supports SSSE3 instructions
 # This is required for the AES-NI instructions.
@@ -1197,11 +1322,42 @@ fi
 
 
 #
+# Check whether GCC assembler needs "-Wa,--divide" to correctly handle
+# constant division
+#
+if test $amd64_as_feature_detection = yes; then
+  AC_CACHE_CHECK([whether GCC assembler handles division correctly],
+       [gcry_cv_gcc_as_const_division_ok],
+       [gcry_cv_gcc_as_const_division_ok=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[__asm__("xorl \$(123456789/12345678), %ebp;\n\t");]])],
+          [gcry_cv_gcc_as_const_division_ok=yes])])
+  if test "$gcry_cv_gcc_as_const_division_ok" = "no" ; then
+    #
+    # Add '-Wa,--divide' to CPPFLAGS and try check again.
+    #
+    _gcc_cppflags_save="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS -Wa,--divide"
+    AC_CACHE_CHECK([whether GCC assembler handles division correctly with "-Wa,--divide"],
+         [gcry_cv_gcc_as_const_division_with_wadivide_ok],
+         [gcry_cv_gcc_as_const_division_with_wadivide_ok=no
+          AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+            [[__asm__("xorl \$(123456789/12345678), %ebp;\n\t");]])],
+            [gcry_cv_gcc_as_const_division_with_wadivide_ok=yes])])
+    if test "$gcry_cv_gcc_as_const_division_with_wadivide_ok" = "no" ; then
+      # '-Wa,--divide' did not work, restore old flags.
+      CPPFLAGS="$_gcc_cppflags_save"
+    fi
+  fi
+fi
+
+
+#
 # Check whether GCC assembler supports features needed for our amd64
 # implementations
 #
 if test $amd64_as_feature_detection = yes; then
-    AC_CACHE_CHECK([whether GCC assembler is compatible for amd64 assembly implementations],
+  AC_CACHE_CHECK([whether GCC assembler is compatible for amd64 assembly implementations],
        [gcry_cv_gcc_amd64_platform_as_ok],
        [if test "$mpi_cpu_arch" != "x86" ; then
           gcry_cv_gcc_amd64_platform_as_ok="n/a"
@@ -1211,18 +1367,38 @@ if test $amd64_as_feature_detection = yes; then
           [[__asm__(
                 /* Test if '.type' and '.size' are supported.  */
                 /* These work only on ELF targets. */
-		/* TODO: add COFF (mingw64, cygwin64) support to assembly
-                 * implementations.  Mingw64/cygwin64 also require additional
-                 * work because they use different calling convention. */
 		"asmfunc:\n\t"
                 ".size asmfunc,.-asmfunc;\n\t"
                 ".type asmfunc,@function;\n\t"
+		/* Test if assembler allows use of '/' for constant division
+		 * (Solaris/x86 issue). If previous constant division check
+		 * and "-Wa,--divide" workaround failed, this causes assembly
+		 * to be disable on this machine. */
+		"xorl \$(123456789/12345678), %ebp;\n\t"
             );]])],
           [gcry_cv_gcc_amd64_platform_as_ok=yes])
         fi])
   if test "$gcry_cv_gcc_amd64_platform_as_ok" = "yes" ; then
      AC_DEFINE(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS,1,
               [Defined if underlying assembler is compatible with amd64 assembly implementations])
+  fi
+  if test "$gcry_cv_gcc_amd64_platform_as_ok" = "no" &&
+     test "$gcry_cv_gcc_attribute_sysv_abi" = "yes" &&
+     test "$gcry_cv_gcc_default_abi_is_ms_abi" = "yes"; then
+    AC_CACHE_CHECK([whether GCC assembler is compatible for WIN64 assembly implementations],
+      [gcry_cv_gcc_win64_platform_as_ok],
+      [gcry_cv_gcc_win64_platform_as_ok=no
+      AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+        [[__asm__(
+              ".globl asmfunc\n\t"
+              "asmfunc:\n\t"
+              "xorq \$(1234), %rbp;\n\t"
+          );]])],
+        [gcry_cv_gcc_win64_platform_as_ok=yes])])
+    if test "$gcry_cv_gcc_win64_platform_as_ok" = "yes" ; then
+      AC_DEFINE(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS,1,
+                [Defined if underlying assembler is compatible with WIN64 assembly implementations])
+    fi
   fi
 fi
 
@@ -1310,7 +1486,7 @@ AC_CACHE_CHECK([whether GCC inline assembler supports NEON instructions],
           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
           [[__asm__(
                 ".syntax unified\n\t"
-                ".thumb\n\t"
+                ".arm\n\t"
                 ".fpu neon\n\t"
                 "vld1.64 {%q0-%q1}, [%r0]!;\n\t"
                 "vrev64.8 %q0, %q3;\n\t"
@@ -1600,6 +1776,13 @@ LIST_MEMBER(arcfour, $enabled_ciphers)
 if test "$found" = "1"; then
    GCRYPT_CIPHERS="$GCRYPT_CIPHERS arcfour.lo"
    AC_DEFINE(USE_ARCFOUR, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS arcfour-amd64.lo"
+      ;;
+   esac
 fi
 
 LIST_MEMBER(blowfish, $enabled_ciphers)
@@ -1640,6 +1823,13 @@ LIST_MEMBER(des, $enabled_ciphers)
 if test "$found" = "1" ; then
    GCRYPT_CIPHERS="$GCRYPT_CIPHERS des.lo"
    AC_DEFINE(USE_DES, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS des-amd64.lo"
+      ;;
+   esac
 fi
 
 LIST_MEMBER(aes, $enabled_ciphers)
@@ -1651,10 +1841,23 @@ if test "$found" = "1" ; then
       x86_64-*-*)
          # Build with the assembly implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-amd64.lo"
+
+         # Build with the SSSE3 implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-arm.lo"
+      ;;
+   esac
+
+   case "$mpi_cpu_arch" in
+     x86)
+         # Build with the AES-NI implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-aesni.lo"
+
+         # Build with the Padlock implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-padlock.lo"
       ;;
    esac
 fi
@@ -1768,6 +1971,39 @@ if test "$found" = "1" ; then
    AC_DEFINE(USE_GOST28147, 1, [Defined if this module should be included])
 fi
 
+LIST_MEMBER(chacha20, $enabled_ciphers)
+if test "$found" = "1" ; then
+   GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20.lo"
+   AC_DEFINE(USE_CHACHA20, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-sse2-amd64.lo"
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-ssse3-amd64.lo"
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-avx2-amd64.lo"
+      ;;
+   esac
+
+   if test x"$neonsupport" = xyes ; then
+     # Build with the NEON implementation
+     GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-armv7-neon.lo"
+   fi
+fi
+
+case "${host}" in
+   x86_64-*-*)
+      # Build with the assembly implementation
+      GCRYPT_CIPHERS="$GCRYPT_CIPHERS poly1305-sse2-amd64.lo"
+      GCRYPT_CIPHERS="$GCRYPT_CIPHERS poly1305-avx2-amd64.lo"
+   ;;
+esac
+
+if test x"$neonsupport" = xyes ; then
+   # Build with the NEON implementation
+   GCRYPT_CIPHERS="$GCRYPT_CIPHERS poly1305-armv7-neon.lo"
+fi
+
 LIST_MEMBER(dsa, $enabled_pubkey_ciphers)
 if test "$found" = "1" ; then
    GCRYPT_PUBKEY_CIPHERS="$GCRYPT_PUBKEY_CIPHERS dsa.lo"
@@ -1798,6 +2034,13 @@ LIST_MEMBER(crc, $enabled_digests)
 if test "$found" = "1" ; then
    GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc.lo"
    AC_DEFINE(USE_CRC, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      i?86-*-* | x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-intel-pclmul.lo"
+      ;;
+   esac
 fi
 
 LIST_MEMBER(gostr3411-94, $enabled_digests)
@@ -1816,6 +2059,12 @@ if test "$found" = "1" ; then
    AC_DEFINE(USE_GOST_R_3411_12, 1, [Defined if this module should be included])
 fi
 
+LIST_MEMBER(md2, $enabled_digests)
+if test "$found" = "1" ; then
+   GCRYPT_DIGESTS="$GCRYPT_DIGESTS md2.lo"
+   AC_DEFINE(USE_MD2, 1, [Defined if this module should be included])
+fi
+
 LIST_MEMBER(md4, $enabled_digests)
 if test "$found" = "1" ; then
    GCRYPT_DIGESTS="$GCRYPT_DIGESTS md4.lo"
@@ -1828,6 +2077,12 @@ if test "$found" = "1" ; then
    AC_DEFINE(USE_MD5, 1, [Defined if this module should be included])
 fi
 
+LIST_MEMBER(rmd160, $enabled_digests)
+if test "$found" = "1" ; then
+   GCRYPT_DIGESTS="$GCRYPT_DIGESTS rmd160.lo"
+   AC_DEFINE(USE_RMD160, 1, [Defined if this module should be included])
+fi
+
 LIST_MEMBER(sha256, $enabled_digests)
 if test "$found" = "1" ; then
    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256.lo"
@@ -1837,6 +2092,8 @@ if test "$found" = "1" ; then
       x86_64-*-*)
          # Build with the assembly implementation
          GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ssse3-amd64.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-avx-amd64.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-avx2-bmi2-amd64.lo"
       ;;
    esac
 fi
@@ -1853,11 +2110,33 @@ if test "$found" = "1" ; then
          GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-avx-amd64.lo"
          GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-avx2-bmi2-amd64.lo"
       ;;
+      arm*-*-*)
+         # Build with the assembly implementation
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-arm.lo"
+      ;;
    esac
 
    if test x"$neonsupport" = xyes ; then
      # Build with the NEON implementation
      GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-armv7-neon.lo"
+   fi
+fi
+
+LIST_MEMBER(sha3, $enabled_digests)
+if test "$found" = "1" ; then
+   GCRYPT_DIGESTS="$GCRYPT_DIGESTS keccak.lo"
+   AC_DEFINE(USE_SHA3, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         :
+      ;;
+   esac
+
+   if test x"$neonsupport" = xyes ; then
+     # Build with the NEON implementation
+     GCRYPT_DIGESTS="$GCRYPT_DIGESTS keccak-armv7-neon.lo"
    fi
 fi
 
@@ -1871,17 +2150,30 @@ LIST_MEMBER(whirlpool, $enabled_digests)
 if test "$found" = "1" ; then
    GCRYPT_DIGESTS="$GCRYPT_DIGESTS whirlpool.lo"
    AC_DEFINE(USE_WHIRLPOOL, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS whirlpool-sse2-amd64.lo"
+      ;;
+   esac
 fi
 
-# rmd160 and sha1 should be included always.
-GCRYPT_DIGESTS="$GCRYPT_DIGESTS rmd160.lo sha1.lo"
-AC_DEFINE(USE_RMD160, 1, [Defined if this module should be included])
+# SHA-1 needs to be included always for example because it is used by
+# random-csprng.c.
+GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1.lo"
 AC_DEFINE(USE_SHA1, 1,   [Defined if this module should be included])
 
 case "${host}" in
   x86_64-*-*)
     # Build with the assembly implementation
     GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-ssse3-amd64.lo"
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-avx-amd64.lo"
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-avx-bmi2-amd64.lo"
+  ;;
+  arm*-*-*)
+    # Build with the assembly implementation
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv7-neon.lo"
   ;;
 esac
 
@@ -1985,6 +2277,16 @@ AC_SUBST([GCRYPT_HWF_MODULES])
 
 
 #
+# Option to disable building of doc file
+#
+build_doc=yes
+AC_ARG_ENABLE([doc], AC_HELP_STRING([--disable-doc],
+                                    [do not build the documentation]),
+                     build_doc=$enableval, build_doc=yes)
+AM_CONDITIONAL([BUILD_DOC], [test "x$build_doc" != xno])
+
+
+#
 # Provide information about the build.
 #
 BUILD_REVISION="mym4_revision"
@@ -1998,7 +2300,16 @@ changequote([,])dnl
 BUILD_FILEVERSION="${BUILD_FILEVERSION}mym4_revision_dec"
 AC_SUBST(BUILD_FILEVERSION)
 
-BUILD_TIMESTAMP=`date -u +%Y-%m-%dT%H:%M+0000 2>/dev/null || date`
+AC_ARG_ENABLE([build-timestamp],
+  AC_HELP_STRING([--enable-build-timestamp],
+                 [set an explicit build timestamp for reproducibility.
+                  (default is the current time in ISO-8601 format)]),
+     [if test "$enableval" = "yes"; then
+        BUILD_TIMESTAMP=`date -u +%Y-%m-%dT%H:%M+0000 2>/dev/null || date`
+      else
+        BUILD_TIMESTAMP="$enableval"
+      fi],
+     [BUILD_TIMESTAMP="<none>"])
 AC_SUBST(BUILD_TIMESTAMP)
 AC_DEFINE_UNQUOTED(BUILD_TIMESTAMP, "$BUILD_TIMESTAMP",
                    [The time this package was configured for a build])
@@ -2047,9 +2358,17 @@ GCRY_MSG_SHOW([Try using Intel AVX2:     ],[$avx2support])
 GCRY_MSG_SHOW([Try using ARM NEON:       ],[$neonsupport])
 GCRY_MSG_SHOW([],[])
 
+if test "x${gpg_config_script_warn}" != x; then
+cat <<G10EOF
+        Mismatches between the target platform and the to
+        be used libraries have been been detected for:
+         ${gpg_config_script_warn}
+        Please check above for warning messages.
+
+G10EOF
+fi
 if test "$print_egd_notice" = "yes"; then
 cat <<G10EOF
-
    The performance of the Unix random gatherer module (rndunix) is not
    very good and it does not keep the entropy pool over multiple
    invocations of Libgcrypt base applications.  The suggested way to
@@ -2068,7 +2387,6 @@ fi
 
 if test "$gcry_cv_gcc_attribute_aligned" != "yes" ; then
 cat <<G10EOF
-
    Please not that your compiler does not support the GCC style
    aligned attribute. Using this software may evoke bus errors.
 
@@ -2080,4 +2398,5 @@ if test -n "$gpl"; then
   echo "  $gpl"
   echo "included.  These parts are licensed under the GPL and thus the"
   echo "use of this library has to comply with the conditions of the GPL."
+  echo ""
 fi

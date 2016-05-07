@@ -107,6 +107,7 @@ _gcry_pk_util_parse_flaglist (gcry_sexp_t list,
             {
               encoding = PUBKEY_ENC_RAW;
               flags |= PUBKEY_FLAG_EDDSA;
+              flags |= PUBKEY_FLAG_DJB_TWEAK;
             }
           else if (!memcmp (s, "pkcs1", 5) && encoding == PUBKEY_ENC_UNKNOWN)
             {
@@ -142,13 +143,28 @@ _gcry_pk_util_parse_flaglist (gcry_sexp_t list,
             rc = GPG_ERR_INV_FLAG;
           break;
 
+        case 9:
+          if (!memcmp (s, "pkcs1-raw", 9) && encoding == PUBKEY_ENC_UNKNOWN)
+            {
+              encoding = PUBKEY_ENC_PKCS1_RAW;
+              flags |= PUBKEY_FLAG_FIXEDLEN;
+            }
+          else if (!memcmp (s, "djb-tweak", 9))
+            {
+              encoding = PUBKEY_ENC_RAW;
+              flags |= PUBKEY_FLAG_DJB_TWEAK;
+            }
+          else if (!igninvflag)
+            rc = GPG_ERR_INV_FLAG;
+          break;
+
         case 10:
           if (!memcmp (s, "igninvflag", 10))
             igninvflag = 1;
           else if (!memcmp (s, "no-keytest", 10))
             flags |= PUBKEY_FLAG_NO_KEYTEST;
-          /* In 1.7.0 we will return an INV_FLAG on error but we
-             do not fix that bug here in 1.6.4  */
+          else if (!igninvflag)
+            rc = GPG_ERR_INV_FLAG;
           break;
 
         case 11:
@@ -201,6 +217,10 @@ get_hash_algo (const char *s, size_t n)
     { "md4",    GCRY_MD_MD4 },
     { "tiger",  GCRY_MD_TIGER },
     { "haval",  GCRY_MD_HAVAL },
+    { "sha3-224", GCRY_MD_SHA3_224 },
+    { "sha3-256", GCRY_MD_SHA3_256 },
+    { "sha3-384", GCRY_MD_SHA3_384 },
+    { "sha3-512", GCRY_MD_SHA3_512 },
     { NULL, 0 }
   };
   int algo;
@@ -597,7 +617,14 @@ _gcry_pk_util_init_encoding_ctx (struct pk_encoding_ctx *ctx,
   ctx->nbits = nbits;
   ctx->encoding = PUBKEY_ENC_UNKNOWN;
   ctx->flags = 0;
-  ctx->hash_algo = GCRY_MD_SHA1;
+  if (fips_mode ())
+    {
+      ctx->hash_algo = GCRY_MD_SHA256;
+    }
+  else
+    {
+      ctx->hash_algo = GCRY_MD_SHA1;
+    }
   ctx->label = NULL;
   ctx->labellen = 0;
   ctx->saltlen = 20;
@@ -638,7 +665,7 @@ _gcry_pk_util_free_encoding_ctx (struct pk_encoding_ctx *ctx)
 
    LABEL is specific to OAEP.
 
-   SALT-LENGTH is for PSS.
+   SALT-LENGTH is for PSS it is limited to 16384 bytes.
 
    RANDOM-OVERRIDE is used to replace random nonces for regression
    testing.  */
@@ -854,6 +881,21 @@ _gcry_pk_util_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
                                                  ctx->hash_algo);
         }
     }
+  else if (ctx->encoding == PUBKEY_ENC_PKCS1_RAW && lvalue
+	   && (ctx->op == PUBKEY_OP_SIGN || ctx->op == PUBKEY_OP_VERIFY))
+    {
+      const void * value;
+      size_t valuelen;
+
+      if (sexp_length (lvalue) != 2)
+        rc = GPG_ERR_INV_OBJ;
+      else if ( !(value=sexp_nth_data (lvalue, 1, &valuelen))
+                || !valuelen )
+        rc = GPG_ERR_INV_OBJ;
+      else
+        rc = _gcry_rsa_pkcs1_encode_raw_for_sig (ret_mpi, ctx->nbits,
+                                                 value, valuelen);
+    }
   else if (ctx->encoding == PUBKEY_ENC_OAEP && lvalue
 	   && ctx->op == PUBKEY_OP_ENCRYPT)
     {
@@ -1026,6 +1068,31 @@ _gcry_pk_util_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
             rc = GPG_ERR_DIGEST_ALGO;
 	  else
 	    {
+	      gcry_sexp_t list;
+	      /* Get SALT-LENGTH. */
+	      list = sexp_find_token (ldata, "salt-length", 0);
+	      if (list)
+		{
+                  unsigned long ul;
+
+		  s = sexp_nth_data (list, 1, &n);
+		  if (!s)
+		    {
+		      rc = GPG_ERR_NO_OBJ;
+                      sexp_release (list);
+		      goto leave;
+		    }
+		  ul = strtoul (s, NULL, 10);
+                  if (ul > 16384)
+                    {
+                      rc = GPG_ERR_TOO_LARGE;
+                      sexp_release (list);
+                      goto leave;
+                    }
+                  ctx->saltlen = ul;
+		  sexp_release (list);
+		}
+
 	      *ret_mpi = sexp_nth_mpi (lhash, 2, GCRYMPI_FMT_USG);
 	      if (!*ret_mpi)
 		rc = GPG_ERR_INV_OBJ;

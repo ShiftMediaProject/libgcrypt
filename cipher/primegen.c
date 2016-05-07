@@ -29,7 +29,6 @@
 #include "g10lib.h"
 #include "mpi.h"
 #include "cipher.h"
-#include "ath.h"
 
 static gcry_mpi_t gen_prime (unsigned int nbits, int secret, int randomlevel,
                              int (*extra_check)(void *, gcry_mpi_t),
@@ -141,18 +140,15 @@ struct primepool_s
 };
 struct primepool_s *primepool;
 /* Mutex used to protect access to the primepool.  */
-static ath_mutex_t primepool_lock;
+GPGRT_LOCK_DEFINE (primepool_lock);
 
 
 gcry_err_code_t
 _gcry_primegen_init (void)
 {
-  gcry_err_code_t ec;
-
-  ec = ath_mutex_init (&primepool_lock);
-  if (ec)
-    return gpg_err_code_from_errno (ec);
-  return ec;
+  /* This function was formerly used to initialize the primepool
+     Mutex. This has been replace by a static initialization.  */
+  return 0;
 }
 
 
@@ -446,12 +442,11 @@ prime_generate_internal (int need_q_factor,
               goto leave;
             }
 
-          if (ath_mutex_lock (&primepool_lock))
-            {
-              err = GPG_ERR_INTERNAL;
-              goto leave;
-            }
+          err = gpgrt_lock_lock (&primepool_lock);
+          if (err)
+            goto leave;
           is_locked = 1;
+
           for (i = 0; i < n; i++)
             {
               perms[i] = 1;
@@ -470,11 +465,9 @@ prime_generate_internal (int need_q_factor,
                   pool[i] = get_pool_prime (fbits, poolrandomlevel);
                   if (!pool[i])
                     {
-                      if (ath_mutex_unlock (&primepool_lock))
-                        {
-                          err = GPG_ERR_INTERNAL;
-                          goto leave;
-                        }
+                      err = gpgrt_lock_unlock (&primepool_lock);
+                      if (err)
+                        goto leave;
                       is_locked = 0;
                     }
                 }
@@ -483,23 +476,20 @@ prime_generate_internal (int need_q_factor,
               pool_in_use[i] = i;
               factors[i] = pool[i];
             }
-          if (is_locked && ath_mutex_unlock (&primepool_lock))
-            {
-              err = GPG_ERR_INTERNAL;
-              goto leave;
-            }
+
+          if (is_locked && (err = gpgrt_lock_unlock (&primepool_lock)))
+            goto leave;
           is_locked = 0;
         }
       else
         {
           /* Get next permutation. */
           m_out_of_n ( (char*)perms, n, m);
-          if (ath_mutex_lock (&primepool_lock))
-            {
-              err = GPG_ERR_INTERNAL;
-              goto leave;
-            }
+
+          if ((err = gpgrt_lock_lock (&primepool_lock)))
+            goto leave;
           is_locked = 1;
+
           for (i = j = 0; (i < m) && (j < n); i++)
             if (perms[i])
               {
@@ -509,11 +499,8 @@ prime_generate_internal (int need_q_factor,
                     pool[i] = get_pool_prime (fbits, poolrandomlevel);
                     if (!pool[i])
                       {
-                        if (ath_mutex_unlock (&primepool_lock))
-                          {
-                            err = GPG_ERR_INTERNAL;
-                            goto leave;
-                          }
+                        if ((err = gpgrt_lock_unlock (&primepool_lock)))
+                          goto leave;
                         is_locked = 0;
                       }
                   }
@@ -522,12 +509,11 @@ prime_generate_internal (int need_q_factor,
                 pool_in_use[j] = i;
                 factors[j++] = pool[i];
               }
-          if (is_locked && ath_mutex_unlock (&primepool_lock))
-            {
-              err = GPG_ERR_INTERNAL;
-              goto leave;
-            }
+
+          if (is_locked && (err = gpgrt_lock_unlock (&primepool_lock)))
+            goto leave;
           is_locked = 0;
+
           if (i == n)
             {
               /* Ran out of permutations: Allocate new primes.  */
@@ -636,47 +622,44 @@ prime_generate_internal (int need_q_factor,
         }
     }
 
-  if (g)
+  if (g && need_q_factor)
+    err = GPG_ERR_NOT_IMPLEMENTED;
+  else if (g)
     {
       /* Create a generator (start with 3).  */
       gcry_mpi_t tmp = mpi_alloc (mpi_get_nlimbs (prime));
       gcry_mpi_t b = mpi_alloc (mpi_get_nlimbs (prime));
       gcry_mpi_t pmin1 = mpi_alloc (mpi_get_nlimbs (prime));
 
-      if (need_q_factor)
-        err = GPG_ERR_NOT_IMPLEMENTED;
-      else
+      factors[n] = q;
+      factors[n + 1] = mpi_alloc_set_ui (2);
+      mpi_sub_ui (pmin1, prime, 1);
+      mpi_set_ui (g, 2);
+      do
         {
-          factors[n] = q;
-          factors[n + 1] = mpi_alloc_set_ui (2);
-          mpi_sub_ui (pmin1, prime, 1);
-          mpi_set_ui (g, 2);
-          do
+          mpi_add_ui (g, g, 1);
+          if (DBG_CIPHER)
+            log_printmpi ("checking g", g);
+          else
+            progress('^');
+          for (i = 0; i < n + 2; i++)
             {
-              mpi_add_ui (g, g, 1);
-              if (DBG_CIPHER)
-                log_printmpi ("checking g", g);
-              else
-                progress('^');
-              for (i = 0; i < n + 2; i++)
-                {
-                  mpi_fdiv_q (tmp, pmin1, factors[i]);
-                  /* No mpi_pow(), but it is okay to use this with mod
-                     prime.  */
-                  mpi_powm (b, g, tmp, prime);
-                  if (! mpi_cmp_ui (b, 1))
-                    break;
-                }
-              if (DBG_CIPHER)
-                progress('\n');
+              mpi_fdiv_q (tmp, pmin1, factors[i]);
+              /* No mpi_pow(), but it is okay to use this with mod
+                 prime.  */
+              mpi_powm (b, g, tmp, prime);
+              if (! mpi_cmp_ui (b, 1))
+                break;
             }
-          while (i < n + 2);
-
-          mpi_free (factors[n+1]);
-          mpi_free (tmp);
-          mpi_free (b);
-          mpi_free (pmin1);
+          if (DBG_CIPHER)
+            progress('\n');
         }
+      while (i < n + 2);
+
+      mpi_free (factors[n+1]);
+      mpi_free (tmp);
+      mpi_free (b);
+      mpi_free (pmin1);
     }
 
   if (! DBG_CIPHER)
@@ -686,7 +669,7 @@ prime_generate_internal (int need_q_factor,
  leave:
   if (pool)
     {
-      is_locked = !ath_mutex_lock (&primepool_lock);
+      is_locked = !gpgrt_lock_lock (&primepool_lock);
       for(i = 0; i < m; i++)
         {
           if (pool[i])
@@ -703,8 +686,8 @@ prime_generate_internal (int need_q_factor,
                 mpi_free (pool[i]);
             }
         }
-      if (is_locked && ath_mutex_unlock (&primepool_lock))
-        err = GPG_ERR_INTERNAL;
+      if (is_locked)
+        err = gpgrt_lock_unlock (&primepool_lock);
       is_locked = 0;
       xfree (pool);
     }
@@ -1199,6 +1182,27 @@ _gcry_prime_check (gcry_mpi_t x, unsigned int flags)
   return GPG_ERR_NO_PRIME;
 }
 
+
+/* Check whether the number X is prime according to FIPS 186-4 table C.2.  */
+gcry_err_code_t
+_gcry_fips186_4_prime_check (gcry_mpi_t x, unsigned int bits)
+{
+  gcry_err_code_t ec = GPG_ERR_NO_ERROR;
+
+  switch (mpi_cmp_ui (x, 2))
+    {
+    case 0:  return ec;               /* 2 is a prime */
+    case -1: return GPG_ERR_NO_PRIME; /* Only numbers > 1 are primes.  */
+    }
+
+  /* We use 5 or 4 rounds as specified in table C.2 */
+  if (! check_prime (x, mpi_const (MPI_C_TWO), bits > 1024 ? 4 : 5, NULL, NULL))
+    ec = GPG_ERR_NO_PRIME;
+
+  return ec;
+}
+
+
 /* Find a generator for PRIME where the factorization of (prime-1) is
    in the NULL terminated array FACTORS. Return the generator as a
    newly allocated MPI in R_G.  If START_G is not NULL, use this as s
@@ -1208,21 +1212,24 @@ _gcry_prime_group_generator (gcry_mpi_t *r_g,
                              gcry_mpi_t prime, gcry_mpi_t *factors,
                              gcry_mpi_t start_g)
 {
-  gcry_mpi_t tmp   = mpi_new (0);
-  gcry_mpi_t b     = mpi_new (0);
-  gcry_mpi_t pmin1 = mpi_new (0);
-  gcry_mpi_t g = start_g? mpi_copy (start_g) : mpi_set_ui (NULL, 3);
-  int first = 1;
-  int i, n;
+  gcry_mpi_t tmp, b, pmin1, g;
+  int first, i, n;
 
-  if (!factors || !r_g || !prime)
+  if (!r_g)
     return GPG_ERR_INV_ARG;
   *r_g = NULL;
+  if (!factors || !prime)
+    return GPG_ERR_INV_ARG;
 
   for (n=0; factors[n]; n++)
     ;
   if (n < 2)
     return GPG_ERR_INV_ARG;
+
+  tmp   = mpi_new (0);
+  b     = mpi_new (0);
+  pmin1 = mpi_new (0);
+  g     = start_g? mpi_copy (start_g) : mpi_set_ui (NULL, 3);
 
   /* Extra sanity check - usually disabled. */
 /*   mpi_set (tmp, factors[0]); */
@@ -1233,6 +1240,7 @@ _gcry_prime_group_generator (gcry_mpi_t *r_g,
 /*     return gpg_error (GPG_ERR_INV_ARG); */
 
   mpi_sub_ui (pmin1, prime, 1);
+  first = 1;
   do
     {
       if (first)
@@ -1625,23 +1633,21 @@ _gcry_generate_fips186_2_prime (unsigned int pbits, unsigned int qbits,
 
 
 
-/* WARNING: The code below has not yet been tested!  However, it is
-   not yet used.  We need to wait for FIPS 186-3 final and for test
-   vectors.
-
-   Generate the two prime used for DSA using the algorithm specified
-   in FIPS 186-3, A.1.1.2.  PBITS is the desired length of the prime P
-   and a QBITS the length of the prime Q.  If SEED is not supplied and
-   SEEDLEN is 0 the function generates an appropriate SEED.  On
-   success the generated primes are stored at R_Q and R_P, the counter
-   value is stored at R_COUNTER and the seed actually used for
-   generation is stored at R_SEED and R_SEEDVALUE.  The hash algorithm
-   used is stored at R_HASHALGO.
-
-   Note that this function is very similar to the fips186_2 code.  Due
-   to the minor differences, other buffer sizes and for documentarion,
-   we use a separate function.
-*/
+/* WARNING: The code below has not yet been tested!
+ *
+ * Generate the two prime used for DSA using the algorithm specified
+ * in FIPS 186-3, A.1.1.2.  PBITS is the desired length of the prime P
+ * and a QBITS the length of the prime Q.  If SEED is not supplied and
+ * SEEDLEN is 0 the function generates an appropriate SEED.  On
+ * success the generated primes are stored at R_Q and R_P, the counter
+ * value is stored at R_COUNTER and the seed actually used for
+ * generation is stored at R_SEED and R_SEEDVALUE.  The hash algorithm
+ * used is stored at R_HASHALGO.
+ *
+ * Note that this function is very similar to the fips186_2 code.  Due
+ * to the minor differences, other buffer sizes and for documentarion,
+ * we use a separate function.
+ */
 gpg_err_code_t
 _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
                                 const void *seed, size_t seedlen,
@@ -1653,7 +1659,7 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
   gpg_err_code_t ec;
   unsigned char seed_help_buffer[256/8];  /* Used to hold a generated SEED. */
   unsigned char *seed_plus;     /* Malloced buffer to hold SEED+x.  */
-  unsigned char digest[256/8];  /* Helper buffer for SHA-1 digest.  */
+  unsigned char digest[256/8];  /* Helper buffer for SHA-2 digest.  */
   gcry_mpi_t val_2 = NULL;      /* Helper for the prime test.  */
   gcry_mpi_t tmpval = NULL;     /* Helper variable.  */
   int hashalgo;                 /* The id of the Approved Hash Function.  */
@@ -1672,9 +1678,7 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
 
   /* Step 1:  Check the requested prime lengths.  */
   /* Note that due to the size of our buffers QBITS is limited to 256.  */
-  if (pbits == 1024 && qbits == 160)
-    hashalgo = GCRY_MD_SHA1;
-  else if (pbits == 2048 && qbits == 224)
+  if (pbits == 2048 && qbits == 224)
     hashalgo = GCRY_MD_SHA224;
   else if (pbits == 2048 && qbits == 256)
     hashalgo = GCRY_MD_SHA256;
@@ -1743,7 +1747,7 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
         }
       _gcry_mpi_release (prime_q); prime_q = NULL;
       ec = _gcry_mpi_scan (&prime_q, GCRYMPI_FMT_USG,
-                           value_u, sizeof value_u, NULL);
+                           value_u, qbits/8, NULL);
       if (ec)
         goto leave;
       mpi_set_highbit (prime_q, qbits-1 );
@@ -1788,11 +1792,11 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
               if (seed_plus[i])
                 break;
             }
-          _gcry_md_hash_buffer (GCRY_MD_SHA1, digest, seed_plus, seedlen);
+          _gcry_md_hash_buffer (hashalgo, digest, seed_plus, seedlen);
 
           _gcry_mpi_release (tmpval); tmpval = NULL;
           ec = _gcry_mpi_scan (&tmpval, GCRYMPI_FMT_USG,
-                               digest, sizeof digest, NULL);
+                               digest, qbits/8, NULL);
           if (ec)
             goto leave;
           if (value_j == value_n)
@@ -1828,11 +1832,12 @@ _gcry_generate_fips186_3_prime (unsigned int pbits, unsigned int qbits,
     }
 
   /* Step 12:  Save p, q, counter and seed.  */
-  log_debug ("fips186-3 pbits p=%u q=%u counter=%d\n",
-             mpi_get_nbits (prime_p), mpi_get_nbits (prime_q), counter);
-  log_printhex ("fips186-3 seed", seed, seedlen);
-  log_printmpi ("fips186-3    p", prime_p);
-  log_printmpi ("fips186-3    q", prime_q);
+  /* log_debug ("fips186-3 pbits p=%u q=%u counter=%d\n", */
+  /*            mpi_get_nbits (prime_p), mpi_get_nbits (prime_q), counter); */
+  /* log_printhex ("fips186-3 seed", seed, seedlen); */
+  /* log_printmpi ("fips186-3    p", prime_p); */
+  /* log_printmpi ("fips186-3    q", prime_q); */
+
   if (r_q)
     {
       *r_q = prime_q;

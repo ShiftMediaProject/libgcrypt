@@ -1,5 +1,5 @@
 /* mac-internal.h  -  Internal defs for mac.c
- * Copyright © 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -17,8 +17,16 @@
  * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <config.h>
+
+#include "g10lib.h"
+
+
 /* The data object used to hold a handle to an encryption object.  */
 struct gcry_mac_handle;
+
+/* The data object used to hold poly1305-mac context.  */
+struct poly1305mac_context_s;
 
 
 /*
@@ -84,7 +92,6 @@ typedef struct gcry_mac_spec
 } gcry_mac_spec_t;
 
 
-
 /* The handle structure.  */
 struct gcry_mac_handle
 {
@@ -106,6 +113,9 @@ struct gcry_mac_handle
       gcry_cipher_hd_t ctx;
       int cipher_algo;
     } gmac;
+    struct {
+      struct poly1305mac_context_s *ctx;
+    } poly1305mac;
   } u;
 };
 
@@ -123,6 +133,12 @@ extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha224;
 #if USE_SHA512
 extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha512;
 extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha384;
+#endif
+#if USE_SHA3
+extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_224;
+extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_256;
+extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_384;
+extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_512;
 #endif
 #ifdef USE_GOST_R_3411_94
 extern gcry_mac_spec_t _gcry_mac_type_spec_hmac_gost3411_94;
@@ -201,4 +217,24 @@ extern gcry_mac_spec_t _gcry_mac_type_spec_gmac_seed;
 #endif
 #if USE_CAMELLIA
 extern gcry_mac_spec_t _gcry_mac_type_spec_gmac_camellia;
+#endif
+
+/*
+ * The Poly1305 MAC algorithm specifications (mac-poly1305.c).
+ */
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac;
+#if USE_AES
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_aes;
+#endif
+#if USE_CAMELLIA
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_camellia;
+#endif
+#if USE_TWOFISH
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_twofish;
+#endif
+#if USE_SERPENT
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_serpent;
+#endif
+#if USE_SEED
+extern gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_seed;
 #endif

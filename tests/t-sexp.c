@@ -1,5 +1,6 @@
-/* tsexp.c  -  S-expression regression tests
- *	Copyright (C) 2001, 2002, 2003, 2005 Free Software Foundation, Inc.
+/* t-sexp.c  -  S-expression regression tests
+ * Copyright (C) 2001, 2002, 2003, 2005 Free Software Foundation, Inc.
+ * Copyright (C) 2014 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
  *
@@ -14,8 +15,7 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -28,73 +28,8 @@
 #include <assert.h>
 #include "../src/gcrypt-int.h"
 
-#define PGMNAME "tsexp"
-
-#ifndef DIM
-# define DIM(v)		     (sizeof(v)/sizeof((v)[0]))
-#endif
-#define my_isascii(c) (!((c) & 0x80))
-#define digitp(p)     (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a)  (digitp (a)                     \
-                       || (*(a) >= 'A' && *(a) <= 'F')  \
-                       || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)     (*(p) <= '9'? (*(p)- '0'): \
-                       *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)     ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xstrdup(a)    gcry_xstrdup ((a))
-#define xfree(a)      gcry_free ((a))
-#define pass()        do { ; } while (0)
-
-
-static int verbose;
-static int error_count;
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr ;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGMNAME);
-  va_start( arg_ptr, format ) ;
-  vfprintf (stderr, format, arg_ptr );
-  va_end(arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  exit (1);
-}
-
-static void
-info (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  if (verbose)
-    {
-      va_start( arg_ptr, format ) ;
-      vfprintf (stderr, format, arg_ptr );
-      va_end(arg_ptr);
-      if (*format && format[strlen(format)-1] != '\n')
-        putc ('\n', stderr);
-    }
-}
-
-static void
-fail ( const char *format, ... )
-{
-    va_list arg_ptr ;
-
-    fputs (PGMNAME ": ", stderr);
-    va_start( arg_ptr, format ) ;
-    vfprintf (stderr, format, arg_ptr );
-    va_end(arg_ptr);
-    if (*format && format[strlen(format)-1] != '\n')
-      putc ('\n', stderr);
-    error_count++;
-}
-
+#define PGMNAME "t-sexp"
+#include "t-common.h"
 
 
 /* Convert STRING consisting of hex characters into its binary
@@ -452,11 +387,46 @@ canon_len (void)
 }
 
 
+/* Compare SE to the canonical formatted expression in
+ * (CANON,CANONLEN).  This is done by a converting SE to canonical
+ * format and doing a byte compare.  Returns 0 if they match.  */
+static int
+compare_to_canon (gcry_sexp_t se, const unsigned char *canon, size_t canonlen)
+{
+  size_t n, n1;
+  char *p1;
+
+  n1 = gcry_sexp_sprint (se, GCRYSEXP_FMT_CANON, NULL, 0);
+  if (!n1)
+    {
+      fail ("get required length in compare_to_canon failed\n");
+      return -1;
+    }
+  p1 = gcry_xmalloc (n1);
+  n = gcry_sexp_sprint (se, GCRYSEXP_FMT_CANON, p1, n1);
+  if (n1 != n+1)
+    {
+      fail ("length mismatch in compare_to_canon detected\n");
+      xfree (p1);
+      return -1;
+    }
+  if (n1 != canonlen || memcmp (p1, canon, canonlen))
+    {
+      xfree (p1);
+      return -1;
+    }
+  xfree (p1);
+  return 0;
+}
+
+
 static void
 back_and_forth_one (int testno, const char *buffer, size_t length)
 {
   gcry_error_t rc;
   gcry_sexp_t se, se1;
+  unsigned char *canon;
+  size_t canonlen;  /* Including the hidden nul suffix.  */
   size_t n, n1;
   char *p1;
 
@@ -474,11 +444,14 @@ back_and_forth_one (int testno, const char *buffer, size_t length)
     }
   p1 = gcry_xmalloc (n1);
   n = gcry_sexp_sprint (se, GCRYSEXP_FMT_CANON, p1, n1);
-  if (n1 != n+1) /* sprints adds an extra 0 but dies not return it */
+  if (n1 != n+1) /* sprints adds an extra 0 but does not return it. */
     {
       fail ("baf %d: length mismatch for canon\n", testno);
       return;
     }
+  canonlen = n1;
+  canon = gcry_malloc (canonlen);
+  memcpy (canon, p1, canonlen);
   rc = gcry_sexp_create (&se1, p1, n, 0, gcry_free);
   if (rc)
     {
@@ -514,9 +487,40 @@ back_and_forth_one (int testno, const char *buffer, size_t length)
     fail ("baf %d: memory corrupted (3)\n", testno);
   gcry_free (p1);
 
+  /* Check converting to advanced format.  */
+  n1 = gcry_sexp_sprint (se, GCRYSEXP_FMT_ADVANCED, NULL, 0);
+  if (!n1)
+    {
+      fail ("baf %d: get required length for advanced failed\n", testno);
+      return;
+    }
+  p1 = gcry_xmalloc (n1);
+  n = gcry_sexp_sprint (se, GCRYSEXP_FMT_ADVANCED, p1, n1);
+  if (n1 != n+1) /* sprints adds an extra 0 but does not return it */
+    {
+      fail ("baf %d: length mismatch for advanced\n", testno);
+      return;
+    }
+  rc = gcry_sexp_create (&se1, p1, n, 0, gcry_free);
+  if (rc)
+    {
+      fail ("baf %d: gcry_sexp_create failed: %s\n",
+            testno, gpg_strerror (rc));
+      return;
+    }
+  if (compare_to_canon (se1, canon, canonlen))
+    {
+      fail ("baf %d: converting to advanced failed.\n",
+            testno, gpg_strerror (rc));
+      return;
+    }
+  gcry_sexp_release (se1);
+
+
   /* FIXME: we need a lot more tests */
 
   gcry_sexp_release (se);
+  xfree (canon);
 }
 
 
@@ -539,6 +543,13 @@ back_and_forth (void)
 "   #F7B0B535F8F8E22F4F3DA031224070303F82F9207D42952F1ACF21A4AB1C50304EBB25527992C7B265A9E9FF702826FB88759BDD55E4759E9FCA6C879538C9D043A9C60A326CB6681090BAA731289BD880A7D5774D9999F026E5E7963BFC8C0BDC9F061393CB734B4F259725C0A0A0B15BA39C39146EF6A1B3DC4DF30A22EBE09FD05AE6CB0C8C6532951A925F354F4E26A51964F5BBA50081690C421C8385C4074E9BAB9297D081B857756607EAE652415275A741C89E815558A50AC638EDC5F5030210B4395E3E1A40FF38DCCCB333A19EA88EFE7E4D51B54128C6DF27395646836679AC21B1B25C1DA6F0A7CE9F9BE078EFC7934FA9AE202CBB0AA06C20DFAF9A66FAB7E9073FBE96B9A7F25C3BA45EC3EECA65796AEE313BA148DE5314F30345B452B50B17C4D841A7F27397126E8C10BD0CE3B50A82C0425AAEE7798031671407B681F52916256F78CAF92A477AC27BCBE26DAFD1BCE386A853E2A036F8314BB2E8E5BB1F196434232EFB0288331C2AB16DBC5457CC295EB966CAC5CE73D5DA5D566E469F0EFA82F9A12B8693E0#)\n"
 "  )\n"
 " )\n", 0 },
+    { "((sha1 #8B98CBF4A9823CA7# \"2097\") #3B6FC9#)", 0 },
+    { "((4:sha18:\x8B\x98\xCB\xF4\xA9\x82\x3C\xA7""4:2097)3:\x3B\x6F\xC9)", 0},
+    { "((4:sha18:\x8B\x98\xCB\x22\xA9\x82\x3C\xA7""4:2097)3:\x3B\x6F\xC9)", 0},
+    { "((sha1 #64652267686970C9# \"2097\") #3B6FC9#)", 0 },
+    { "((4:sha18:\x64\x65\x22\x67\x68\xc3\xa4\x71""4:2097)3:\x3B\x6F\xC9)", 0},
+    { "((sha1 \"defghäq\" \"2097\") #3B6FC9#)", 0 },
+    { "((sha1 \"de\\\"ghäq\" \"2097\") #3B6FC9#)", 0 },
     { NULL, 0 }
   };
   int idx;
@@ -1110,17 +1121,65 @@ static char thing[] =
   if (gcry_sexp_nth (n_val, 1))
     fail ("extracting 1-th of car of 'n' list did not fail");
   gcry_sexp_release (n_val);
+  gcry_sexp_release (n);
+  gcry_sexp_release (pubkey);
 }
 
 
 int
 main (int argc, char **argv)
 {
-  if (argc > 1 && !strcmp (argv[1], "--verbose"))
-    verbose = 1;
+  int last_argc = -1;
 
+  if (argc)
+    {
+      argc--; argv++;
+    }
+  while (argc && last_argc != argc )
+    {
+      last_argc = argc;
+      if (!strcmp (*argv, "--"))
+        {
+          argc--; argv++;
+          break;
+        }
+      else if (!strcmp (*argv, "--help"))
+        {
+          puts (
+"usage: " PGMNAME " [options]\n"
+"\n"
+"Options:\n"
+"  --verbose      Show what is going on\n"
+"  --debug        Flyswatter\n"
+);
+          exit (0);
+        }
+      else if (!strcmp (*argv, "--verbose"))
+        {
+          verbose = 1;
+          argc--; argv++;
+        }
+      else if (!strcmp (*argv, "--debug"))
+        {
+          verbose = debug = 1;
+          argc--; argv++;
+        }
+      else if (!strncmp (*argv, "--", 2))
+        die ("unknown option '%s'", *argv);
+    }
+
+  if (debug)
+    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
   gcry_control (GCRYCTL_DISABLE_SECMEM_WARN);
   gcry_control (GCRYCTL_INIT_SECMEM, 16384, 0);
+  if (!gcry_check_version (GCRYPT_VERSION))
+    die ("version mismatch");
+  /* #include "../src/gcrypt-int.h" indicates that internal interfaces
+     may be used; thus better do an exact version check. */
+  if (strcmp (gcry_check_version (NULL), GCRYPT_VERSION))
+    die ("exact version match failed");
+  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   basic ();
   canon_len ();
@@ -1129,5 +1188,5 @@ main (int argc, char **argv)
   check_extract_param ();
   bug_1594 ();
 
-  return error_count? 1:0;
+  return errorcount? 1:0;
 }

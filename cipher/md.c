@@ -27,9 +27,6 @@
 
 #include "g10lib.h"
 #include "cipher.h"
-#include "ath.h"
-
-#include "rmd.h"
 
 
 /* This is the list of the digest implementations included in
@@ -52,8 +49,17 @@ static gcry_md_spec_t *digest_list[] =
      &_gcry_digest_spec_sha512,
      &_gcry_digest_spec_sha384,
 #endif
+#if USE_SHA3
+     &_gcry_digest_spec_sha3_224,
+     &_gcry_digest_spec_sha3_256,
+     &_gcry_digest_spec_sha3_384,
+     &_gcry_digest_spec_sha3_512,
+     &_gcry_digest_spec_shake128,
+     &_gcry_digest_spec_shake256,
+#endif
 #ifdef USE_GOST_R_3411_94
      &_gcry_digest_spec_gost3411_94,
+     &_gcry_digest_spec_gost3411_cp,
 #endif
 #ifdef USE_GOST_R_3411_12
      &_gcry_digest_spec_stribog_256,
@@ -75,6 +81,9 @@ static gcry_md_spec_t *digest_list[] =
 #endif
 #if USE_MD4
      &_gcry_digest_spec_md4,
+#endif
+#if USE_MD2
+     &_gcry_digest_spec_md2,
 #endif
     NULL
   };
@@ -99,10 +108,9 @@ struct gcry_md_context
     unsigned int secure: 1;
     unsigned int finalized:1;
     unsigned int bugemu1:1;
+    unsigned int hmac:1;
   } flags;
   GcryDigestEntry *list;
-  byte *macpads;
-  int macpads_Bsize;             /* Blocksize as used for the HMAC pads. */
 };
 
 
@@ -312,7 +320,7 @@ md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
 
   if (! err)
     {
-      hd->ctx = ctx = (struct gcry_md_context *) ((char *) hd + n);
+      hd->ctx = ctx = (void *) ((char *) hd + n);
       /* Setup the globally visible data (bctl in the diagram).*/
       hd->bufsize = n - sizeof (struct gcry_md_handle) + 1;
       hd->bufpos = 0;
@@ -322,30 +330,8 @@ md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
       ctx->magic = secure ? CTX_MAGIC_SECURE : CTX_MAGIC_NORMAL;
       ctx->actual_handle_size = n + sizeof (struct gcry_md_context);
       ctx->flags.secure = secure;
+      ctx->flags.hmac = hmac;
       ctx->flags.bugemu1 = !!(flags & GCRY_MD_FLAG_BUGEMU1);
-
-      if (hmac)
-	{
-	  switch (algo)
-            {
-              case GCRY_MD_SHA384:
-              case GCRY_MD_SHA512:
-                ctx->macpads_Bsize = 128;
-                break;
-              case GCRY_MD_GOSTR3411_94:
-                ctx->macpads_Bsize = 32;
-                break;
-              default:
-                ctx->macpads_Bsize = 64;
-                break;
-            }
-          ctx->macpads = xtrymalloc_secure (2*(ctx->macpads_Bsize));
-	  if (!ctx->macpads)
-	    {
-	      err = gpg_err_code_from_errno (errno);
-	      md_close (hd);
-	    }
-	}
     }
 
   if (! err)
@@ -422,10 +408,16 @@ md_enable (gcry_md_hd_t hd, int algorithm)
         }
     }
 
+  if (!err && h->flags.hmac && spec->read == NULL)
+    {
+      /* Expandable output function cannot act as part of HMAC. */
+      err = GPG_ERR_DIGEST_ALGO;
+    }
+
   if (!err)
     {
       size_t size = (sizeof (*entry)
-                     + spec->contextsize
+                     + spec->contextsize * (h->flags.hmac? 3 : 1)
                      - sizeof (entry->context));
 
       /* And allocate a new list entry. */
@@ -484,7 +476,7 @@ md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
 
   if (! err)
     {
-      bhd->ctx = b = (struct gcry_md_context *) ((char *) bhd + n);
+      bhd->ctx = b = (void *) ((char *) bhd + n);
       /* No need to copy the buffer due to the write above. */
       gcry_assert (ahd->bufsize == (n - sizeof (struct gcry_md_handle) + 1));
       bhd->bufsize = ahd->bufsize;
@@ -493,17 +485,6 @@ md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
       memcpy (b, a, sizeof *a);
       b->list = NULL;
       b->debug = NULL;
-      if (a->macpads)
-	{
-	  b->macpads = xtrymalloc_secure (2*(a->macpads_Bsize));
-	  if (! b->macpads)
-	    {
-	      err = gpg_err_code_from_errno (errno);
-	      md_close (bhd);
-	    }
-	  else
-	    memcpy (b->macpads, a->macpads, (2*(a->macpads_Bsize)));
-	}
     }
 
   /* Copy the complete list of algorithms.  The copied list is
@@ -513,13 +494,9 @@ md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
       for (ar = a->list; ar; ar = ar->next)
         {
           if (a->flags.secure)
-            br = xtrymalloc_secure (sizeof *br
-                                    + ar->spec->contextsize
-                                    - sizeof(ar->context));
+            br = xtrymalloc_secure (ar->actual_struct_size);
           else
-            br = xtrymalloc (sizeof *br
-                             + ar->spec->contextsize
-                             - sizeof (ar->context));
+            br = xtrymalloc (ar->actual_struct_size);
           if (!br)
             {
 	      err = gpg_err_code_from_errno (errno);
@@ -527,8 +504,7 @@ md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
               break;
             }
 
-          memcpy (br, ar, (sizeof (*br) + ar->spec->contextsize
-                           - sizeof (ar->context)));
+          memcpy (br, ar, ar->actual_struct_size);
           br->next = b->list;
           b->list = br;
         }
@@ -569,14 +545,19 @@ _gcry_md_reset (gcry_md_hd_t a)
 
   a->bufpos = a->ctx->flags.finalized = 0;
 
-  for (r = a->ctx->list; r; r = r->next)
-    {
-      memset (r->context.c, 0, r->spec->contextsize);
-      (*r->spec->init) (&r->context.c,
-                        a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0);
-    }
-  if (a->ctx->macpads)
-    md_write (a, a->ctx->macpads, a->ctx->macpads_Bsize); /* inner pad */
+  if (a->ctx->flags.hmac)
+    for (r = a->ctx->list; r; r = r->next)
+      {
+        memcpy (r->context.c, r->context.c + r->spec->contextsize,
+                r->spec->contextsize);
+      }
+  else
+    for (r = a->ctx->list; r; r = r->next)
+      {
+        memset (r->context.c, 0, r->spec->contextsize);
+        (*r->spec->init) (&r->context.c,
+                          a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0);
+      }
 }
 
 
@@ -594,12 +575,6 @@ md_close (gcry_md_hd_t a)
       r2 = r->next;
       wipememory (r, r->actual_struct_size);
       xfree (r);
-    }
-
-  if (a->ctx->macpads)
-    {
-      wipememory (a->ctx->macpads, 2*(a->ctx->macpads_Bsize));
-      xfree(a->ctx->macpads);
     }
 
   wipememory (a, a->ctx->actual_handle_size);
@@ -638,6 +613,9 @@ md_write (gcry_md_hd_t a, const void *inbuf, size_t inlen)
 }
 
 
+/* Note that this function may be used after finalize and read to keep
+   on writing to the transform function so to mitigate timing
+   attacks.  */
 void
 _gcry_md_write (gcry_md_hd_t hd, const void *inbuf, size_t inlen)
 {
@@ -661,66 +639,128 @@ md_final (gcry_md_hd_t a)
 
   a->ctx->flags.finalized = 1;
 
-  if (a->ctx->macpads)
+  if (!a->ctx->flags.hmac)
+    return;
+
+  for (r = a->ctx->list; r; r = r->next)
     {
-      /* Finish the hmac. */
-      int algo = md_get_algo (a);
-      byte *p = md_read (a, algo);
-      size_t dlen = md_digest_length (algo);
-      gcry_md_hd_t om;
+      byte *p;
+      size_t dlen = r->spec->mdlen;
+      byte *hash;
       gcry_err_code_t err;
 
-      err = md_open (&om, algo,
-                     ((a->ctx->flags.secure? GCRY_MD_FLAG_SECURE:0)
-                      | (a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0)));
-      if (err)
-	_gcry_fatal_error (err, NULL);
-      md_write (om,
-                (a->ctx->macpads)+(a->ctx->macpads_Bsize),
-                a->ctx->macpads_Bsize);
-      md_write (om, p, dlen);
-      md_final (om);
-      /* Replace our digest with the mac (they have the same size). */
-      memcpy (p, md_read (om, algo), dlen);
-      md_close (om);
+      if (r->spec->read == NULL)
+        continue;
+
+      p = r->spec->read (&r->context.c);
+
+      if (a->ctx->flags.secure)
+        hash = xtrymalloc_secure (dlen);
+      else
+        hash = xtrymalloc (dlen);
+      if (!hash)
+        {
+          err = gpg_err_code_from_errno (errno);
+          _gcry_fatal_error (err, NULL);
+        }
+
+      memcpy (hash, p, dlen);
+      memcpy (r->context.c, r->context.c + r->spec->contextsize * 2,
+              r->spec->contextsize);
+      (*r->spec->write) (&r->context.c, hash, dlen);
+      (*r->spec->final) (&r->context.c);
+      xfree (hash);
     }
 }
 
 
 static gcry_err_code_t
-prepare_macpads (gcry_md_hd_t hd, const unsigned char *key, size_t keylen)
+prepare_macpads (gcry_md_hd_t a, const unsigned char *key, size_t keylen)
 {
-  int i;
-  int algo = md_get_algo (hd);
-  unsigned char *helpkey = NULL;
-  unsigned char *ipad, *opad;
+  GcryDigestEntry *r;
 
-  if (!algo)
+  if (!a->ctx->list)
     return GPG_ERR_DIGEST_ALGO; /* Might happen if no algo is enabled.  */
 
-  if ( keylen > hd->ctx->macpads_Bsize )
+  if (!a->ctx->flags.hmac)
+    return GPG_ERR_DIGEST_ALGO; /* Tried setkey for non-HMAC md. */
+
+  for (r = a->ctx->list; r; r = r->next)
     {
-      helpkey = xtrymalloc_secure (md_digest_length (algo));
-      if (!helpkey)
-        return gpg_err_code_from_errno (errno);
-      _gcry_md_hash_buffer (algo, helpkey, key, keylen);
-      key = helpkey;
-      keylen = md_digest_length (algo);
-      gcry_assert ( keylen <= hd->ctx->macpads_Bsize );
+      const unsigned char *k;
+      size_t k_len;
+      unsigned char *key_allocated = NULL;
+      int macpad_Bsize;
+      int i;
+
+      switch (r->spec->algo)
+        {
+        case GCRY_MD_SHA3_224:
+          macpad_Bsize = 1152 / 8;
+          break;
+        case GCRY_MD_SHA3_256:
+          macpad_Bsize = 1088 / 8;
+          break;
+        case GCRY_MD_SHA3_384:
+          macpad_Bsize = 832 / 8;
+          break;
+        case GCRY_MD_SHA3_512:
+          macpad_Bsize = 576 / 8;
+          break;
+        case GCRY_MD_SHA384:
+        case GCRY_MD_SHA512:
+          macpad_Bsize = 128;
+          break;
+        case GCRY_MD_GOSTR3411_94:
+        case GCRY_MD_GOSTR3411_CP:
+          macpad_Bsize = 32;
+          break;
+        default:
+          macpad_Bsize = 64;
+          break;
+        }
+
+      if ( keylen > macpad_Bsize )
+        {
+          k = key_allocated = xtrymalloc_secure (r->spec->mdlen);
+          if (!k)
+            return gpg_err_code_from_errno (errno);
+          _gcry_md_hash_buffer (r->spec->algo, key_allocated, key, keylen);
+          k_len = r->spec->mdlen;
+          gcry_assert ( k_len <= macpad_Bsize );
+        }
+      else
+        {
+          k = key;
+          k_len = keylen;
+        }
+
+      (*r->spec->init) (&r->context.c,
+                        a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0);
+      a->bufpos = 0;
+      for (i=0; i < k_len; i++ )
+        _gcry_md_putc (a, k[i] ^ 0x36);
+      for (; i < macpad_Bsize; i++ )
+        _gcry_md_putc (a, 0x36);
+      (*r->spec->write) (&r->context.c, a->buf, a->bufpos);
+      memcpy (r->context.c + r->spec->contextsize, r->context.c,
+              r->spec->contextsize);
+
+      (*r->spec->init) (&r->context.c,
+                        a->ctx->flags.bugemu1? GCRY_MD_FLAG_BUGEMU1:0);
+      a->bufpos = 0;
+      for (i=0; i < k_len; i++ )
+        _gcry_md_putc (a, k[i] ^ 0x5c);
+      for (; i < macpad_Bsize; i++ )
+        _gcry_md_putc (a, 0x5c);
+      (*r->spec->write) (&r->context.c, a->buf, a->bufpos);
+      memcpy (r->context.c + r->spec->contextsize*2, r->context.c,
+              r->spec->contextsize);
+
+      xfree (key_allocated);
     }
 
-  memset ( hd->ctx->macpads, 0, 2*(hd->ctx->macpads_Bsize) );
-  ipad = hd->ctx->macpads;
-  opad = (hd->ctx->macpads)+(hd->ctx->macpads_Bsize);
-  memcpy ( ipad, key, keylen );
-  memcpy ( opad, key, keylen );
-  for (i=0; i < hd->ctx->macpads_Bsize; i++ )
-    {
-      ipad[i] ^= 0x36;
-      opad[i] ^= 0x5c;
-    }
-  xfree (helpkey);
-
+  a->bufpos = 0;
   return 0;
 }
 
@@ -755,14 +795,9 @@ _gcry_md_setkey (gcry_md_hd_t hd, const void *key, size_t keylen)
 {
   gcry_err_code_t rc;
 
-  if (!hd->ctx->macpads)
-    rc = GPG_ERR_CONFLICT;
-  else
-    {
-      rc = prepare_macpads (hd, key, keylen);
-      if (!rc)
-	_gcry_md_reset (hd);
-    }
+  rc = prepare_macpads (hd, key, keylen);
+  if (!rc)
+    _gcry_md_reset (hd);
 
   return rc;
 }
@@ -797,6 +832,8 @@ md_read( gcry_md_hd_t a, int algo )
         {
           if (r->next)
             log_debug ("more than one algorithm in md_read(0)\n");
+          if (r->spec->read == NULL)
+            return NULL;
           return r->spec->read (&r->context.c);
         }
     }
@@ -804,7 +841,11 @@ md_read( gcry_md_hd_t a, int algo )
     {
       for (r = a->ctx->list; r; r = r->next)
 	if (r->spec->algo == algo)
-	  return r->spec->read (&r->context.c);
+	  {
+	    if (r->spec->read == NULL)
+	      return NULL;
+	    return r->spec->read (&r->context.c);
+	  }
     }
   BUG();
   return NULL;
@@ -823,6 +864,52 @@ _gcry_md_read (gcry_md_hd_t hd, int algo)
      non-operational state.  */
   _gcry_md_ctl (hd, GCRYCTL_FINALIZE, NULL, 0);
   return md_read (hd, algo);
+}
+
+
+/****************
+ * If ALGO is null get the digest for the used algo (which should be
+ * only one)
+ */
+static gcry_err_code_t
+md_extract(gcry_md_hd_t a, int algo, void *out, size_t outlen)
+{
+  GcryDigestEntry *r = a->ctx->list;
+
+  if (!algo)
+    {
+      /* Return the first algorithm */
+      if (r && r->spec->extract)
+	{
+	  if (r->next)
+	    log_debug ("more than one algorithm in md_extract(0)\n");
+	  r->spec->extract (&r->context.c, out, outlen);
+	  return 0;
+	}
+    }
+  else
+    {
+      for (r = a->ctx->list; r; r = r->next)
+	if (r->spec->algo == algo && r->spec->extract)
+	  {
+	    r->spec->extract (&r->context.c, out, outlen);
+	    return 0;
+	  }
+    }
+
+  return GPG_ERR_DIGEST_ALGO;
+}
+
+
+/*
+ * Expand the output from XOF class digest, this function implictly finalizes
+ * the hash.
+ */
+gcry_err_code_t
+_gcry_md_extract (gcry_md_hd_t hd, int algo, void *out, size_t outlen)
+{
+  _gcry_md_ctl (hd, GCRYCTL_FINALIZE, NULL, 0);
+  return md_extract (hd, algo, out, outlen);
 }
 
 
@@ -1139,15 +1226,13 @@ md_stop_debug( gcry_md_hd_t md )
       md->ctx->debug = NULL;
     }
 
-#ifdef HAVE_U64_TYPEDEF
   {  /* a kludge to pull in the __muldi3 for Solaris */
-    volatile u32 a = (u32)(ulong)md;
+    volatile u32 a = (u32)(uintptr_t)md;
     volatile u64 b = 42;
     volatile u64 c;
     c = a * b;
     (void)c;
   }
-#endif
 }
 
 
@@ -1207,6 +1292,17 @@ _gcry_md_info (gcry_md_hd_t h, int cmd, void *buffer, size_t *nbytes)
 gcry_err_code_t
 _gcry_md_init (void)
 {
+  if (fips_mode())
+    {
+      /* disable algorithms that are disallowed in fips */
+      int idx;
+      gcry_md_spec_t *spec;
+
+      for (idx = 0; (spec = digest_list[idx]); idx++)
+        if (!spec->flags.fips)
+          spec->flags.disabled = 1;
+    }
+
   return 0;
 }
 

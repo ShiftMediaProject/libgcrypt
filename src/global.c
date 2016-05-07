@@ -2,7 +2,7 @@
  * Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003
  *               2004, 2005, 2006, 2008, 2011,
  *               2012  Free Software Foundation, Inc.
- * Copyright (C) 2013 g10 Code GmbH
+ * Copyright (C) 2013, 2014 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
  *
@@ -35,10 +35,11 @@
 #endif /*HAVE_SYSLOG*/
 
 #include "g10lib.h"
+#include "gcrypt-testapi.h"
 #include "cipher.h"
 #include "stdmem.h" /* our own memory allocator */
 #include "secmem.h" /* our own secmem allocator */
-#include "ath.h"
+
 
 
 
@@ -88,14 +89,6 @@ global_init (void)
   /* Tell the random module that we have seen an init call.  */
   _gcry_set_preferred_rng_type (0);
 
-  /* Initialize our portable thread/mutex wrapper.  */
-  err = ath_init ();
-  if (err)
-    {
-      err = gpg_error_from_errno (err);
-      goto fail;
-    }
-
   /* See whether the system is in FIPS mode.  This needs to come as
      early as possible but after ATH has been initialized.  */
   _gcry_initialize_fips_mode (force_fips_mode);
@@ -110,6 +103,9 @@ global_init (void)
   if (err)
     goto fail;
   err = _gcry_md_init ();
+  if (err)
+    goto fail;
+  err = _gcry_mac_init ();
   if (err)
     goto fail;
   err = _gcry_pk_init ();
@@ -306,7 +302,6 @@ print_config ( int (*fnc)(FILE *fp, const char *format, ...), FILE *fp)
 #endif
        ":\n");
   fnc (fp, "mpi-asm:%s:\n", _gcry_mpi_get_hw_config ());
-  fnc (fp, "threads:%s:\n", ath_get_model (NULL));
   hwfeatures = _gcry_get_hw_features ();
   fnc (fp, "hwflist:");
   for (i=0; (s = _gcry_enum_hw_features (i, &afeature)); i++)
@@ -314,7 +309,7 @@ print_config ( int (*fnc)(FILE *fp, const char *format, ...), FILE *fp)
       fnc (fp, "%s:", s);
   fnc (fp, "\n");
   /* We use y/n instead of 1/0 for the simple reason that Emacsen's
-     compile error parser would accidently flag that line when printed
+     compile error parser would accidentally flag that line when printed
      during "make check" as an error.  */
   fnc (fp, "fips-mode:%c:%c:\n",
        fips_mode ()? 'y':'n',
@@ -478,10 +473,10 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
       break;
 
     case GCRYCTL_SET_THREAD_CBS:
+      /* This is now a dummy call.  We used to install our own thread
+         library here. */
       _gcry_set_preferred_rng_type (0);
-      rc = ath_install (va_arg (arg_ptr, void *));
-      if (!rc)
-	global_init ();
+      global_init ();
       break;
 
     case GCRYCTL_FAST_POLL:
@@ -584,41 +579,25 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wswitch"
 #endif
-    case 58:  /* Init external random test.  */
+    case PRIV_CTL_INIT_EXTRNG_TEST:  /* Init external random test.  */
+      rc = GPG_ERR_NOT_SUPPORTED;
+      break;
+    case PRIV_CTL_RUN_EXTRNG_TEST:  /* Run external DRBG test.  */
       {
-        void **rctx        = va_arg (arg_ptr, void **);
-        unsigned int flags = va_arg (arg_ptr, unsigned int);
-        const void *key    = va_arg (arg_ptr, const void *);
-        size_t keylen      = va_arg (arg_ptr, size_t);
-        const void *seed   = va_arg (arg_ptr, const void *);
-        size_t seedlen     = va_arg (arg_ptr, size_t);
-        const void *dt     = va_arg (arg_ptr, const void *);
-        size_t dtlen       = va_arg (arg_ptr, size_t);
-        if (!fips_is_operational ())
-          rc = fips_not_operational ();
+        struct gcry_drbg_test_vector *test =
+	  va_arg (arg_ptr, struct gcry_drbg_test_vector *);
+        unsigned char *buf = va_arg (arg_ptr, unsigned char *);
+
+        if (buf)
+          rc = _gcry_rngdrbg_cavs_test (test, buf);
         else
-          rc = _gcry_random_init_external_test (rctx, flags, key, keylen,
-                                                seed, seedlen, dt, dtlen);
+          rc = _gcry_rngdrbg_healthcheck_one (test);
       }
       break;
-    case 59:  /* Run external random test.  */
-      {
-        void *ctx     = va_arg (arg_ptr, void *);
-        void *buffer  = va_arg (arg_ptr, void *);
-        size_t buflen = va_arg (arg_ptr, size_t);
-        if (!fips_is_operational ())
-          rc = fips_not_operational ();
-        else
-          rc = _gcry_random_run_external_test (ctx, buffer, buflen);
-      }
+    case PRIV_CTL_DEINIT_EXTRNG_TEST:  /* Deinit external random test.  */
+      rc = GPG_ERR_NOT_SUPPORTED;
       break;
-    case 60:  /* Deinit external random test.  */
-      {
-        void *ctx = va_arg (arg_ptr, void *);
-        _gcry_random_deinit_external_test (ctx);
-      }
-      break;
-    case 61:  /* Run external lock test */
+    case PRIV_CTL_EXTERNAL_LOCK_TEST:  /* Run external lock test */
       rc = external_lock_test (va_arg (arg_ptr, int));
       break;
     case 62:  /* RFU */
@@ -678,6 +657,20 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
     case GCRYCTL_INACTIVATE_FIPS_FLAG:
     case GCRYCTL_REACTIVATE_FIPS_FLAG:
       rc = GPG_ERR_NOT_IMPLEMENTED;
+      break;
+
+    case GCRYCTL_DRBG_REINIT:
+      {
+        const char *flagstr = va_arg (arg_ptr, const char *);
+        gcry_buffer_t *pers = va_arg (arg_ptr, gcry_buffer_t *);
+        int npers = va_arg (arg_ptr, int);
+        if (va_arg (arg_ptr, void *) || npers < 0)
+          rc = GPG_ERR_INV_ARG;
+        else if (_gcry_get_rng_type (!any_init_done) != GCRY_RNG_TYPE_FIPS)
+          rc = GPG_ERR_NOT_SUPPORTED;
+        else
+          rc = _gcry_rngdrbg_reinit (flagstr, pers, npers);
+      }
       break;
 
     default:
@@ -876,7 +869,7 @@ _gcry_free (void *p)
     return;
 
   /* In case ERRNO is set we better save it so that the free machinery
-     may not accidently change ERRNO.  We restore it only if it was
+     may not accidentally change ERRNO.  We restore it only if it was
      already set to comply with the usual C semantic for ERRNO.  */
   save_errno = errno;
   if (free_func)
@@ -1142,25 +1135,25 @@ _gcry_set_progress_handler (void (*cb)(void *,const char*,int, int, int),
 static gpg_err_code_t
 external_lock_test (int cmd)
 {
-  static ath_mutex_t testlock;
+  GPGRT_LOCK_DEFINE (testlock);
   gpg_err_code_t rc = 0;
 
   switch (cmd)
     {
     case 30111:  /* Init Lock.  */
-      rc = ath_mutex_init (&testlock);
+      rc = gpgrt_lock_init (&testlock);
       break;
 
     case 30112:  /* Take Lock.  */
-      rc = ath_mutex_lock (&testlock);
+      rc = gpgrt_lock_lock (&testlock);
       break;
 
     case 30113:  /* Release Lock.  */
-      rc = ath_mutex_unlock (&testlock);
+      rc = gpgrt_lock_unlock (&testlock);
       break;
 
     case 30114:  /* Destroy Lock.  */
-      rc = ath_mutex_destroy (&testlock);
+      rc = gpgrt_lock_destroy (&testlock);
       break;
 
     default:

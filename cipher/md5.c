@@ -50,7 +50,7 @@ typedef struct {
 } MD5_CONTEXT;
 
 static unsigned int
-transform ( void *ctx, const unsigned char *data );
+transform ( void *ctx, const unsigned char *data, size_t datalen );
 
 static void
 md5_init( void *context, unsigned int flags)
@@ -83,10 +83,10 @@ md5_init( void *context, unsigned int flags)
 
 
 /****************
- * transform n*64 bytes
+ * transform 64 bytes
  */
 static unsigned int
-transform ( void *c, const unsigned char *data )
+transform_blk ( void *c, const unsigned char *data )
 {
   MD5_CONTEXT *ctx = c;
   u32 correct_words[16];
@@ -207,6 +207,21 @@ transform ( void *c, const unsigned char *data )
 }
 
 
+static unsigned int
+transform ( void *c, const unsigned char *data, size_t nblks )
+{
+  unsigned int burn;
+
+  do
+    {
+      burn = transform_blk (c, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
+}
+
 
 /* The routine final terminates the message-digest computation and
  * ends with the desired message digest in mdContext->digest[0...15].
@@ -260,11 +275,11 @@ md5_final( void *context)
   /* append the 64 bit count */
   buf_put_le32(hd->bctx.buf + 56, lsb);
   buf_put_le32(hd->bctx.buf + 60, msb);
-  burn = transform( hd, hd->bctx.buf );
+  burn = transform ( hd, hd->bctx.buf, 1 );
   _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#define X(a) do { *(u32*)p = le_bswap32((*hd).a) ; p += 4; } while(0)
+#define X(a) do { buf_put_le32(p, hd->a); p += 4; } while(0)
   X(A);
   X(B);
   X(C);
@@ -295,8 +310,8 @@ static gcry_md_oid_spec_t oid_spec_md5[] =
 
 gcry_md_spec_t _gcry_digest_spec_md5 =
   {
-    GCRY_MD_MD5, {0, 1},
+    GCRY_MD_MD5, {0, 0},
     "MD5", asn, DIM (asn), oid_spec_md5, 16,
-    md5_init, _gcry_md_block_write, md5_final, md5_read,
+    md5_init, _gcry_md_block_write, md5_final, md5_read, NULL,
     sizeof (MD5_CONTEXT)
   };

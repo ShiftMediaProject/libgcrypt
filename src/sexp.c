@@ -53,7 +53,7 @@
    data) is required as well.  The close_tag finishes the list and
    would actually be sufficient.  For fail-safe reasons a final stop
    tag is always the last byte in a buffer; it has a value of 0 so
-   that string function accidently applied to an S-expression will
+   that string function accidentally applied to an S-expression will
    never access unallocated data.  We do not support display hints and
    thus don't need to represent them.  A list may have more an
    arbitrary number of data elements but at least one is required.
@@ -1592,6 +1592,13 @@ do_vsexp_sscan (gcry_sexp_t *retsexp, size_t *erroff,
 	      err = GPG_ERR_SEXP_UNMATCHED_DH;
               goto leave;
 	    }
+
+	  if (level == 0)
+	    {
+	      *erroff = p - buffer;
+	      err = GPG_ERR_SEXP_UNMATCHED_PAREN;
+	      goto leave;
+	    }
 	  MAKE_SPACE (0);
 	  *c.pos++ = ST_CLOSE;
 	  level--;
@@ -2183,8 +2190,8 @@ _gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
  * a parameter name, enclose the name in single quotes.
  *
  * Unless in gcry_buffer_t mode for each parameter name a pointer to
- * an MPI variable is expected and finally a NULL is expected.
- * Example:
+ * an MPI variable is expected that must be set to NULL prior to
+ * invoking this function, and finally a NULL is expected.  Example:
  *
  *   _gcry_sexp_extract_param (key, NULL, "n/x+ed",
  *                             &mpi_n, &mpi_x, &mpi_e, NULL)
@@ -2208,8 +2215,11 @@ _gcry_sexp_canon_len (const unsigned char *buffer, size_t length,
  * mark separated tokens are used to via gcry_sexp_find_token to find
  * a start point inside SEXP.
  *
- * The function returns NULL on success.  On error an error code is
- * returned and the passed MPIs are either unchanged or set to NULL.
+ * The function returns 0 on success.  On error an error code is
+ * returned, all passed MPIs that might have been allocated up to this
+ * point are deallocated and set to NULL, and all passed buffers are
+ * either truncated if the caller supplied the buffer, or deallocated
+ * if the function allocated the buffer.
  */
 gpg_err_code_t
 _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,

@@ -19,10 +19,10 @@
 ## Process this file with automake to produce Makefile.in
 
 tests_bin = \
-        version mpitests tsexp t-convert \
+        version mpitests t-sexp t-convert \
 	t-mpi-bit t-mpi-point curves t-lock \
 	prime basic keygen pubkey hmac hashtest t-kdf keygrip \
-	fips186-dsa aeswrap pkcs1v2 random dsa-rfc6979 t-ed25519
+	fips186-dsa aeswrap pkcs1v2 random dsa-rfc6979 t-ed25519 t-cv25519
 
 tests_bin_last = benchmark bench-slope
 
@@ -46,17 +46,20 @@ AM_CPPFLAGS = -I../src -I$(top_srcdir)/src
 AM_CFLAGS = $(GPG_ERROR_CFLAGS)
 AM_LDFLAGS = -no-install
 
-default_ldadd = \
+standard_ldadd = \
 	../src/libgcrypt.la $(DL_LIBS) \
-        ../compat/libcompat.la $(GPG_ERROR_LIBS)
+        ../compat/libcompat.la
 
 EXTRA_PROGRAMS = testapi pkbench
-noinst_PROGRAMS = $(tests_bin) $(tests_bin_last) fipsdrv rsacvt genhashdata
+noinst_PROGRAMS = $(tests_bin) $(tests_bin_last) fipsdrv rsacvt genhashdata \
+		  gchash
 noinst_HEADERS = t-common.h
 
 EXTRA_DIST = README rsa-16k.key cavs_tests.sh cavs_driver.pl \
 	     pkcs1v2-oaep.h pkcs1v2-pss.h pkcs1v2-v15c.h pkcs1v2-v15s.h \
-	     t-ed25519.inp stopwatch.h hashtest-256g.in
+	     t-ed25519.inp stopwatch.h hashtest-256g.in \
+	     sha3-224.h sha3-256.h sha3-384.h sha3-512.h
 
-LDADD = $(default_ldadd) $(LIBTHREAD)
-t_lock_LDADD = $(default_ldadd) $(LIBMULTITHREAD)
+LDADD = $(standard_ldadd) $(GPG_ERROR_LIBS)
+t_lock_LDADD = $(standard_ldadd) $(GPG_ERROR_MT_LIBS)
+t_lock_CFLAGS = $(GPG_ERROR_MT_CFLAGS)

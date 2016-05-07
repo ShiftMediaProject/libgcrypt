@@ -1,10 +1,14 @@
 Library: Libgcrypt
-Homepage: https://www.gnu.org/software/libgcrypt/
+Homepage: https://www.gnupg.org/related_software/libgcrypt/
+Download: https://ftp.gnupg.org/ftp/gcrypt/libgcrypt/
+          ftp://ftp.gnupg.org/gcrypt/libgcrypt/
+Repository: git://git.gnupg.org/libgcrypt.git
 Maintainer: Werner Koch <wk@gnupg.org>
-Bug reports: http://bugs.gnupg.org
+Bug reports: https://bugs.gnupg.org
 Security related bug reports: <security@gnupg.org>
 License (library): LGPLv2.1+
 License (manual and tools): GPLv2+
+
 
 Libgcrypt is free software.  See the files COPYING.LIB and COPYING for
 copying conditions, and LICENSES for notices about a few contributions
@@ -30,8 +34,9 @@ List of Copyright holders
   Copyright (C) 2012 Simon Josefsson, Niels Möller
   Copyright (c) 2012 Intel Corporation
   Copyright (C) 2013 Christian Grothoff
-  Copyright (C) 2013-2015 Jussi Kivilinna
+  Copyright (C) 2013-2016 Jussi Kivilinna
   Copyright (C) 2013-2014 Dmitry Eremin-Solenikov
+  Copyright (C) 2014 Stephan Mueller
 
 
 Authors with a FSF copyright assignment
@@ -136,6 +141,9 @@ phcoder@gmail.com
 Authors with a DCO
 ==================
 
+Andrei Scherer <andsch@inbox.com>
+2014-08-22:BF7CEF794F9.000003F0andsch@inbox.com:
+
 Christian Aistleitner <christian@quelltextlich.at>
 2013-02-26:20130226110144.GA12678@quelltextlich.at:
 
@@ -154,14 +162,29 @@ Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
 Jussi Kivilinna <jussi.kivilinna@iki.fi>
 2013-05-06:5186720A.4090101@iki.fi:
 
+Markus Teich <markus dot teich at stusta dot mhn dot de>
+2014-10-08:20141008180509.GA2770@trolle:
+
+Milan Broz <gmazyland@gmail.com>
+2014-01-13:52D44CC6.4050707@gmail.com:
+
+Peter Wu <peter@lekensteyn.nl>
+2015-07-22:20150722191325.GA8113@al:
+
 Rafaël Carré <funman@videolan.org>
 2012-04-20:4F91988B.1080502@videolan.org:
 
 Sergey V. <sftp.mtuci@gmail.com>
 2013-11-07:2066221.5IYa7Yq760@darkstar:
 
+Stephan Mueller <smueller@chronox.de>
+2014-08-22:2008899.25OeoelVVA@myon.chronox.de:
+
 Tomáš Mráz <tm@t8m.info>
 2012-04-16:1334571250.5056.52.camel@vespa.frost.loc:
+
+Vitezslav Cizek <vcizek@suse.com>
+2015-11-05:20151105131424.GA32700@kolac.suse.cz:
 
 Werner Koch <wk@gnupg.org> (g10 Code GmbH)
 2012-12-05:87obi8u4h2.fsf@vigenere.g10code.de:
@@ -172,10 +195,6 @@ More credits
 
 Libgcrypt used to be part of GnuPG but has been taken out into its own
 package on 2000-12-21.
-
-The ATH implementation (src/ath*) has been taken from GPGME and
-relicensed to the LGPL by the copyright holder of GPGME (g10 Code
-GmbH); it is now considered to be a part of Libgcrypt.
 
 Most of the stuff in mpi has been taken from an old GMP library
 version by Torbjorn Granlund <tege@noisy.tmg.se>.

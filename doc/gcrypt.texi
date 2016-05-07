@@ -188,8 +188,8 @@ the same handle, he has to take care of the serialization of such
 functions himself.  If not described otherwise, every function is
 thread-safe.
 
-Libgcrypt depends on the library `libgpg-error', which
-contains common error handling related code for GnuPG components.
+Libgcrypt depends on the library `libgpg-error', which contains some
+common code used by other GnuPG components.
 
 @c **********************************************************
 @c *******************  Preparation  ************************
@@ -267,9 +267,9 @@ example shows how it can be used at the command line:
 gcc -c foo.c `libgcrypt-config --cflags`
 @end example
 
-Adding the output of @samp{libgcrypt-config --cflags} to the compilers
-command line will ensure that the compiler can find the Libgcrypt header
-file.
+Adding the output of @samp{libgcrypt-config --cflags} to the
+compiler’s command line will ensure that the compiler can find the
+Libgcrypt header file.
 
 A similar problem occurs when linking the program with the library.
 Again, the compiler has to find the library files.  For this to work,
@@ -314,7 +314,20 @@ found, execute @var{action-if-found}, otherwise do
 Additionally, the function defines @code{LIBGCRYPT_CFLAGS} to the
 flags needed for compilation of the program to find the
 @file{gcrypt.h} header file, and @code{LIBGCRYPT_LIBS} to the linker
-flags needed to link the program to the Libgcrypt library.
+flags needed to link the program to the Libgcrypt library.  If the
+used helper script does not match the target type you are building for
+a warning is printed and the string @code{libgcrypt} is appended to the
+variable @code{gpg_config_script_warn}.
+
+This macro searches for @command{libgcrypt-config} along the PATH.  If
+you are cross-compiling, it is useful to set the environment variable
+@code{SYSROOT} to the top directory of your target.  The macro will
+then first look for the helper program in the @file{bin} directory
+below that top directory.  An absolute directory name must be used for
+@code{SYSROOT}.  Finally, if the configure command line option
+@code{--with-libgcrypt-prefix} is used, only its value is used for the top
+directory below which the helper script is expected.
+
 @end defmac
 
 You can use the defined Autoconf variables like this in your
@@ -343,8 +356,7 @@ after program startup.
 
 The function @code{gcry_check_version} initializes some subsystems used
 by Libgcrypt and must be invoked before any other function in the
-library, with the exception of the @code{GCRYCTL_SET_THREAD_CBS} command
-(called via the @code{gcry_control} function).
+library.
 @xref{Multi-Threading}.
 
 Furthermore, this function returns the version number of the library.
@@ -369,7 +381,7 @@ memory is not a problem, you should initialize Libgcrypt this way:
 
 @example
   /* Version check should be the very first call because it
-     makes sure that important subsystems are intialized. */
+     makes sure that important subsystems are initialized. */
   if (!gcry_check_version (GCRYPT_VERSION))
     @{
       fputs ("libgcrypt version mismatch\n", stderr);
@@ -450,51 +462,16 @@ thread-safe if you adhere to the following requirements:
 
 @itemize @bullet
 @item
-If your application is multi-threaded, you must set the thread support
-callbacks with the @code{GCRYCTL_SET_THREAD_CBS} command
-@strong{before} any other function in the library.
-
-This is easy enough if you are indeed writing an application using
-Libgcrypt.  It is rather problematic if you are writing a library
-instead.  Here are some tips what to do if you are writing a library:
-
-If your library requires a certain thread package, just initialize
-Libgcrypt to use this thread package.  If your library supports multiple
-thread packages, but needs to be configured, you will have to
-implement a way to determine which thread package the application
-wants to use with your library anyway.  Then configure Libgcrypt to use
-this thread package.
-
-If your library is fully reentrant without any special support by a
-thread package, then you are lucky indeed.  Unfortunately, this does
-not relieve you from doing either of the two above, or use a third
-option.  The third option is to let the application initialize Libgcrypt
-for you.  Then you are not using Libgcrypt transparently, though.
-
-As if this was not difficult enough, a conflict may arise if two
-libraries try to initialize Libgcrypt independently of each others, and
-both such libraries are then linked into the same application.  To
-make it a bit simpler for you, this will probably work, but only if
-both libraries have the same requirement for the thread package.  This
-is currently only supported for the non-threaded case, GNU Pth and
-pthread.
-
 If you use pthread and your applications forks and does not directly
 call exec (even calling stdio functions), all kind of problems may
 occur.  Future versions of Libgcrypt will try to cleanup using
 pthread_atfork but even that may lead to problems.  This is a common
 problem with almost all applications using pthread and fork.
 
-Note that future versions of Libgcrypt will drop this flexible thread
-support and instead only support the platforms standard thread
-implementation.
-
 
 @item
 The function @code{gcry_check_version} must be called before any other
-function in the library, except the @code{GCRYCTL_SET_THREAD_CBS}
-command (called via the @code{gcry_control} function), because it
-initializes the thread support subsystem in Libgcrypt.  To
+function in the library.  To
 achieve this in multi-threaded programs, you must synchronize the
 memory with respect to other threads that also want to use
 Libgcrypt.  For this, it is sufficient to call
@@ -513,52 +490,6 @@ Just like the function @code{gpg_strerror}, the function
 @code{gpg_strerror_r} instead.
 
 @end itemize
-
-
-Libgcrypt contains convenient macros, which define the
-necessary thread callbacks for PThread and for GNU Pth:
-
-@table @code
-@item GCRY_THREAD_OPTION_PTH_IMPL
-
-This macro defines the following (static) symbols:
-@code{gcry_pth_init}, @code{gcry_pth_mutex_init},
-@code{gcry_pth_mutex_destroy}, @code{gcry_pth_mutex_lock},
-@code{gcry_pth_mutex_unlock}, @code{gcry_pth_read},
-@code{gcry_pth_write}, @code{gcry_pth_select},
-@code{gcry_pth_waitpid}, @code{gcry_pth_accept},
-@code{gcry_pth_connect}, @code{gcry_threads_pth}.
-
-After including this macro, @code{gcry_control()} shall be used with a
-command of @code{GCRYCTL_SET_THREAD_CBS} in order to register the
-thread callback structure named ``gcry_threads_pth''.  Example:
-
-@smallexample
-  ret = gcry_control (GCRYCTL_SET_THREAD_CBS, &gcry_threads_pth);
-@end smallexample
-
-
-@item GCRY_THREAD_OPTION_PTHREAD_IMPL
-
-This macro defines the following (static) symbols:
-@code{gcry_pthread_mutex_init}, @code{gcry_pthread_mutex_destroy},
-@code{gcry_pthread_mutex_lock}, @code{gcry_pthread_mutex_unlock},
-@code{gcry_threads_pthread}.
-
-After including this macro, @code{gcry_control()} shall be used with a
-command of @code{GCRYCTL_SET_THREAD_CBS} in order to register the
-thread callback structure named ``gcry_threads_pthread''.  Example:
-
-@smallexample
-  ret = gcry_control (GCRYCTL_SET_THREAD_CBS, &gcry_threads_pthread);
-@end smallexample
-
-
-@end table
-
-Note that these macros need to be terminated with a semicolon.  Keep
-in mind that these are convenient macros for C programmers; C++
-programmers might have to wrap these macros in an ``extern C'' body.
 
 
 @node Enabling FIPS mode
@@ -625,6 +556,7 @@ are
 @item padlock-sha
 @item padlock-mmul
 @item intel-cpu
+@item intel-fast-shld
 @item intel-bmi2
 @item intel-ssse3
 @item intel-pclmul
@@ -863,8 +795,7 @@ This command returns true if the command@*
 GCRYCTL_INITIALIZATION_FINISHED has already been run.
 
 @item GCRYCTL_SET_THREAD_CBS; Arguments: struct ath_ops *ath_ops
-This command registers a thread-callback structure.
-@xref{Multi-Threading}.
+This command is obsolete since version 1.6.
 
 @item GCRYCTL_FAST_POLL; Arguments: none
 Run a fast random poll.
@@ -951,7 +882,7 @@ The default is @code{GCRY_RNG_TYPE_STANDARD} unless FIPS mode as been
 enabled; in which case @code{GCRY_RNG_TYPE_FIPS} is used and locked
 against further changes.
 
-@item GCRYCTL_GETT_CURRENT_RNG_TYPE; Arguments: int *
+@item GCRYCTL_GET_CURRENT_RNG_TYPE; Arguments: int *
 This command stores the type of the currently used RNG as an integer
 value at the provided address.
 
@@ -1647,6 +1578,10 @@ This is the Salsa20/12 - reduced round version of Salsa20 stream cipher.
 The GOST 28147-89 cipher, defined in the respective GOST standard.
 Translation of this GOST into English is provided in the RFC-5830.
 
+@item GCRY_CIPHER_CHACHA20
+@cindex ChaCha20
+This is the ChaCha20 stream cipher.
+
 @end table
 
 @node Available cipher modes
@@ -1663,9 +1598,12 @@ set, this mode may be used to bypass the actual encryption.
 Electronic Codebook mode.
 
 @item GCRY_CIPHER_MODE_CFB
+@item GCRY_CIPHER_MODE_CFB8
 @cindex CFB, Cipher Feedback mode
-Cipher Feedback mode.  The shift size equals the block size of the
-cipher (e.g. for AES it is CFB-128).
+Cipher Feedback mode.  For GCRY_CIPHER_MODE_CFB the shift size equals
+the block size of the cipher (e.g. for AES it is CFB-128).  For
+GCRY_CIPHER_MODE_CFB8 the shift size is 8 bit but that variant is not
+yet available.
 
 @item  GCRY_CIPHER_MODE_CBC
 @cindex CBC, Cipher Block Chaining mode
@@ -1708,6 +1646,24 @@ Galois/Counter Mode (GCM) is an Authenticated Encryption with
 Associated Data (AEAD) block cipher mode, which is specified in
 'NIST Special Publication 800-38D'.
 
+@item  GCRY_CIPHER_MODE_POLY1305
+@cindex Poly1305 based AEAD mode with ChaCha20
+This mode implements the Poly1305 Authenticated Encryption with Associated
+Data (AEAD) mode according to RFC-7539. This mode can be used with ChaCha20
+stream cipher.
+
+@item  GCRY_CIPHER_MODE_OCB
+@cindex OCB, OCB3
+OCB is an Authenticated Encryption with Associated Data (AEAD) block
+cipher mode, which is specified in RFC-7253.  Supported tag lengths
+are 128, 96, and 64 bit with the default being 128 bit.  To switch to
+a different tag length @code{gcry_cipher_ctl} using the command
+@code{GCRYCTL_SET_TAGLEN} and the address of an @code{int} variable
+set to 12 (for 96 bit) or 8 (for 64 bit) provided for the
+@code{buffer} argument and @code{sizeof(int)} for @code{buflen}.
+
+Note that the use of @code{gcry_cipher_final} is required.
+
 @end table
 
 @node Working with cipher handles
@@ -1734,13 +1690,16 @@ The cipher mode to use must be specified via @var{mode}.  See
 @xref{Available cipher modes}, for a list of supported cipher modes
 and the according constants.  Note that some modes are incompatible
 with some algorithms - in particular, stream mode
-(@code{GCRY_CIPHER_MODE_STREAM}) only works with stream ciphers. The
-block cipher modes (@code{GCRY_CIPHER_MODE_ECB},
-@code{GCRY_CIPHER_MODE_CBC}, @code{GCRY_CIPHER_MODE_CFB},
-@code{GCRY_CIPHER_MODE_OFB} and @code{GCRY_CIPHER_MODE_CTR}) will work
-with any block cipher algorithm. @code{GCRY_CIPHER_MODE_CCM} and
-@code{GCRY_CIPHER_MODE_GCM} modes will only work with block cipher algorithms
-which have the block size of 16 bytes.
+(@code{GCRY_CIPHER_MODE_STREAM}) only works with stream ciphers.
+Poly1305 AEAD mode (@code{GCRY_CIPHER_MODE_POLY1305}) only works with
+ChaCha20 stream cipher. The block cipher modes
+(@code{GCRY_CIPHER_MODE_ECB}, @code{GCRY_CIPHER_MODE_CBC},
+@code{GCRY_CIPHER_MODE_CFB}, @code{GCRY_CIPHER_MODE_OFB} and
+@code{GCRY_CIPHER_MODE_CTR}) will work with any block cipher
+algorithm.  GCM mode (@code{GCRY_CIPHER_MODE_CCM}), CCM mode
+(@code{GCRY_CIPHER_MODE_GCM}), and OCB mode
+(@code{GCRY_CIPHER_MODE_OCB}) will only work with block cipher
+algorithms which have the block size of 16 bytes.
 
 The third argument @var{flags} can either be passed as @code{0} or as
 the bit-wise OR of the following constants.
@@ -1803,12 +1762,9 @@ vector is passed as the buffer @var{K} of length @var{l} bytes and
 copied to internal data structures.  The function checks that the IV
 matches the requirement of the selected algorithm and mode.
 
-This function is also used with the Salsa20 stream cipher to set or
-update the required nonce.  In this case it needs to be called after
-setting the key.
-
-This function is also used with the AEAD cipher modes to set or
-update the required nonce.
+This function is also used by AEAD modes and with Salsa20 and ChaCha20
+stream ciphers to set or update the required nonce.  In these cases it
+needs to be called after setting the key.
 
 @end deftypefun
 
@@ -1841,15 +1797,23 @@ authenticated data (AAD) for AEAD cipher modes.
 
 @end deftypefun
 
-@deftypefun gcry_error_t gcry_cipher_gettag (gcry_cipher_hd_t @var{h}, void *@var{tag}, size_t @var{taglen})
+@deftypefun {gcry_error_t} gcry_cipher_gettag @
+            (@w{gcry_cipher_hd_t @var{h}}, @
+            @w{void *@var{tag}}, @w{size_t @var{taglen}})
 
 This function is used to read the authentication tag after encryption.
 The function finalizes and outputs the authentication tag to the buffer
 @var{tag} of length @var{taglen} bytes.
 
+Depending on the used mode certain restrictions for @var{taglen} are
+enforced:  For GCM @var{taglen} must be at least 16 or one of the
+allowed truncated lengths (4, 8, 12, 13, 14, or 15).
+
 @end deftypefun
 
-@deftypefun gcry_error_t gcry_cipher_checktag (gcry_cipher_hd_t @var{h}, const void *@var{tag}, size_t @var{taglen})
+@deftypefun {gcry_error_t} gcry_cipher_checktag @
+            (@w{gcry_cipher_hd_t @var{h}}, @
+            @w{const void *@var{tag}}, @w{size_t @var{taglen}})
 
 Check the authentication tag after decryption. The authentication
 tag is passed as the buffer @var{tag} of length @var{taglen} bytes
@@ -1857,6 +1821,10 @@ and compared to internal authentication tag computed during
 decryption.  Error code @code{GPG_ERR_CHECKSUM} is returned if
 the authentication tag in the buffer @var{tag} does not match
 the authentication tag calculated during decryption.
+
+Depending on the used mode certain restrictions for @var{taglen} are
+enforced: For GCM @var{taglen} must either be 16 or one of the allowed
+truncated lengths (4, 8, 12, 13, 14, or 15).
 
 @end deftypefun
 
@@ -1870,7 +1838,7 @@ all the data.
 can either work in place or with two buffers.  It uses the cipher
 context already setup and described by the handle @var{h}.  There are 2
 ways to use the function: If @var{in} is passed as @code{NULL} and
-@var{inlen} is @code{0}, in-place encryption of the data in @var{out} or
+@var{inlen} is @code{0}, in-place encryption of the data in @var{out} of
 length @var{outsize} takes place.  With @var{in} being not @code{NULL},
 @var{inlen} bytes are encrypted to the buffer @var{out} which must have
 at least a size of @var{inlen}.  @var{outsize} must be set to the
@@ -1879,6 +1847,9 @@ is sufficient space. Note that overlapping buffers are not allowed.
 
 Depending on the selected algorithms and encryption mode, the length of
 the buffers must be a multiple of the block size.
+
+Some encryption modes require that @code{gcry_cipher_final} is used
+before the final data chunk is passed to this function.
 
 The function returns @code{0} on success or an error code.
 @end deftypefun
@@ -1900,11 +1871,27 @@ is sufficient space.  Note that overlapping buffers are not allowed.
 Depending on the selected algorithms and encryption mode, the length of
 the buffers must be a multiple of the block size.
 
+Some encryption modes require that @code{gcry_cipher_final} is used
+before the final data chunk is passed to this function.
+
 The function returns @code{0} on success or an error code.
 @end deftypefun
 
 
-OpenPGP (as defined in RFC-2440) requires a special sync operation in
+The OCB mode features integrated padding and must thus be told about
+the end of the input data. This is done with:
+
+@deftypefun gcry_error_t gcry_cipher_final (gcry_cipher_hd_t @var{h})
+
+Set a flag in the context to tell the encrypt and decrypt functions
+that their next call will provide the last chunk of data.  Only the
+first call to this function has an effect and only for modes which
+support it.  Checking the error is in general not necessary.  This is
+implemented as a macro.
+@end deftypefun
+
+
+OpenPGP (as defined in RFC-4880) requires a special sync operation in
 some places.  The following function is used for this:
 
 @deftypefun gcry_error_t gcry_cipher_sync (gcry_cipher_hd_t @var{h})
@@ -1928,12 +1915,24 @@ handle @var{h}.  Please see the comments in the source code
 (@code{src/global.c}) for details.
 @end deftypefun
 
-@deftypefun gcry_error_t gcry_cipher_info (gcry_cipher_hd_t @var{h}, int @var{what}, void *@var{buffer}, size_t *@var{nbytes})
+@deftypefun gcry_error_t gcry_cipher_info (gcry_cipher_hd_t @var{h}, @
+              int @var{what}, void *@var{buffer}, size_t *@var{nbytes})
 
 @code{gcry_cipher_info} is used to retrieve various
 information about a cipher context or the cipher module in general.
 
-Currently no information is available.
+@c begin constants for gcry_cipher_info
+@table @code
+
+@item GCRYCTL_GET_TAGLEN:
+Return the length of the tag for an AE algorithm mode.  An error is
+returned for modes which do not support a tag.  @var{buffer} must be
+given as NULL.  On success the result is stored @var{nbytes}.  The
+taglen is returned in bytes.
+
+@end table
+@c end constants for gcry_cipher_info
+
 @end deftypefun
 
 @node General cipher functions
@@ -2773,7 +2772,7 @@ operations.  @var{cmd} controls what is to be done. The return value is
 Disable the algorithm given as an algorithm id in @var{buffer}.
 @var{buffer} must point to an @code{int} variable with the algorithm
 id and @var{buflen} must have the value @code{sizeof (int)}.  This
-fucntion is not thread safe and should thus be used before any other
+function is not thread safe and should thus be used before any other
 threads are started.
 
 @end table
@@ -3065,6 +3064,7 @@ are also supported.
 @c begin table of hash algorithms
 @cindex SHA-1
 @cindex SHA-224, SHA-256, SHA-384, SHA-512
+@cindex SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE128, SHAKE256
 @cindex RIPE-MD-160
 @cindex MD2, MD4, MD5
 @cindex TIGER, TIGER1, TIGER2
@@ -3137,6 +3137,32 @@ See FIPS 180-2 for the specification.
 This is the SHA-384 algorithm which yields a message digest of 64 bytes.
 See FIPS 180-2 for the specification.
 
+@item GCRY_MD_SHA3_224
+This is the SHA3-224 algorithm which yields a message digest of 28 bytes.
+See FIPS 202 for the specification.
+
+@item GCRY_MD_SHA3_256
+This is the SHA3-256 algorithm which yields a message digest of 32 bytes.
+See FIPS 202 for the specification.
+
+@item GCRY_MD_SHA3_384
+This is the SHA3-384 algorithm which yields a message digest of 48 bytes.
+See FIPS 202 for the specification.
+
+@item GCRY_MD_SHA3_512
+This is the SHA3-384 algorithm which yields a message digest of 64 bytes.
+See FIPS 202 for the specification.
+
+@item GCRY_MD_SHAKE128
+This is the SHAKE128 extendable-output function (XOF) algorithm with 128 bit
+security strength.
+See FIPS 202 for the specification.
+
+@item GCRY_MD_SHAKE256
+This is the SHAKE256 extendable-output function (XOF) algorithm with 256 bit
+security strength.
+See FIPS 202 for the specification.
+
 @item GCRY_MD_CRC32
 This is the ISO 3309 and ITU-T V.42 cyclic redundancy check.  It yields
 an output of 4 bytes.  Note that this is not a hash algorithm in the
@@ -3199,11 +3225,28 @@ this is the hashed data is highly confidential.
 @item GCRY_MD_FLAG_HMAC
 @cindex HMAC
 Turn the algorithm into a HMAC message authentication algorithm.  This
-only works if just one algorithm is enabled for the handle.  Note that
-the function @code{gcry_md_setkey} must be used to set the MAC key.
-The size of the MAC is equal to the message digest of the underlying
-hash algorithm.  If you want CBC message authentication codes based on
-a cipher, see @xref{Working with cipher handles}.
+only works if just one algorithm is enabled for the handle and that
+algorithm is not an extendable-output function.  Note that the function
+@code{gcry_md_setkey} must be used to set the MAC key.  The size of the
+MAC is equal to the message digest of the underlying hash algorithm.
+If you want CBC message authentication codes based on a cipher,
+see @xref{Working with cipher handles}.
+
+@item GCRY_MD_FLAG_BUGEMU1
+@cindex bug emulation
+Versions of Libgcrypt before 1.6.0 had a bug in the Whirlpool code
+which led to a wrong result for certain input sizes and write
+patterns.  Using this flag emulates that bug.  This may for example be
+useful for applications which use Whirlpool as part of their key
+generation.  It is strongly suggested to use this flag only if really
+needed and if possible to the data should be re-processed using the
+regular Whirlpool algorithm.
+
+Note that this flag works for the entire hash context.  If needed
+arises it may be used to enable bug emulation for other hash
+algorithms.  Thus you should not use this flag for a multi-algorithm
+hash context.
+
 
 @item GCRY_MD_FLAG_BUGEMU1
 @cindex bug emulation
@@ -3300,7 +3343,11 @@ by just one character.  Both methods can be used on the same hash context.
 
 Pass @var{length} bytes of the data in @var{buffer} to the digest object
 with handle @var{h} to update the digest values. This
-function should be used for large blocks of data.
+function should be used for large blocks of data.  If this function is
+used after the context has been finalized, it will keep on pushing
+the data through the algorithm specific transform function and change
+the context; however the results are not meaningful and this feature
+is only available to mitigate timing attacks.
 @end deftypefun
 
 @deftypefun void gcry_md_putc (gcry_md_hd_t @var{h}, int @var{c})
@@ -3318,9 +3365,11 @@ message digest or some padding.
 @deftypefun void gcry_md_final (gcry_md_hd_t @var{h})
 
 Finalize the message digest calculation.  This is not really needed
-because @code{gcry_md_read} does this implicitly.  After this has been
-done no further updates (by means of @code{gcry_md_write} or
-@code{gcry_md_putc} are allowed.  Only the first call to this function
+because @code{gcry_md_read} and @code{gcry_md_extract} do this implicitly.
+After this has been done no further updates (by means of @code{gcry_md_write}
+or @code{gcry_md_putc} should be done; However, to mitigate timing
+attacks it is sometimes useful to keep on updating the context after
+having stored away the actual digest.  Only the first call to this function
 has an effect. It is implemented as a macro.
 @end deftypefun
 
@@ -3333,10 +3382,27 @@ function:
 calculation.  This function may be used as often as required but it will
 always return the same value for one handle.  The returned message digest
 is allocated within the message context and therefore valid until the
-handle is released or reseted (using @code{gcry_md_close} or
-@code{gcry_md_reset}.  @var{algo} may be given as 0 to return the only
+handle is released or reset-ed (using @code{gcry_md_close} or
+@code{gcry_md_reset} or it has been updated as a mitigation measure
+against timing attacks.  @var{algo} may be given as 0 to return the only
 enabled message digest or it may specify one of the enabled algorithms.
 The function does return @code{NULL} if the requested algorithm has not
+been enabled.
+@end deftypefun
+
+The way to read output of extendable-output function is by using the
+function:
+
+@deftypefun gpg_err_code_t gcry_md_extract (gcry_md_hd_t @var{h}, @
+  int @var{algo}, void *@var{buffer}, size_t @var{length})
+
+@code{gcry_mac_read} returns output from extendable-output function.
+This function may be used as often as required to generate more output
+byte stream from the algorithm.  Function extracts the new output bytes
+to @var{buffer} of the length @var{length}.  Buffer will be fully
+populated with new output.  @var{algo} may be given as 0 to return the only
+enabled message digest or it may specify one of the enabled algorithms.
+The function does return non-zero value if the requested algorithm has not
 been enabled.
 @end deftypefun
 
@@ -3350,7 +3416,7 @@ memory, two fast convenience function are available for this task:
 
 @code{gcry_md_hash_buffers} is a shortcut function to calculate a
 message digest from several buffers.  This function does not require a
-context and immediately returns the message digest of of the data
+context and immediately returns the message digest of the data
 described by @var{iov} and @var{iovcnt}.  @var{digest} must be
 allocated by the caller, large enough to hold the message digest
 yielded by the the specified algorithm @var{algo}.  This required size
@@ -3481,7 +3547,7 @@ hashed can be written to files on request.
 @deftypefun void gcry_md_debug (gcry_md_hd_t @var{h}, const char *@var{suffix})
 
 Enable debugging for the digest object with handle @var{h}.  This
-creates create files named @file{dbgmd-<n>.<string>} while doing the
+creates files named @file{dbgmd-<n>.<string>} while doing the
 actual hashing.  @var{suffix} is the string part in the filename.  The
 number is a counter incremented for each new hashing.  The data in the
 file is the raw data as passed to @code{gcry_md_write} or
@@ -3515,6 +3581,7 @@ provided by Libgcrypt.
 @c begin table of MAC algorithms
 @cindex HMAC-SHA-1
 @cindex HMAC-SHA-224, HMAC-SHA-256, HMAC-SHA-384, HMAC-SHA-512
+@cindex HMAC-SHA3-224, HMAC-SHA3-256, HMAC-SHA3-384, HMAC-SHA3-512
 @cindex HMAC-RIPE-MD-160
 @cindex HMAC-MD2, HMAC-MD4, HMAC-MD5
 @cindex HMAC-TIGER1
@@ -3540,6 +3607,22 @@ algorithm.
 
 @item GCRY_MAC_HMAC_SHA384
 This is HMAC message authentication algorithm based on the SHA-384 hash
+algorithm.
+
+@item GCRY_MAC_HMAC_SHA3_256
+This is HMAC message authentication algorithm based on the SHA3-384 hash
+algorithm.
+
+@item GCRY_MAC_HMAC_SHA3_224
+This is HMAC message authentication algorithm based on the SHA3-224 hash
+algorithm.
+
+@item GCRY_MAC_HMAC_SHA3_512
+This is HMAC message authentication algorithm based on the SHA3-512 hash
+algorithm.
+
+@item GCRY_MAC_HMAC_SHA3_384
+This is HMAC message authentication algorithm based on the SHA3-384 hash
 algorithm.
 
 @item GCRY_MAC_HMAC_SHA1
@@ -3638,6 +3721,30 @@ block cipher algorithm.
 This is GMAC message authentication algorithm based on the SEED
 block cipher algorithm.
 
+@item GCRY_MAC_POLY1305
+This is plain Poly1305 message authentication algorithm, used with
+one-time key.
+
+@item GCRY_MAC_POLY1305_AES
+This is Poly1305-AES message authentication algorithm, used with
+key and one-time nonce.
+
+@item GCRY_MAC_POLY1305_CAMELLIA
+This is Poly1305-Camellia message authentication algorithm, used with
+key and one-time nonce.
+
+@item GCRY_MAC_POLY1305_TWOFISH
+This is Poly1305-Twofish message authentication algorithm, used with
+key and one-time nonce.
+
+@item GCRY_MAC_POLY1305_SERPENT
+This is Poly1305-Serpent message authentication algorithm, used with
+key and one-time nonce.
+
+@item GCRY_MAC_POLY1305_SEED
+This is Poly1305-SEED message authentication algorithm, used with
+key and one-time nonce.
+
 @end table
 @c end table of MAC algorithms
 
@@ -3683,8 +3790,8 @@ underlying block cipher.
 @end deftypefun
 
 
-GMAC algorithms need initialization vector to be set, which can be
-performed with function:
+GMAC algorithms and Poly1305-with-cipher algorithms need initialization vector to be set,
+which can be performed with function:
 
 @deftypefun gcry_error_t gcry_mac_setiv (gcry_mac_hd_t @var{h}, const void *@var{iv}, size_t @var{ivlen})
 
@@ -3723,9 +3830,12 @@ see how it is actually done.
 @deftypefun gcry_error_t gcry_mac_write (gcry_mac_hd_t @var{h}, const void *@var{buffer}, size_t @var{length})
 
 Pass @var{length} bytes of the data in @var{buffer} to the MAC object
-with handle @var{h} to update the MAC values.
+with handle @var{h} to update the MAC values.  If this function is
+used after the context has been finalized, it will keep on pushing the
+data through the algorithm specific transform function and thereby
+change the context; however the results are not meaningful and this
+feature is only available to mitigate timing attacks.
 @end deftypefun
-
 
 The way to read out the calculated MAC is by using the function:
 
@@ -3737,7 +3847,6 @@ Function copies the resulting MAC value to @var{buffer} of the length
 then length of MAC is returned through @var{length}.
 @end deftypefun
 
-
 To compare existing MAC value with recalculated MAC, one is to use the function:
 
 @deftypefun gcry_error_t gcry_mac_verify (gcry_mac_hd_t @var{h}, void *@var{buffer}, size_t @var{length})
@@ -3746,6 +3855,16 @@ To compare existing MAC value with recalculated MAC, one is to use the function:
 @var{length} bytes of data in @var{buffer}. Error code @code{GPG_ERR_CHECKSUM}
 is returned if the MAC value in the buffer @var{buffer} does not match
 the MAC calculated in object @var{h}.
+@end deftypefun
+
+
+In some situations it might be hard to remember the algorithm used for
+the MAC calculation. The following function might be used to get that
+information:
+
+@deftypefun {int} gcry_mac_get_algo (gcry_mac_hd_t @var{h})
+
+Retrieve the algorithm used with the handle @var{h}.
 @end deftypefun
 
 
@@ -4104,7 +4223,7 @@ logging stream.
 @noindent
 Often canonical encoding is used in the external representation.  The
 following function can be used to check for valid encoding and to learn
-the length of the S-expression"
+the length of the S-expression.
 
 @deftypefun size_t gcry_sexp_canon_len (@w{const unsigned char *@var{buffer}}, @w{size_t @var{length}}, @w{size_t *@var{erroff}}, @w{int *@var{errcode}})
 
@@ -4260,8 +4379,10 @@ In general parameter names are single letters.  To use a string for a
 parameter name, enclose the name in single quotes.
 
 Unless in buffer descriptor mode for each parameter name a pointer to
-an @code{gcry_mpi_t} variable is expected finally followed by a @code{NULL}.
-For example
+an @code{gcry_mpi_t} variable is expected that must be set to
+@code{NULL} prior to invoking this function, and finally a @code{NULL}
+is expected.  For example
+
 @example
   _gcry_sexp_extract_param (key, NULL, "n/x+e d-'foo'",
                             &mpi_n, &mpi_x, &mpi_e, &mpi_foo, NULL)
@@ -4290,8 +4411,11 @@ number of bytes copied to that buffer; in case the buffer is too
 small, the function immediately returns with an error code (and
 @var{len} is set to 0).
 
-The function returns NULL on success.  On error an error code is
-returned and the passed MPIs are either unchanged or set to NULL.
+The function returns 0 on success.  On error an error code is
+returned, all passed MPIs that might have been allocated up to this
+point are deallocated and set to @code{NULL}, and all passed buffers
+are either truncated if the caller supplied the buffer, or deallocated
+if the function allocated the buffer.
 @end deftypefun
 
 
@@ -4421,7 +4545,8 @@ representation of an MPI and the internal one of Libgcrypt.
 Convert the external representation of an integer stored in @var{buffer}
 with a length of @var{buflen} into a newly created MPI returned which
 will be stored at the address of @var{r_mpi}.  For certain formats the
-length argument is not required and should be passed as @code{0}.  After a
+length argument is not required and should be passed as @code{0}. A
+@var{buflen} larger than 16 MiByte will be rejected.  After a
 successful operation the variable @var{nscanned} receives the number of
 bytes actually scanned unless @var{nscanned} was given as
 @code{NULL}. @var{format} describes the format of the MPI as stored in
@@ -4435,6 +4560,7 @@ bytes actually scanned unless @var{nscanned} was given as
 @item GCRYMPI_FMT_PGP
 As used by OpenPGP (only defined as unsigned). This is basically
 @code{GCRYMPI_FMT_STD} with a 2 byte big endian length header.
+A length header indicating a length of more than 16384 is not allowed.
 
 @item GCRYMPI_FMT_SSH
 As used in the Secure Shell protocol.  This is @code{GCRYMPI_FMT_STD}
@@ -4729,7 +4855,7 @@ newly allocated point object.
 @end deftypefun
 
 @anchor{gcry_mpi_ec_new}
-@deftypefun gpg_error_t gcry_mpi_ec_p_new (@w{gpg_ctx_t *@var{r_ctx}}, @
+@deftypefun gpg_error_t gcry_mpi_ec_new (@w{gcry_ctx_t *@var{r_ctx}}, @
  @w{gcry_sexp_t @var{keyparam}}, @w{const char *@var{curvename}})
 
 Allocate a new context for elliptic curve operations.  If
@@ -4806,6 +4932,19 @@ Valid names are the point parameters of an elliptic curve
 (@pxref{ecc_keyparam}).
 @end deftypefun
 
+@deftypefun gpg_err_code_t gcry_mpi_ec_decode_point ( @
+ @w{mpi_point_t @var{result}}, @w{gcry_mpi_t @var{value}}, @
+ @w{gcry_ctx_t @var{ctx}})
+
+Decode the point given as an MPI in @var{value} and store at
+@var{result}.  To decide which encoding is used the function takes a
+context @var{ctx} which can be created with @code{gcry_mpi_ec_new}.
+If @code{NULL} is given for the context the function assumes a 0x04
+prefixed uncompressed encoding.  On error an error code is returned
+and @var{result} might be changed.
+@end deftypefun
+
+
 @deftypefun int gcry_mpi_ec_get_affine ( @
  @w{gcry_mpi_t @var{x}}, @w{gcry_mpi_t @var{y}}, @
  @w{gcry_mpi_point_t @var{point}}, @w{gcry_ctx_t @var{ctx}})
@@ -4837,6 +4976,15 @@ and store the result into @var{w}.
 
 Add the points @var{u} and @var{v} of the elliptic curve described by
 @var{ctx} and store the result into @var{w}.
+@end deftypefun
+
+@deftypefun void gcry_mpi_ec_sub ( @
+ @w{gcry_mpi_point_t @var{w}}, @w{gcry_mpi_point_t @var{u}}, @
+ @w{gcry_mpi_point_t @var{v}}, @w{gcry_ctx_t @var{ctx}})
+
+Subtracts the point @var{v} from the point @var{u} of the elliptic
+curve described by @var{ctx} and store the result into @var{w}. Only
+Twisted Edwards curves are supported for now.
 @end deftypefun
 
 @deftypefun void gcry_mpi_ec_mul ( @
@@ -5536,9 +5684,9 @@ that system and is the only gathering module available for that OS.
 
 @item rndhw
 Extra module to collect additional entropy by utilizing a hardware
-random number generator.  As of now the only supported hardware RNG is
-the Padlock engine of VIA (Centaur) CPUs.  It is not available in FIPS
-mode.
+random number generator.  As of now the supported hardware RNG is
+the Padlock engine of VIA (Centaur) CPUs and x86 CPUs with the RDRAND
+instruction.  It is not available in FIPS mode.
 
 @end table
 
@@ -5558,7 +5706,7 @@ Practically Strong Random Numbers".@footnote{Also described in chapter
 6 of his book "Cryptographic Security Architecture", New York, 2004,
 ISBN 0-387-95387-6.}
 
-A pool of 600 bytes is used and mixed using the core RIPE-MD160 hash
+A pool of 600 bytes is used and mixed using the core SHA-1 hash
 transform function.  Several extra features are used to make the
 robust against a wide variety of attacks and to protect against
 failures of subsystems.  The state of the generator may be saved to a

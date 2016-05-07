@@ -1,5 +1,5 @@
 /* cipher-selftest.c - Helper functions for bulk encryption selftests.
- *	Copyright © 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -105,7 +105,11 @@ _gcry_selftest_helper_cbc (const char *cipher, gcry_cipher_setkey_t setkey_func,
   ciphertext = plaintext2 + nblocks * blocksize;
 
   /* Initialize ctx */
-  setkey_func (ctx, key, sizeof(key));
+  if (setkey_func (ctx, key, sizeof(key)) != GPG_ERR_NO_ERROR)
+   {
+     xfree(mem);
+     return "setkey failed";
+   }
 
   /* Test single block code path */
   memset (iv, 0x4e, blocksize);
@@ -224,7 +228,11 @@ _gcry_selftest_helper_cfb (const char *cipher, gcry_cipher_setkey_t setkey_func,
   ciphertext = plaintext2 + nblocks * blocksize;
 
   /* Initialize ctx */
-  setkey_func (ctx, key, sizeof(key));
+  if (setkey_func (ctx, key, sizeof(key)) != GPG_ERR_NO_ERROR)
+   {
+     xfree(mem);
+     return "setkey failed";
+   }
 
   /* Test single block code path */
   memset(iv, 0xd3, blocksize);
@@ -343,7 +351,11 @@ _gcry_selftest_helper_ctr (const char *cipher, gcry_cipher_setkey_t setkey_func,
   ciphertext2 = ciphertext + nblocks * blocksize;
 
   /* Initialize ctx */
-  setkey_func (ctx, key, sizeof(key));
+  if (setkey_func (ctx, key, sizeof(key)) != GPG_ERR_NO_ERROR)
+   {
+     xfree(mem);
+     return "setkey failed";
+   }
 
   /* Test single block code path */
   memset (iv, 0xff, blocksize);

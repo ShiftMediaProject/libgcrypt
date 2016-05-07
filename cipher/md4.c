@@ -66,7 +66,7 @@ typedef struct {
 } MD4_CONTEXT;
 
 static unsigned int
-transform ( void *c, const unsigned char *data );
+transform ( void *c, const unsigned char *data, size_t nblks );
 
 static void
 md4_init (void *context, unsigned int flags)
@@ -96,7 +96,7 @@ md4_init (void *context, unsigned int flags)
  * transform 64 bytes
  */
 static unsigned int
-transform ( void *c, const unsigned char *data )
+transform_blk ( void *c, const unsigned char *data )
 {
   MD4_CONTEXT *ctx = c;
   u32 in[16];
@@ -183,6 +183,21 @@ transform ( void *c, const unsigned char *data )
 }
 
 
+static unsigned int
+transform ( void *c, const unsigned char *data, size_t nblks )
+{
+  unsigned int burn;
+
+  do
+    {
+      burn = transform_blk (c, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
+}
+
 
 /* The routine final terminates the message-digest computation and
  * ends with the desired message digest in mdContext->digest[0...15].
@@ -236,11 +251,11 @@ md4_final( void *context )
   /* append the 64 bit count */
   buf_put_le32(hd->bctx.buf + 56, lsb);
   buf_put_le32(hd->bctx.buf + 60, msb);
-  burn = transform( hd, hd->bctx.buf );
+  burn = transform ( hd, hd->bctx.buf, 1 );
   _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#define X(a) do { *(u32*)p = le_bswap32((*hd).a) ; p += 4; } while(0)
+#define X(a) do { buf_put_le32(p, hd->a); p += 4; } while(0)
   X(A);
   X(B);
   X(C);
@@ -271,6 +286,6 @@ gcry_md_spec_t _gcry_digest_spec_md4 =
   {
     GCRY_MD_MD4, {0, 0},
     "MD4", asn, DIM (asn), oid_spec_md4,16,
-    md4_init, _gcry_md_block_write, md4_final, md4_read,
+    md4_init, _gcry_md_block_write, md4_final, md4_read, NULL,
     sizeof (MD4_CONTEXT)
   };

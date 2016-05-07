@@ -55,7 +55,8 @@
 
 #ifdef __x86_64
 #include <config.h>
-#if defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
+#if (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS)) && \
     defined(HAVE_INTEL_SYNTAX_PLATFORM_AS) && \
     defined(HAVE_GCC_INLINE_ASM_SSSE3) && defined(USE_SHA256)
 
@@ -63,6 +64,12 @@
 #  define ADD_RIP +rip
 #else
 #  define ADD_RIP
+#endif
+
+#ifdef HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS
+# define ELF(...) __VA_ARGS__
+#else
+# define ELF(...) /*_*/
 #endif
 
 .intel_syntax noprefix
@@ -206,7 +213,7 @@ a = TMP_
 	add	h, y1		/* h = h + S1 + CH + k + w + S0 */
 		por	XTMP1, XTMP2	/* XTMP1 = W[-15] ror 7 */
 	or	y0, y2		/* y0 = MAJ = (a|c)&b)|(a&c) */
-	add	h, y0		/* h = h + S1 + CH + k + w + S0 + MAJ */
+	lea	h, [h + y0]	/* h = h + S1 + CH + k + w + S0 + MAJ */
 
 ROTATE_ARGS
 		movdqa	XTMP2, XTMP3	/* XTMP2 = W[-15] */
@@ -247,7 +254,7 @@ ROTATE_ARGS
 	add	h, y1		/* h = h + S1 + CH + k + w + S0 */
 		paddd	XTMP0, XTMP1	/* XTMP0 = W[-16] + W[-7] + s0 */
 	or	y0, y2		/* y0 = MAJ = (a|c)&b)|(a&c) */
-	add	h, y0		/* h = h + S1 + CH + k + w + S0 + MAJ */
+	lea	h, [h + y0]	/* h = h + S1 + CH + k + w + S0 + MAJ */
 
 ROTATE_ARGS
 		movdqa	XTMP3, XTMP2	/* XTMP3 = W[-2] {BBAA} */
@@ -288,7 +295,7 @@ ROTATE_ARGS
 		/* compute high s1 */
 		pshufd	XTMP2, XTMP0, 0b01010000 /* XTMP2 = W[-2] {DDCC} */
 	or	y0, y2		/* y0 = MAJ = (a|c)&b)|(a&c) */
-	add	h, y0		/* h = h + S1 + CH + k + w + S0 + MAJ */
+	lea	h, [h + y0]	/* h = h + S1 + CH + k + w + S0 + MAJ */
 
 ROTATE_ARGS
 		movdqa	XTMP3, XTMP2	/* XTMP3 = W[-2] {DDCC} */
@@ -327,7 +334,7 @@ ROTATE_ARGS
 	and	y0, b		/* y0 = (a|c)&b */
 	add	h, y1		/* h = h + S1 + CH + k + w + S0 */
 	or	y0, y2		/* y0 = MAJ = (a|c)&b)|(a&c) */
-	add	h, y0		/* h = h + S1 + CH + k + w + S0 + MAJ */
+	lea	h, [h + y0]	/* h = h + S1 + CH + k + w + S0 + MAJ */
 
 ROTATE_ARGS
 rotate_Xs
@@ -362,7 +369,7 @@ rotate_Xs
 	and	y0, b		/* y0 = (a|c)&b */
 	add	h, y1		/* h = h + S1 + CH + k + w + S0 */
 	or	y0, y2		/* y0 = MAJ = (a|c)&b)|(a&c) */
-	add	h, y0		/* h = h + S1 + CH + k + w + S0 + MAJ */
+	lea	h, [h + y0]	/* h = h + S1 + CH + k + w + S0 + MAJ */
 	ROTATE_ARGS
 .endm
 
@@ -376,7 +383,7 @@ rotate_Xs
 */
 .text
 .globl _gcry_sha256_transform_amd64_ssse3
-.type  _gcry_sha256_transform_amd64_ssse3,@function;
+ELF(.type  _gcry_sha256_transform_amd64_ssse3,@function;)
 .align 16
 _gcry_sha256_transform_amd64_ssse3:
 	push	rbx
@@ -505,6 +512,7 @@ _gcry_sha256_transform_amd64_ssse3:
 	pop	rbx
 
 	mov     eax, STACK_SIZE + 5*8
+
 	ret
 
 

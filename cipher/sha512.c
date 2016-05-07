@@ -66,29 +66,40 @@
 #endif /*ENABLE_NEON_SUPPORT*/
 
 
+/* USE_ARM_ASM indicates whether to enable ARM assembly code. */
+#undef USE_ARM_ASM
+#if defined(__ARMEL__) && defined(HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS)
+# define USE_ARM_ASM 1
+#endif
+
+
 /* USE_SSSE3 indicates whether to compile with Intel SSSE3 code. */
 #undef USE_SSSE3
-#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
-    defined(HAVE_GCC_INLINE_ASM_SSSE3) && \
-    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS)
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_SSSE3) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_SSSE3 1
 #endif
 
 
 /* USE_AVX indicates whether to compile with Intel AVX code. */
 #undef USE_AVX
-#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
-    defined(HAVE_GCC_INLINE_ASM_AVX) && \
-    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS)
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_AVX) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_AVX 1
 #endif
 
 
 /* USE_AVX2 indicates whether to compile with Intel AVX2/rorx code. */
 #undef USE_AVX2
-#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) && \
-    defined(HAVE_GCC_INLINE_ASM_AVX2) && defined(HAVE_GCC_INLINE_ASM_BMI2) && \
-    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS)
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_AVX2) && \
+    defined(HAVE_GCC_INLINE_ASM_BMI2) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_AVX2 1
 #endif
 
@@ -117,7 +128,7 @@ typedef struct
 } SHA512_CONTEXT;
 
 static unsigned int
-transform (void *context, const unsigned char *data);
+transform (void *context, const unsigned char *data, size_t nblks);
 
 static void
 sha512_init (void *context, unsigned int flags)
@@ -150,7 +161,7 @@ sha512_init (void *context, unsigned int flags)
   ctx->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
 #ifdef USE_AVX
-  ctx->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_CPU);
+  ctx->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_FAST_SHLD);
 #endif
 #ifdef USE_AVX2
   ctx->use_avx2 = (features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2);
@@ -190,7 +201,7 @@ sha384_init (void *context, unsigned int flags)
   ctx->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
 #ifdef USE_AVX
-  ctx->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_CPU);
+  ctx->use_avx = (features & HWF_INTEL_AVX) && (features & HWF_INTEL_FAST_SHLD);
 #endif
 #ifdef USE_AVX2
   ctx->use_avx2 = (features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2);
@@ -199,36 +210,6 @@ sha384_init (void *context, unsigned int flags)
   (void)features;
 }
 
-
-static inline u64
-ROTR (u64 x, u64 n)
-{
-  return ((x >> n) | (x << (64 - n)));
-}
-
-static inline u64
-Ch (u64 x, u64 y, u64 z)
-{
-  return ((x & y) ^ ( ~x & z));
-}
-
-static inline u64
-Maj (u64 x, u64 y, u64 z)
-{
-  return ((x & y) ^ (x & z) ^ (y & z));
-}
-
-static inline u64
-Sum0 (u64 x)
-{
-  return (ROTR (x, 28) ^ ROTR (x, 34) ^ ROTR (x, 39));
-}
-
-static inline u64
-Sum1 (u64 x)
-{
-  return (ROTR (x, 14) ^ ROTR (x, 18) ^ ROTR (x, 41));
-}
 
 static const u64 k[] =
   {
@@ -274,11 +255,43 @@ static const u64 k[] =
     U64_C(0x5fcb6fab3ad6faec), U64_C(0x6c44198c4a475817)
   };
 
+#ifndef USE_ARM_ASM
+
+static inline u64
+ROTR (u64 x, u64 n)
+{
+  return ((x >> n) | (x << (64 - n)));
+}
+
+static inline u64
+Ch (u64 x, u64 y, u64 z)
+{
+  return ((x & y) ^ ( ~x & z));
+}
+
+static inline u64
+Maj (u64 x, u64 y, u64 z)
+{
+  return ((x & y) ^ (x & z) ^ (y & z));
+}
+
+static inline u64
+Sum0 (u64 x)
+{
+  return (ROTR (x, 28) ^ ROTR (x, 34) ^ ROTR (x, 39));
+}
+
+static inline u64
+Sum1 (u64 x)
+{
+  return (ROTR (x, 14) ^ ROTR (x, 18) ^ ROTR (x, 41));
+}
+
 /****************
  * Transform the message W which consists of 16 64-bit-words
  */
 static unsigned int
-__transform (SHA512_STATE *hd, const unsigned char *data)
+transform_blk (SHA512_STATE *hd, const unsigned char *data)
 {
   u64 a, b, c, d, e, f, g, h;
   u64 w[16];
@@ -299,7 +312,6 @@ __transform (SHA512_STATE *hd, const unsigned char *data)
 
 #define S0(x) (ROTR((x),1) ^ ROTR((x),8) ^ ((x)>>7))
 #define S1(x) (ROTR((x),19) ^ ROTR((x),61) ^ ((x)>>6))
-
 
   for (t = 0; t < 80 - 16; )
     {
@@ -541,57 +553,82 @@ __transform (SHA512_STATE *hd, const unsigned char *data)
   return /* burn_stack */ (8 + 16) * sizeof(u64) + sizeof(u32) +
                           3 * sizeof(void*);
 }
+#endif /*!USE_ARM_ASM*/
+
+/* AMD64 assembly implementations use SystemV ABI, ABI conversion and additional
+ * stack to store XMM6-XMM15 needed on Win64. */
+#undef ASM_FUNC_ABI
+#undef ASM_EXTRA_STACK
+#if defined(USE_SSSE3) || defined(USE_AVX) || defined(USE_AVX2)
+# ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+#  define ASM_FUNC_ABI __attribute__((sysv_abi))
+#  define ASM_EXTRA_STACK (10 * 16)
+# else
+#  define ASM_FUNC_ABI
+#  define ASM_EXTRA_STACK 0
+# endif
+#endif
 
 
 #ifdef USE_ARM_NEON_ASM
 void _gcry_sha512_transform_armv7_neon (SHA512_STATE *hd,
 					const unsigned char *data,
-					const u64 k[]);
+					const u64 k[], size_t num_blks);
+#endif
+
+#ifdef USE_ARM_ASM
+unsigned int _gcry_sha512_transform_arm (SHA512_STATE *hd,
+					 const unsigned char *data,
+					 const u64 k[], size_t num_blks);
 #endif
 
 #ifdef USE_SSSE3
 unsigned int _gcry_sha512_transform_amd64_ssse3(const void *input_data,
-					        void *state, size_t num_blks);
+                                                void *state,
+                                                size_t num_blks) ASM_FUNC_ABI;
 #endif
 
 #ifdef USE_AVX
 unsigned int _gcry_sha512_transform_amd64_avx(const void *input_data,
-					      void *state, size_t num_blks);
+                                              void *state,
+                                              size_t num_blks) ASM_FUNC_ABI;
 #endif
 
 #ifdef USE_AVX2
 unsigned int _gcry_sha512_transform_amd64_avx2(const void *input_data,
-					       void *state, size_t num_blks);
+                                               void *state,
+                                               size_t num_blks) ASM_FUNC_ABI;
 #endif
 
 
 static unsigned int
-transform (void *context, const unsigned char *data)
+transform (void *context, const unsigned char *data, size_t nblks)
 {
   SHA512_CONTEXT *ctx = context;
+  unsigned int burn;
 
 #ifdef USE_AVX2
   if (ctx->use_avx2)
-    return _gcry_sha512_transform_amd64_avx2 (data, &ctx->state, 1)
-           + 4 * sizeof(void*);
+    return _gcry_sha512_transform_amd64_avx2 (data, &ctx->state, nblks)
+           + 4 * sizeof(void*) + ASM_EXTRA_STACK;
 #endif
 
 #ifdef USE_AVX
   if (ctx->use_avx)
-    return _gcry_sha512_transform_amd64_avx (data, &ctx->state, 1)
-           + 4 * sizeof(void*);
+    return _gcry_sha512_transform_amd64_avx (data, &ctx->state, nblks)
+           + 4 * sizeof(void*) + ASM_EXTRA_STACK;
 #endif
 
 #ifdef USE_SSSE3
   if (ctx->use_ssse3)
-    return _gcry_sha512_transform_amd64_ssse3 (data, &ctx->state, 1)
-           + 4 * sizeof(void*);
+    return _gcry_sha512_transform_amd64_ssse3 (data, &ctx->state, nblks)
+           + 4 * sizeof(void*) + ASM_EXTRA_STACK;
 #endif
 
 #ifdef USE_ARM_NEON_ASM
   if (ctx->use_neon)
     {
-      _gcry_sha512_transform_armv7_neon (&ctx->state, data, k);
+      _gcry_sha512_transform_armv7_neon (&ctx->state, data, k, nblks);
 
       /* _gcry_sha512_transform_armv7_neon does not store sensitive data
        * to stack.  */
@@ -599,7 +636,26 @@ transform (void *context, const unsigned char *data)
     }
 #endif
 
-  return __transform (&ctx->state, data) + 3 * sizeof(void*);
+#ifdef USE_ARM_ASM
+  burn = _gcry_sha512_transform_arm (&ctx->state, data, k, nblks);
+#else
+  do
+    {
+      burn = transform_blk (&ctx->state, data) + 3 * sizeof(void*);
+      data += 128;
+    }
+  while (--nblks);
+
+#ifdef ASM_EXTRA_STACK
+  /* 'transform_blk' is typically inlined and XMM6-XMM15 are stored at
+   *  the prologue of this function. Therefore need to add ASM_EXTRA_STACK to
+   *  here too.
+   */
+  burn += ASM_EXTRA_STACK;
+#endif
+#endif
+
+  return burn;
 }
 
 
@@ -657,11 +713,11 @@ sha512_final (void *context)
   /* append the 128 bit count */
   buf_put_be64(hd->bctx.buf + 112, msb);
   buf_put_be64(hd->bctx.buf + 120, lsb);
-  stack_burn_depth = transform (hd, hd->bctx.buf);
+  stack_burn_depth = transform (hd, hd->bctx.buf, 1);
   _gcry_burn_stack (stack_burn_depth);
 
   p = hd->bctx.buf;
-#define X(a) do { *(u64*)p = be_bswap64(hd->state.h##a) ; p += 8; } while (0)
+#define X(a) do { buf_put_be64(p, hd->state.h##a); p += 8; } while (0)
   X (0);
   X (1);
   X (2);
@@ -839,7 +895,7 @@ gcry_md_spec_t _gcry_digest_spec_sha512 =
   {
     GCRY_MD_SHA512, {0, 1},
     "SHA512", sha512_asn, DIM (sha512_asn), oid_spec_sha512, 64,
-    sha512_init, _gcry_md_block_write, sha512_final, sha512_read,
+    sha512_init, _gcry_md_block_write, sha512_final, sha512_read, NULL,
     sizeof (SHA512_CONTEXT),
     run_selftests
   };
@@ -865,7 +921,7 @@ gcry_md_spec_t _gcry_digest_spec_sha384 =
   {
     GCRY_MD_SHA384, {0, 1},
     "SHA384", sha384_asn, DIM (sha384_asn), oid_spec_sha384, 48,
-    sha384_init, _gcry_md_block_write, sha512_final, sha512_read,
+    sha384_init, _gcry_md_block_write, sha512_final, sha512_read, NULL,
     sizeof (SHA512_CONTEXT),
     run_selftests
   };

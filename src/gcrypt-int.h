@@ -129,6 +129,8 @@ gpg_err_code_t _gcry_md_ctl (gcry_md_hd_t hd, int cmd,
                           void *buffer, size_t buflen);
 void _gcry_md_write (gcry_md_hd_t hd, const void *buffer, size_t length);
 unsigned char *_gcry_md_read (gcry_md_hd_t hd, int algo);
+gpg_error_t _gcry_md_extract (gcry_md_hd_t hd, int algo, void *buffer,
+                              size_t length);
 void _gcry_md_hash_buffer (int algo, void *digest,
                            const void *buffer, size_t length);
 gpg_err_code_t _gcry_md_hash_buffers (int algo, unsigned int flags,
@@ -180,6 +182,7 @@ gpg_err_code_t _gcry_mac_write (gcry_mac_hd_t hd, const void *buffer,
 gpg_err_code_t _gcry_mac_read (gcry_mac_hd_t hd, void *buffer, size_t *buflen);
 gpg_err_code_t _gcry_mac_verify (gcry_mac_hd_t hd, const void *buffer,
                                  size_t buflen);
+int _gcry_mac_get_algo (gcry_mac_hd_t hd);
 unsigned int _gcry_mac_get_algo_maclen (int algo);
 unsigned int _gcry_mac_get_algo_keylen (int algo);
 const char *_gcry_mac_algo_name (int algorithm) _GCRY_GCC_ATTR_PURE;
@@ -415,6 +418,7 @@ gcry_mpi_point_t _gcry_mpi_point_set (gcry_mpi_point_t point,
 gcry_mpi_point_t _gcry_mpi_point_snatch_set (gcry_mpi_point_t point,
                                             gcry_mpi_t x, gcry_mpi_t y,
                                             gcry_mpi_t z);
+
 gcry_mpi_t _gcry_mpi_ec_get_mpi (const char *name, gcry_ctx_t ctx, int copy);
 gcry_mpi_point_t _gcry_mpi_ec_get_point (const char *name,
                                         gcry_ctx_t ctx, int copy);
@@ -422,6 +426,8 @@ int _gcry_mpi_ec_get_affine (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_point_t point,
                              mpi_ec_t ctx);
 void _gcry_mpi_ec_dup (gcry_mpi_point_t w, gcry_mpi_point_t u, gcry_ctx_t ctx);
 void _gcry_mpi_ec_add (gcry_mpi_point_t w,
+                       gcry_mpi_point_t u, gcry_mpi_point_t v, mpi_ec_t ctx);
+void _gcry_mpi_ec_sub (gcry_mpi_point_t w,
                        gcry_mpi_point_t u, gcry_mpi_point_t v, mpi_ec_t ctx);
 void _gcry_mpi_ec_mul (gcry_mpi_point_t w, gcry_mpi_t n, gcry_mpi_point_t u,
                        mpi_ec_t ctx);

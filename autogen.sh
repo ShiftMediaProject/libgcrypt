@@ -385,7 +385,7 @@ info "Running $ACLOCAL ${aclocal_flags} ..."
 $ACLOCAL ${aclocal_flags}
 info "Running autoheader..."
 $AUTOHEADER
-info "Running automake --gnu --add-missing..."
+info "Running automake --gnu --add-missing ..."
 $AUTOMAKE --gnu --add-missing;
 info "Running autoconf${FORCE} ..."
 $AUTOCONF${FORCE}

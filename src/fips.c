@@ -31,7 +31,6 @@
 #endif /*HAVE_SYSLOG*/
 
 #include "g10lib.h"
-#include "ath.h"
 #include "cipher-proto.h"
 #include "hmac256.h"
 
@@ -69,7 +68,7 @@ static int enforced_fips_mode;
 static int inactive_fips_mode;
 
 /* This is the lock we use to protect the FSM.  */
-static ath_mutex_t fsm_lock;
+GPGRT_LOCK_DEFINE (fsm_lock);
 
 /* The current state of the FSM.  The whole state machinery is only
    used while in fips mode. Change this only while holding fsm_lock. */
@@ -103,7 +102,7 @@ _gcry_initialize_fips_mode (int force)
   static int done;
   gpg_error_t err;
 
-  /* Make sure we are not accidently called twice.  */
+  /* Make sure we are not accidentally called twice.  */
   if (done)
     {
       if ( fips_mode () )
@@ -181,18 +180,18 @@ _gcry_initialize_fips_mode (int force)
       FILE *fp;
 
       /* Intitialize the lock to protect the FSM.  */
-      err = ath_mutex_init (&fsm_lock);
+      err = gpgrt_lock_init (&fsm_lock);
       if (err)
         {
           /* If that fails we can't do anything but abort the
              process. We need to use log_info so that the FSM won't
              get involved.  */
           log_info ("FATAL: failed to create the FSM lock in libgcrypt: %s\n",
-                     strerror (err));
+                    gpg_strerror (err));
 #ifdef HAVE_SYSLOG
           syslog (LOG_USER|LOG_ERR, "Libgcrypt error: "
                   "creating FSM lock failed: %s - abort",
-                  strerror (err));
+                  gpg_strerror (err));
 #endif /*HAVE_SYSLOG*/
           abort ();
         }
@@ -222,15 +221,15 @@ lock_fsm (void)
 {
   gpg_error_t err;
 
-  err = ath_mutex_lock (&fsm_lock);
+  err = gpgrt_lock_lock (&fsm_lock);
   if (err)
     {
       log_info ("FATAL: failed to acquire the FSM lock in libgrypt: %s\n",
-                strerror (err));
+                gpg_strerror (err));
 #ifdef HAVE_SYSLOG
       syslog (LOG_USER|LOG_ERR, "Libgcrypt error: "
               "acquiring FSM lock failed: %s - abort",
-              strerror (err));
+              gpg_strerror (err));
 #endif /*HAVE_SYSLOG*/
       abort ();
     }
@@ -241,15 +240,15 @@ unlock_fsm (void)
 {
   gpg_error_t err;
 
-  err = ath_mutex_unlock (&fsm_lock);
+  err = gpgrt_lock_unlock (&fsm_lock);
   if (err)
     {
       log_info ("FATAL: failed to release the FSM lock in libgrypt: %s\n",
-                strerror (err));
+                gpg_strerror (err));
 #ifdef HAVE_SYSLOG
       syslog (LOG_USER|LOG_ERR, "Libgcrypt error: "
               "releasing FSM lock failed: %s - abort",
-              strerror (err));
+              gpg_strerror (err));
 #endif /*HAVE_SYSLOG*/
       abort ();
     }
@@ -378,7 +377,7 @@ _gcry_fips_is_operational (void)
              (GCRYCTL_INITIALIZATION_FINISHED) where the latter will
              run the selftests.  The drawback of these on-demand
              self-tests are a small chance that self-tests are
-             performed by severeal threads; that is no problem because
+             performed by several threads; that is no problem because
              our FSM make sure that we won't oversee any error. */
           unlock_fsm ();
           _gcry_fips_run_selftests (0);
@@ -519,6 +518,10 @@ run_hmac_selftests (int extended)
       GCRY_MD_SHA256,
       GCRY_MD_SHA384,
       GCRY_MD_SHA512,
+      GCRY_MD_SHA3_224,
+      GCRY_MD_SHA3_256,
+      GCRY_MD_SHA3_384,
+      GCRY_MD_SHA3_512,
       0
     };
   int idx;
@@ -546,7 +549,7 @@ run_pubkey_selftests (int extended)
     {
       GCRY_PK_RSA,
       GCRY_PK_DSA,
-      /* GCRY_PK_ECC is not enabled in fips mode.  */
+      GCRY_PK_ECC,
       0
     };
   int idx;
@@ -634,11 +637,15 @@ check_binary_integrity (void)
                   int n;
 
                   /* The HMAC files consists of lowercase hex digits
-                     only with an optional trailing linefeed.  Fail if
-                     there is any garbage.  */
+                     with an optional trailing linefeed or optional
+                     with two trailing spaces.  The latter format
+                     allows the use of the usual sha1sum format.  Fail
+                     if there is any garbage.  */
                   err = gpg_error (GPG_ERR_SELFTEST_FAILED);
                   n = fread (buffer, 1, sizeof buffer, fp);
-                  if (n == 64 || (n == 65 && buffer[64] == '\n'))
+                  if (n == 64
+                      || (n == 65 && buffer[64] == '\n')
+                      || (n == 66 && buffer[64] == ' ' && buffer[65] == ' '))
                     {
                       buffer[64] = 0;
                       for (n=0, s= buffer;

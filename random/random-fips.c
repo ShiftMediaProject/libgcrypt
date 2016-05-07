@@ -66,13 +66,12 @@
 #include "g10lib.h"
 #include "random.h"
 #include "rand-internal.h"
-#include "ath.h"
 
 /* This is the lock we use to serialize access to this RNG.  The extra
    integer variable is only used to check the locking state; that is,
    it is not meant to be thread-safe but merely as a failsafe feature
    to assert proper locking.  */
-static ath_mutex_t fips_rng_lock;
+GPGRT_LOCK_DEFINE (fips_rng_lock);
 static int fips_rng_is_locked;
 
 
@@ -105,7 +104,7 @@ static size_t entropy_collect_buffer_size;     /* Allocated length.  */
 /* This random context type is used to track properties of one random
    generator. Thee context are usually allocated in secure memory so
    that the seed value is well protected.  There are a couble of guard
-   fields to help detecting applications accidently overwriting parts
+   fields to help detecting applications accidentally overwriting parts
    of the memory. */
 struct rng_context
 {
@@ -190,15 +189,11 @@ static void
 basic_initialization (void)
 {
   static int initialized;
-  int my_errno;
 
   if (initialized)
     return;
   initialized = 1;
 
-  my_errno = ath_mutex_init (&fips_rng_lock);
-  if (my_errno)
-    log_fatal ("failed to create the RNG lock: %s\n", strerror (my_errno));
   fips_rng_is_locked = 0;
 
   /* Make sure that we are still using the values we have
@@ -214,11 +209,11 @@ basic_initialization (void)
 static void
 lock_rng (void)
 {
-  int my_errno;
+  gpg_err_code_t rc;
 
-  my_errno = ath_mutex_lock (&fips_rng_lock);
-  if (my_errno)
-    log_fatal ("failed to acquire the RNG lock: %s\n", strerror (my_errno));
+  rc = gpgrt_lock_lock (&fips_rng_lock);
+  if (rc)
+    log_fatal ("failed to acquire the RNG lock: %s\n", gpg_strerror (rc));
   fips_rng_is_locked = 1;
 }
 
@@ -227,12 +222,12 @@ lock_rng (void)
 static void
 unlock_rng (void)
 {
-  int my_errno;
+  gpg_err_code_t rc;
 
   fips_rng_is_locked = 0;
-  my_errno = ath_mutex_unlock (&fips_rng_lock);
-  if (my_errno)
-    log_fatal ("failed to release the RNG lock: %s\n", strerror (my_errno));
+  rc = gpgrt_lock_unlock (&fips_rng_lock);
+  if (rc)
+    log_fatal ("failed to release the RNG lock: %s\n", gpg_strerror (rc));
 }
 
 static void
@@ -320,7 +315,7 @@ x931_get_dt (unsigned char *buffer, size_t length, rng_context_t rng_ctx)
     if (gettimeofday (&tv, NULL))
       log_fatal ("gettimeofday() failed: %s\n", strerror (errno));
 
-    /* The microseconds part is always less than 1 millon (0x0f4240).
+    /* The microseconds part is always less than 1 million (0x0f4240).
        Thus we don't care about the MSB and in addition shift it to
        the left by 4 bits.  */
     usec = tv.tv_usec;

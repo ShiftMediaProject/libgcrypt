@@ -211,7 +211,12 @@ _gcry_mpi_free( gcry_mpi_t a )
   if (!a )
     return;
   if ((a->flags & 32))
+  {
+#if GPGRT_VERSION_NUMBER >= 0x011600  /* 1.22 */
+    gpgrt_annotate_leaked_object(a);
+#endif
     return; /* Never release a constant. */
+  }
   if ((a->flags & 4))
     xfree( a->d );
   else
@@ -483,12 +488,17 @@ _gcry_mpi_set (gcry_mpi_t w, gcry_mpi_t u)
   return w;
 }
 
+/****************
+ * Set the value of W by the one of U, when SET is 1.
+ * Leave the value when SET is 0.
+ * This implementation should be constant-time regardless of SET.
+ */
 gcry_mpi_t
 _gcry_mpi_set_cond (gcry_mpi_t w, const gcry_mpi_t u, unsigned long set)
 {
   mpi_size_t i;
   mpi_size_t nlimbs = u->alloced;
-  mpi_limb_t mask = ((mpi_limb_t)0) - !!set;
+  mpi_limb_t mask = ((mpi_limb_t)0) - set;
   mpi_limb_t x;
 
   if (w->alloced != u->alloced)
@@ -565,6 +575,43 @@ _gcry_mpi_swap (gcry_mpi_t a, gcry_mpi_t b)
     struct gcry_mpi tmp;
 
     tmp = *a; *a = *b; *b = tmp;
+}
+
+
+/****************
+ * Swap the value of A and B, when SWAP is 1.
+ * Leave the value when SWAP is 0.
+ * This implementation should be constant-time regardless of SWAP.
+ */
+void
+_gcry_mpi_swap_cond (gcry_mpi_t a, gcry_mpi_t b, unsigned long swap)
+{
+  mpi_size_t i;
+  mpi_size_t nlimbs;
+  mpi_limb_t mask = ((mpi_limb_t)0) - swap;
+  mpi_limb_t x;
+
+  if (a->alloced > b->alloced)
+    nlimbs = b->alloced;
+  else
+    nlimbs = a->alloced;
+  if (a->nlimbs > nlimbs || b->nlimbs > nlimbs)
+    log_bug ("mpi_swap_cond: different sizes\n");
+
+  for (i = 0; i < nlimbs; i++)
+    {
+      x = mask & (a->d[i] ^ b->d[i]);
+      a->d[i] = a->d[i] ^ x;
+      b->d[i] = b->d[i] ^ x;
+    }
+
+  x = mask & (a->nlimbs ^ b->nlimbs);
+  a->nlimbs = a->nlimbs ^ x;
+  b->nlimbs = b->nlimbs ^ x;
+
+  x = mask & (a->sign ^ b->sign);
+  a->sign = a->sign ^ x;
+  b->sign = b->sign ^ x;
 }
 
 

@@ -21,6 +21,7 @@
 #define G10_RANDOM_H
 
 #include "types.h"
+#include "../src/gcrypt-testapi.h"  /* struct gcry_drbg_test_vector */
 
 /*-- random.c --*/
 void _gcry_register_random_progress (void (*cb)(void *,const char*,int,int,int),
@@ -54,6 +55,12 @@ gcry_err_code_t _gcry_random_run_external_test (void *context,
                                                 char *buffer, size_t buflen);
 void            _gcry_random_deinit_external_test (void *context);
 
+/*-- random-drbg.c --*/
+gpg_err_code_t _gcry_rngdrbg_reinit (const char *flagstr,
+                                     gcry_buffer_t *pers, int npers);
+gpg_err_code_t _gcry_rngdrbg_cavs_test (struct gcry_drbg_test_vector *t,
+                                        unsigned char *buf);
+gpg_err_code_t _gcry_rngdrbg_healthcheck_one (struct gcry_drbg_test_vector *t);
 
 /*-- rndegd.c --*/
 gpg_error_t _gcry_rndegd_set_socket_name (const char *name);

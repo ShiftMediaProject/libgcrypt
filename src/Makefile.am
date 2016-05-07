@@ -20,13 +20,13 @@
 
 ## Process this file with automake to produce Makefile.in
 
-EXTRA_DIST = Manifest libgcrypt-config.in libgcrypt.m4 libgcrypt.vers \
+EXTRA_DIST = libgcrypt-config.in libgcrypt.m4 libgcrypt.vers \
              gcrypt.h.in libgcrypt.def
 
 bin_SCRIPTS = libgcrypt-config
 m4datadir = $(datadir)/aclocal
 m4data_DATA = libgcrypt.m4
-include_HEADERS = gcrypt.h
+nodist_include_HEADERS = gcrypt.h
 
 lib_LTLIBRARIES = libgcrypt.la
 bin_PROGRAMS = dumpsexp hmac256 mpicalc
@@ -56,13 +56,12 @@ endif
 libgcrypt_la_CFLAGS = $(GPG_ERROR_CFLAGS)
 libgcrypt_la_SOURCES = \
         gcrypt-int.h g10lib.h visibility.c visibility.h types.h \
-	cipher.h cipher-proto.h \
+	gcrypt-testapi.h cipher.h cipher-proto.h \
 	misc.c global.c sexp.c hwfeatures.c hwf-common.h \
 	stdmem.c stdmem.h secmem.c secmem.h \
 	mpi.h missing-string.c fips.c \
 	hmac256.c hmac256.h context.c context.h \
-	ec-context.h \
-	ath.h ath.c
+	ec-context.h
 
 EXTRA_libgcrypt_la_SOURCES = hwf-x86.c hwf-arm.c
 gcrypt_hwf_modules = @GCRYPT_HWF_MODULES@
@@ -132,7 +131,7 @@ dumpsexp_LDADD = $(arch_gpg_error_libs) $(LIBTHREAD)
 
 mpicalc_SOURCES = mpicalc.c
 mpicalc_CFLAGS = $(GPG_ERROR_CFLAGS)
-mpicalc_LDADD = libgcrypt.la $(GPG_ERROR_LIBS) $(LIBTHREAD)
+mpicalc_LDADD = libgcrypt.la $(DL_LIBS) $(GPG_ERROR_LIBS)
 
 hmac256_SOURCES = hmac256.c
 hmac256_CFLAGS = -DSTANDALONE $(arch_gpg_error_cflags)

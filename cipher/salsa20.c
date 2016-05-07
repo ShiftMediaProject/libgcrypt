@@ -43,7 +43,8 @@
 
 /* USE_AMD64 indicates whether to compile with AMD64 code. */
 #undef USE_AMD64
-#if defined(__x86_64__) && defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS)
+#if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+    defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_AMD64 1
 #endif
 
@@ -118,12 +119,25 @@ static const char *selftest (void);
 
 
 #ifdef USE_AMD64
+
+/* Assembly implementations use SystemV ABI, ABI conversion and additional
+ * stack to store XMM6-XMM15 needed on Win64. */
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+# define ASM_FUNC_ABI __attribute__((sysv_abi))
+# define ASM_EXTRA_STACK (10 * 16)
+#else
+# define ASM_FUNC_ABI
+# define ASM_EXTRA_STACK 0
+#endif
+
 /* AMD64 assembly implementations of Salsa20. */
-void _gcry_salsa20_amd64_keysetup(u32 *ctxinput, const void *key, int keybits);
-void _gcry_salsa20_amd64_ivsetup(u32 *ctxinput, const void *iv);
+void _gcry_salsa20_amd64_keysetup(u32 *ctxinput, const void *key, int keybits)
+                                 ASM_FUNC_ABI;
+void _gcry_salsa20_amd64_ivsetup(u32 *ctxinput, const void *iv)
+                                ASM_FUNC_ABI;
 unsigned int
 _gcry_salsa20_amd64_encrypt_blocks(u32 *ctxinput, const void *src, void *dst,
-                                   size_t len, int rounds);
+                                   size_t len, int rounds) ASM_FUNC_ABI;
 
 static void
 salsa20_keysetup(SALSA20_context_t *ctx, const byte *key, int keylen)
@@ -141,7 +155,8 @@ static unsigned int
 salsa20_core (u32 *dst, SALSA20_context_t *ctx, unsigned int rounds)
 {
   memset(dst, 0, SALSA20_BLOCK_SIZE);
-  return _gcry_salsa20_amd64_encrypt_blocks(ctx->input, dst, dst, 1, rounds);
+  return _gcry_salsa20_amd64_encrypt_blocks(ctx->input, dst, dst, 1, rounds)
+         + ASM_EXTRA_STACK;
 }
 
 #else /* USE_AMD64 */
@@ -418,6 +433,7 @@ salsa20_do_encrypt_stream (SALSA20_context_t *ctx,
       size_t nblocks = length / SALSA20_BLOCK_SIZE;
       burn = _gcry_salsa20_amd64_encrypt_blocks(ctx->input, inbuf, outbuf,
                                                 nblocks, rounds);
+      burn += ASM_EXTRA_STACK;
       length -= SALSA20_BLOCK_SIZE * nblocks;
       outbuf += SALSA20_BLOCK_SIZE * nblocks;
       inbuf  += SALSA20_BLOCK_SIZE * nblocks;
@@ -485,7 +501,8 @@ salsa20r12_encrypt_stream (void *context,
 static const char*
 selftest (void)
 {
-  SALSA20_context_t ctx;
+  byte ctxbuf[sizeof(SALSA20_context_t) + 15];
+  SALSA20_context_t *ctx;
   byte scratch[8+1];
   byte buf[256+64+4];
   int i;
@@ -502,32 +519,35 @@ selftest (void)
   static const byte ciphertext_1[] =
     { 0xE3, 0xBE, 0x8F, 0xDD, 0x8B, 0xEC, 0xA2, 0xE3};
 
-  salsa20_setkey (&ctx, key_1, sizeof key_1);
-  salsa20_setiv  (&ctx, nonce_1, sizeof nonce_1);
+  /* 16-byte alignment required for amd64 implementation. */
+  ctx = (SALSA20_context_t *)((uintptr_t)(ctxbuf + 15) & ~(uintptr_t)15);
+
+  salsa20_setkey (ctx, key_1, sizeof key_1);
+  salsa20_setiv  (ctx, nonce_1, sizeof nonce_1);
   scratch[8] = 0;
-  salsa20_encrypt_stream (&ctx, scratch, plaintext_1, sizeof plaintext_1);
+  salsa20_encrypt_stream (ctx, scratch, plaintext_1, sizeof plaintext_1);
   if (memcmp (scratch, ciphertext_1, sizeof ciphertext_1))
     return "Salsa20 encryption test 1 failed.";
   if (scratch[8])
     return "Salsa20 wrote too much.";
-  salsa20_setkey( &ctx, key_1, sizeof(key_1));
-  salsa20_setiv  (&ctx, nonce_1, sizeof nonce_1);
-  salsa20_encrypt_stream (&ctx, scratch, scratch, sizeof plaintext_1);
+  salsa20_setkey( ctx, key_1, sizeof(key_1));
+  salsa20_setiv  (ctx, nonce_1, sizeof nonce_1);
+  salsa20_encrypt_stream (ctx, scratch, scratch, sizeof plaintext_1);
   if (memcmp (scratch, plaintext_1, sizeof plaintext_1))
     return "Salsa20 decryption test 1 failed.";
 
   for (i = 0; i < sizeof buf; i++)
     buf[i] = i;
-  salsa20_setkey (&ctx, key_1, sizeof key_1);
-  salsa20_setiv (&ctx, nonce_1, sizeof nonce_1);
+  salsa20_setkey (ctx, key_1, sizeof key_1);
+  salsa20_setiv (ctx, nonce_1, sizeof nonce_1);
   /*encrypt*/
-  salsa20_encrypt_stream (&ctx, buf, buf, sizeof buf);
+  salsa20_encrypt_stream (ctx, buf, buf, sizeof buf);
   /*decrypt*/
-  salsa20_setkey (&ctx, key_1, sizeof key_1);
-  salsa20_setiv (&ctx, nonce_1, sizeof nonce_1);
-  salsa20_encrypt_stream (&ctx, buf, buf, 1);
-  salsa20_encrypt_stream (&ctx, buf+1, buf+1, (sizeof buf)-1-1);
-  salsa20_encrypt_stream (&ctx, buf+(sizeof buf)-1, buf+(sizeof buf)-1, 1);
+  salsa20_setkey (ctx, key_1, sizeof key_1);
+  salsa20_setiv (ctx, nonce_1, sizeof nonce_1);
+  salsa20_encrypt_stream (ctx, buf, buf, 1);
+  salsa20_encrypt_stream (ctx, buf+1, buf+1, (sizeof buf)-1-1);
+  salsa20_encrypt_stream (ctx, buf+(sizeof buf)-1, buf+(sizeof buf)-1, 1);
   for (i = 0; i < sizeof buf; i++)
     if (buf[i] != (byte)i)
       return "Salsa20 encryption test 2 failed.";

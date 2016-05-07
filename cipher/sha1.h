@@ -1,5 +1,5 @@
-/* rmd.h - RIPE-MD hash functions
- *	Copyright (C) 1998, 2001, 2002 Free Software Foundation, Inc.
+/* sha1.h - SHA-1 context definition
+ * Copyright (C) 1998, 2001, 2002, 2003, 2008 Free Software Foundation, Inc.
  *
  * This file is part of Libgcrypt.
  *
@@ -14,22 +14,26 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef G10_RMD_H
-#define G10_RMD_H
+#ifndef GCRY_SHA1_H
+#define GCRY_SHA1_H
 
 #include "hash-common.h"
 
-/* We need this here because random.c must have direct access. */
+/* We need this here for direct use by random-csprng.c. */
 typedef struct
 {
   gcry_md_block_ctx_t bctx;
-  u32  h0,h1,h2,h3,h4;
-} RMD160_CONTEXT;
+  u32          h0,h1,h2,h3,h4;
+  unsigned int use_ssse3:1;
+  unsigned int use_avx:1;
+  unsigned int use_bmi2:1;
+  unsigned int use_neon:1;
+} SHA1_CONTEXT;
 
-void _gcry_rmd160_init ( void *context );
-void _gcry_rmd160_mixblock ( RMD160_CONTEXT *hd, void *blockof64byte );
 
-#endif /*G10_RMD_H*/
+void _gcry_sha1_mixblock_init (SHA1_CONTEXT *hd);
+unsigned int _gcry_sha1_mixblock (SHA1_CONTEXT *hd, void *blockof64byte);
+
+#endif /*GCRY_SHA1_H*/

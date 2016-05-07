@@ -31,9 +31,6 @@
 #include "bithelp.h"
 #include "bufhelp.h"
 
-/* We really need a 64 bit type for this code.  */
-#ifdef HAVE_U64_TYPEDEF
-
 typedef struct
 {
   gcry_md_block_ctx_t bctx;
@@ -590,7 +587,7 @@ static u64 sbox4[256] = {
 };
 
 static unsigned int
-transform ( void *ctx, const unsigned char *data );
+transform ( void *ctx, const unsigned char *data, size_t nblks );
 
 static void
 do_init (void *context, int variant)
@@ -633,75 +630,51 @@ tiger2_init (void *context, unsigned int flags)
   do_init (context, 2);
 }
 
-static void
-tiger_round( u64 *ra, u64 *rb, u64 *rc, u64 x, int mul )
-{
-  u64 a = *ra;
-  u64 b = *rb;
-  u64 c = *rc;
 
-  c ^= x;
-  a -= (  sbox1[  c        & 0xff ] ^ sbox2[ (c >> 16) & 0xff ]
-        ^ sbox3[ (c >> 32) & 0xff ] ^ sbox4[ (c >> 48) & 0xff ]);
-  b += (  sbox4[ (c >>  8) & 0xff ] ^ sbox3[ (c >> 24) & 0xff ]
-        ^ sbox2[ (c >> 40) & 0xff ] ^ sbox1[ (c >> 56) & 0xff ]);
-  b *= mul;
-
-  *ra = a;
-  *rb = b;
-  *rc = c;
-}
+#define tiger_round(xa, xb, xc, xx, xmul) { \
+  xc ^= xx; \
+  xa -= (  sbox1[  (xc)        & 0xff ] ^ sbox2[ ((xc) >> 16) & 0xff ] \
+         ^ sbox3[ ((xc) >> 32) & 0xff ] ^ sbox4[ ((xc) >> 48) & 0xff ]); \
+  xb += (  sbox4[ ((xc) >>  8) & 0xff ] ^ sbox3[ ((xc) >> 24) & 0xff ] \
+         ^ sbox2[ ((xc) >> 40) & 0xff ] ^ sbox1[ ((xc) >> 56) & 0xff ]); \
+  xb *= xmul; }
 
 
-static void
-pass( u64 *ra, u64 *rb, u64 *rc, u64 *x, int mul )
-{
-  u64 a = *ra;
-  u64 b = *rb;
-  u64 c = *rc;
-
-  tiger_round( &a, &b, &c, x[0], mul );
-  tiger_round( &b, &c, &a, x[1], mul );
-  tiger_round( &c, &a, &b, x[2], mul );
-  tiger_round( &a, &b, &c, x[3], mul );
-  tiger_round( &b, &c, &a, x[4], mul );
-  tiger_round( &c, &a, &b, x[5], mul );
-  tiger_round( &a, &b, &c, x[6], mul );
-  tiger_round( &b, &c, &a, x[7], mul );
-
-  *ra = a;
-  *rb = b;
-  *rc = c;
-}
+#define pass(ya, yb, yc, yx, ymul) { \
+  tiger_round( ya, yb, yc, yx[0], ymul ); \
+  tiger_round( yb, yc, ya, yx[1], ymul ); \
+  tiger_round( yc, ya, yb, yx[2], ymul ); \
+  tiger_round( ya, yb, yc, yx[3], ymul ); \
+  tiger_round( yb, yc, ya, yx[4], ymul ); \
+  tiger_round( yc, ya, yb, yx[5], ymul ); \
+  tiger_round( ya, yb, yc, yx[6], ymul ); \
+  tiger_round( yb, yc, ya, yx[7], ymul ); }
 
 
-static void
-key_schedule( u64 *x )
-{
-  x[0] -= x[7] ^ 0xa5a5a5a5a5a5a5a5LL;
-  x[1] ^= x[0];
-  x[2] += x[1];
-  x[3] -= x[2] ^ ((~x[1]) << 19 );
-  x[4] ^= x[3];
-  x[5] += x[4];
-  x[6] -= x[5] ^ ((~x[4]) >> 23 );
-  x[7] ^= x[6];
-  x[0] += x[7];
-  x[1] -= x[0] ^ ((~x[7]) << 19 );
-  x[2] ^= x[1];
-  x[3] += x[2];
-  x[4] -= x[3] ^ ((~x[2]) >> 23 );
-  x[5] ^= x[4];
-  x[6] += x[5];
-  x[7] -= x[6] ^ 0x0123456789abcdefLL;
-}
+#define key_schedule(x) { \
+  x[0] -= x[7] ^ 0xa5a5a5a5a5a5a5a5LL; \
+  x[1] ^= x[0]; \
+  x[2] += x[1]; \
+  x[3] -= x[2] ^ ((~x[1]) << 19 ); \
+  x[4] ^= x[3]; \
+  x[5] += x[4]; \
+  x[6] -= x[5] ^ ((~x[4]) >> 23 ); \
+  x[7] ^= x[6]; \
+  x[0] += x[7]; \
+  x[1] -= x[0] ^ ((~x[7]) << 19 ); \
+  x[2] ^= x[1]; \
+  x[3] += x[2]; \
+  x[4] -= x[3] ^ ((~x[2]) >> 23 ); \
+  x[5] ^= x[4]; \
+  x[6] += x[5]; \
+  x[7] -= x[6] ^ 0x0123456789abcdefLL; }
 
 
 /****************
  * Transform the message DATA which consists of 512 bytes (8 words)
  */
 static unsigned int
-transform ( void *ctx, const unsigned char *data )
+transform_blk ( void *ctx, const unsigned char *data )
 {
   TIGER_CONTEXT *hd = ctx;
   u64 a,b,c,aa,bb,cc;
@@ -716,11 +689,11 @@ transform ( void *ctx, const unsigned char *data )
   b = bb = hd->b;
   c = cc = hd->c;
 
-  pass( &a, &b, &c, x, 5);
+  pass( a, b, c, x, 5);
   key_schedule( x );
-  pass( &c, &a, &b, x, 7);
+  pass( c, a, b, x, 7);
   key_schedule( x );
-  pass( &b, &c, &a, x, 9);
+  pass( b, c, a, x, 9);
 
   /* feedforward */
   a ^= aa;
@@ -732,6 +705,22 @@ transform ( void *ctx, const unsigned char *data )
   hd->c = c;
 
   return /*burn_stack*/ 21*8+11*sizeof(void*);
+}
+
+
+static unsigned int
+transform ( void *c, const unsigned char *data, size_t nblks )
+{
+  unsigned int burn;
+
+  do
+    {
+      burn = transform_blk (c, data);
+      data += 64;
+    }
+  while (--nblks);
+
+  return burn;
 }
 
 
@@ -785,12 +774,12 @@ tiger_final( void *context )
   /* append the 64 bit count */
   buf_put_le32(hd->bctx.buf + 56, lsb);
   buf_put_le32(hd->bctx.buf + 60, msb);
-  burn = transform( hd, hd->bctx.buf );
+  burn = transform( hd, hd->bctx.buf, 1 );
   _gcry_burn_stack (burn);
 
   p = hd->bctx.buf;
-#define X(a) do { *(u64*)p = be_bswap64(hd->a); p += 8; } while(0)
-#define Y(a) do { *(u64*)p = le_bswap64(hd->a); p += 8; } while(0)
+#define X(a) do { buf_put_be64(p, hd->a); p += 8; } while(0)
+#define Y(a) do { buf_put_le64(p, hd->a); p += 8; } while(0)
   if (hd->variant == 0)
     {
       X(a);
@@ -824,7 +813,7 @@ gcry_md_spec_t _gcry_digest_spec_tiger =
   {
     GCRY_MD_TIGER, {0, 0},
     "TIGER192", NULL, 0, NULL, 24,
-    tiger_init, _gcry_md_block_write, tiger_final, tiger_read,
+    tiger_init, _gcry_md_block_write, tiger_final, tiger_read, NULL,
     sizeof (TIGER_CONTEXT)
   };
 
@@ -847,7 +836,7 @@ gcry_md_spec_t _gcry_digest_spec_tiger1 =
   {
     GCRY_MD_TIGER1, {0, 0},
     "TIGER", asn1, DIM (asn1), oid_spec_tiger1, 24,
-    tiger1_init, _gcry_md_block_write, tiger_final, tiger_read,
+    tiger1_init, _gcry_md_block_write, tiger_final, tiger_read, NULL,
     sizeof (TIGER_CONTEXT)
   };
 
@@ -858,8 +847,6 @@ gcry_md_spec_t _gcry_digest_spec_tiger2 =
   {
     GCRY_MD_TIGER2, {0, 0},
     "TIGER2", NULL, 0, NULL, 24,
-    tiger2_init, _gcry_md_block_write, tiger_final, tiger_read,
+    tiger2_init, _gcry_md_block_write, tiger_final, tiger_read, NULL,
     sizeof (TIGER_CONTEXT)
   };
-
-#endif /* HAVE_U64_TYPEDEF */

@@ -57,6 +57,7 @@ static struct
   const char *a, *b;          /* The coefficients. */
   const char *n;              /* The order of the base point.  */
   const char *g_x, *g_y;      /* Base point.  */
+  const char *h;              /* Cofactor.  */
 } test_curve[] =
   {
     {
@@ -67,7 +68,8 @@ static struct
       "0xffffffffffffffffffffffff99def836146bc9b1b4d22831",
 
       "0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012",
-      "0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811"
+      "0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811",
+      "0x01"
     },
     {
       "NIST P-224",
@@ -77,7 +79,8 @@ static struct
       "0xffffffffffffffffffffffffffff16a2e0b8f03e13dd29455c5c2a3d" ,
 
       "0xb70e0cbd6bb4bf7f321390b94a03c1d356c21122343280d6115c1d21",
-      "0xbd376388b5f723fb4c22dfe6cd4375a05a07476444d5819985007e34"
+      "0xbd376388b5f723fb4c22dfe6cd4375a05a07476444d5819985007e34",
+      "0x01"
     },
     {
       "NIST P-256",
@@ -87,7 +90,8 @@ static struct
       "0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
 
       "0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
-      "0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+      "0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5",
+      "0x01"
     },
     {
       "NIST P-384",
@@ -103,7 +107,8 @@ static struct
       "0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a38"
       "5502f25dbf55296c3a545e3872760ab7",
       "0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c0"
-      "0a60b1ce1d7e819d7a431d7c90ea0e5f"
+      "0a60b1ce1d7e819d7a431d7c90ea0e5f",
+      "0x01"
     },
     {
       "NIST P-521",
@@ -119,18 +124,20 @@ static struct
       "0xc6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3d"
       "baa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66",
       "0x11839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e6"
-      "62c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650"
+      "62c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650",
+      "0x01"
     },
     {
       "Ed25519",
       "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
-      "-0x01",
-      "-0x2DFC9311D490018C7338BF8688861767FF8FF5B2BEBE27548A14B235ECA6874A",
+      "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEC",
+      "0x52036CEE2B6FFE738CC740797779E89800700A4D4141D8AB75EB4DCA135978A3",
       "0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED",
       "0x216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A",
-      "0x6666666666666666666666666666666666666666666666666666666666666658"
+      "0x6666666666666666666666666666666666666666666666666666666666666658",
+      "0x08"
     },
-    { NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL }
   };
 
 /* A sample public key for NIST P-256.  */
@@ -434,28 +441,18 @@ context_alloc (void)
   gcry_mpi_release (a);
   gcry_ctx_release (ctx);
 
-  p = gcry_mpi_set_ui (NULL, 0);
+  p = NULL;
   a = gcry_mpi_set_ui (NULL, 0);
+
   err = ec_p_new (&ctx, p, a);
   if (!err || gpg_err_code (err) != GPG_ERR_EINVAL)
     fail ("ec_p_new: bad parameter detection failed (1)\n");
-
-  gcry_mpi_set_ui (p, 1);
-  err = ec_p_new (&ctx, p, a);
-  if (!err || gpg_err_code (err) != GPG_ERR_EINVAL)
-    fail ("ec_p_new: bad parameter detection failed (2)\n");
-
-  gcry_mpi_release (p);
-  p = NULL;
-  err = ec_p_new (&ctx, p, a);
-  if (!err || gpg_err_code (err) != GPG_ERR_EINVAL)
-    fail ("ec_p_new: bad parameter detection failed (3)\n");
 
   gcry_mpi_release (a);
   a = NULL;
   err = ec_p_new (&ctx, p, a);
   if (!err || gpg_err_code (err) != GPG_ERR_EINVAL)
-    fail ("ec_p_new: bad parameter detection failed (4)\n");
+    fail ("ec_p_new: bad parameter detection failed (2)\n");
 
 }
 
@@ -543,6 +540,17 @@ context_param (void)
   show ("checking standard curves\n");
   for (idx=0; test_curve[idx].desc; idx++)
     {
+      /* P-192 and Ed25519 are not supported in fips mode */
+      if (gcry_fips_mode_active())
+        {
+          if (!strcmp(test_curve[idx].desc, "NIST P-192")
+              || !strcmp(test_curve[idx].desc, "Ed25519"))
+            {
+	      show("skipping %s in fips mode\n", test_curve[idx].desc );
+              continue;
+            }
+        }
+
       gcry_ctx_release (ctx);
       err = gcry_mpi_ec_new (&ctx, NULL, test_curve[idx].desc);
       if (err)
@@ -565,6 +573,8 @@ context_param (void)
         continue;
       if (get_and_cmp_point ("g", test_curve[idx].g_x, test_curve[idx].g_y,
                              test_curve[idx].desc, ctx))
+        continue;
+      if (get_and_cmp_mpi ("h", test_curve[idx].h, test_curve[idx].desc, ctx))
         continue;
 
     }
@@ -635,6 +645,10 @@ context_param (void)
               gpg_strerror (err));
       gcry_sexp_release (sexp);
     }
+
+  /* Skipping Ed25519 if in FIPS mode (it isn't supported) */
+  if (gcry_fips_mode_active())
+    goto cleanup;
 
   show ("checking sample public key (Ed25519)\n");
   q = hex2mpi (sample_ed25519_q);
@@ -723,6 +737,7 @@ context_param (void)
 
     }
 
+ cleanup:
   gcry_ctx_release (ctx);
   gcry_sexp_release (keyparam);
 }
@@ -1102,8 +1117,14 @@ main (int argc, char **argv)
   context_alloc ();
   context_param ();
   basic_ec_math ();
-  basic_ec_math_simplified ();
-  twistededwards_math ();
+
+  /* The tests are for P-192 and ed25519 which are not supported in
+     FIPS mode.  */
+  if (!gcry_fips_mode_active())
+    {
+      basic_ec_math_simplified ();
+      twistededwards_math ();
+    }
 
   show ("All tests completed. Errors: %d\n", error_count);
   return error_count ? 1 : 0;

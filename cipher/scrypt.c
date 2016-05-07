@@ -50,8 +50,6 @@
 #include "bufhelp.h"
 
 /* We really need a 64 bit type for this code.  */
-#ifdef HAVE_U64_TYPEDEF
-
 #define SALSA20_INPUT_LENGTH 16
 
 #define ROTL32(n,x) (((x)<<(n)) | ((x)>>(32-(n))))
@@ -76,7 +74,7 @@
 
 
 static void
-_salsa20_core(u32 *dst, const u32 *src, unsigned rounds)
+salsa20_core (u32 *dst, const u32 *src, unsigned int rounds)
 {
   u32 x[SALSA20_INPUT_LENGTH];
   unsigned i;
@@ -108,7 +106,7 @@ _salsa20_core(u32 *dst, const u32 *src, unsigned rounds)
 
 
 static void
-_scryptBlockMix (u32 r, unsigned char *B, unsigned char *tmp2)
+scrypt_block_mix (u32 r, unsigned char *B, unsigned char *tmp2)
 {
   u64 i;
   unsigned char *X = tmp2;
@@ -142,7 +140,7 @@ _scryptBlockMix (u32 r, unsigned char *B, unsigned char *tmp2)
       buf_xor(X, X, &B[i * 64], 64);
 
       /* X = Salsa (T) */
-      _salsa20_core ((u32*)X, (u32*)X, 8);
+      salsa20_core ((u32*)(void*)X, (u32*)(void*)X, 8);
 
       /* Y[i] = X */
       memcpy (&Y[i * 64], X, 64);
@@ -173,8 +171,9 @@ _scryptBlockMix (u32 r, unsigned char *B, unsigned char *tmp2)
 #endif
 }
 
+
 static void
-_scryptROMix (u32 r, unsigned char *B, u64 N,
+scrypt_ro_mix (u32 r, unsigned char *B, u64 N,
 	      unsigned char *tmp1, unsigned char *tmp2)
 {
   unsigned char *X = B, *T = B;
@@ -201,7 +200,7 @@ _scryptROMix (u32 r, unsigned char *B, u64 N,
       memcpy (&tmp1[i * 128 * r], X, 128 * r);
 
       /* X =  ScryptBlockMix (X) */
-      _scryptBlockMix (r, X, tmp2);
+      scrypt_block_mix (r, X, tmp2);
     }
 
   /* for i = 0 to N - 1 do */
@@ -216,7 +215,7 @@ _scryptROMix (u32 r, unsigned char *B, u64 N,
       buf_xor (T, T, &tmp1[j * 128 * r], 128 * r);
 
       /* X = scryptBlockMix (T) */
-      _scryptBlockMix (r, T, tmp2);
+      scrypt_block_mix (r, T, tmp2);
     }
 
 #if 0
@@ -234,7 +233,9 @@ _scryptROMix (u32 r, unsigned char *B, u64 N,
 #endif
 }
 
-/**
+
+/*
+ *
  */
 gcry_err_code_t
 _gcry_kdf_scrypt (const unsigned char *passwd, size_t passwdlen,
@@ -243,7 +244,7 @@ _gcry_kdf_scrypt (const unsigned char *passwd, size_t passwdlen,
                   unsigned long iterations,
                   size_t dkLen, unsigned char *DK)
 {
-  u64 N = subalgo;    /* CPU/memory cost paramter.  */
+  u64 N = subalgo;    /* CPU/memory cost parameter.  */
   u32 r;              /* Block size.  */
   u32 p = iterations; /* Parallelization parameter.  */
 
@@ -306,7 +307,7 @@ _gcry_kdf_scrypt (const unsigned char *passwd, size_t passwdlen,
                         1 /* iterations */, p * r128, B);
 
   for (i = 0; !ec && i < p; i++)
-    _scryptROMix (r, &B[i * r128], N, tmp1, tmp2);
+    scrypt_ro_mix (r, &B[i * r128], N, tmp1, tmp2);
 
   for (i = 0; !ec && i < p; i++)
     ec = _gcry_kdf_pkdf2 (passwd, passwdlen, GCRY_MD_SHA256, B, p * r128,
@@ -319,6 +320,3 @@ _gcry_kdf_scrypt (const unsigned char *passwd, size_t passwdlen,
 
   return ec;
 }
-
-
-#endif /* HAVE_U64_TYPEDEF */

@@ -1,5 +1,5 @@
 /* mac-hmac.c  -  HMAC glue for MAC API
- * Copyright © 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -35,6 +35,8 @@ map_mac_algo_to_md (int mac_algo)
     {
     default:
       return GCRY_MD_NONE;
+    case GCRY_MAC_HMAC_MD2:
+      return GCRY_MD_MD2;
     case GCRY_MAC_HMAC_MD4:
       return GCRY_MD_MD4;
     case GCRY_MAC_HMAC_MD5:
@@ -49,6 +51,14 @@ map_mac_algo_to_md (int mac_algo)
       return GCRY_MD_SHA384;
     case GCRY_MAC_HMAC_SHA512:
       return GCRY_MD_SHA512;
+    case GCRY_MAC_HMAC_SHA3_224:
+      return GCRY_MD_SHA3_224;
+    case GCRY_MAC_HMAC_SHA3_256:
+      return GCRY_MD_SHA3_256;
+    case GCRY_MAC_HMAC_SHA3_384:
+      return GCRY_MD_SHA3_384;
+    case GCRY_MAC_HMAC_SHA3_512:
+      return GCRY_MD_SHA3_512;
     case GCRY_MAC_HMAC_RMD160:
       return GCRY_MD_RMD160;
     case GCRY_MAC_HMAC_TIGER1:
@@ -170,6 +180,14 @@ hmac_get_keylen (int algo)
   /* Return blocksize for default key length. */
   switch (algo)
     {
+    case GCRY_MD_SHA3_224:
+      return 1152 / 8;
+    case GCRY_MD_SHA3_256:
+      return 1088 / 8;
+    case GCRY_MD_SHA3_384:
+      return 832 / 8;
+    case GCRY_MD_SHA3_512:
+      return 576 / 8;
     case GCRY_MAC_HMAC_SHA384:
     case GCRY_MAC_HMAC_SHA512:
       return 128;
@@ -223,6 +241,27 @@ gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha384 = {
   &hmac_ops
 };
 #endif
+#if USE_SHA3
+gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_224 = {
+  GCRY_MAC_HMAC_SHA3_224, {0, 1}, "HMAC_SHA3_224",
+  &hmac_ops
+};
+
+gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_256 = {
+  GCRY_MAC_HMAC_SHA3_256, {0, 1}, "HMAC_SHA3_256",
+  &hmac_ops
+};
+
+gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_384 = {
+  GCRY_MAC_HMAC_SHA3_384, {0, 1}, "HMAC_SHA3_384",
+  &hmac_ops
+};
+
+gcry_mac_spec_t _gcry_mac_type_spec_hmac_sha3_512 = {
+  GCRY_MAC_HMAC_SHA3_512, {0, 1}, "HMAC_SHA3_512",
+  &hmac_ops
+};
+#endif
 #ifdef USE_GOST_R_3411_94
 gcry_mac_spec_t _gcry_mac_type_spec_hmac_gost3411_94 = {
   GCRY_MAC_HMAC_GOSTR3411_94, {0, 0}, "HMAC_GOSTR3411_94",
@@ -267,6 +306,12 @@ gcry_mac_spec_t _gcry_mac_type_spec_hmac_md5 = {
 #if USE_MD4
 gcry_mac_spec_t _gcry_mac_type_spec_hmac_md4 = {
   GCRY_MAC_HMAC_MD4, {0, 0}, "HMAC_MD4",
+  &hmac_ops
+};
+#endif
+#if USE_MD2
+gcry_mac_spec_t _gcry_mac_type_spec_hmac_md2 = {
+  GCRY_MAC_HMAC_MD2, {0, 0}, "HMAC_MD2",
   &hmac_ops
 };
 #endif

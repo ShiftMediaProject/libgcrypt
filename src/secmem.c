@@ -37,7 +37,6 @@
 #endif
 #endif
 
-#include "ath.h"
 #include "g10lib.h"
 #include "secmem.h"
 
@@ -86,11 +85,11 @@ static int no_priv_drop;
 static unsigned int cur_alloced, cur_blocks;
 
 /* Lock protecting accesses to the memory pool.  */
-static ath_mutex_t secmem_lock;
+GPGRT_LOCK_DEFINE (secmem_lock);
 
 /* Convenient macros.  */
-#define SECMEM_LOCK   ath_mutex_lock   (&secmem_lock)
-#define SECMEM_UNLOCK ath_mutex_unlock (&secmem_lock)
+#define SECMEM_LOCK   gpgrt_lock_lock   (&secmem_lock)
+#define SECMEM_UNLOCK gpgrt_lock_unlock (&secmem_lock)
 
 /* The size of the memblock structure; this does not include the
    memory that is available to the user.  */
@@ -99,21 +98,20 @@ static ath_mutex_t secmem_lock;
 
 /* Convert an address into the according memory block structure.  */
 #define ADDR_TO_BLOCK(addr) \
-  (memblock_t *) ((char *) addr - BLOCK_HEAD_SIZE)
+  (memblock_t *) (void *) ((char *) addr - BLOCK_HEAD_SIZE)
 
 /* Check whether P points into the pool.  */
 static int
 ptr_into_pool_p (const void *p)
 {
   /* We need to convert pointers to addresses.  This is required by
-     C-99 6.5.8 to avoid undefined behaviour.  Using size_t is at
-     least only implementation defined.  See also
+     C-99 6.5.8 to avoid undefined behaviour.  See also
      http://lists.gnupg.org/pipermail/gcrypt-devel/2007-February/001102.html
   */
-  size_t p_addr = (size_t)p;
-  size_t pool_addr = (size_t)pool;
+  uintptr_t p_addr    = (uintptr_t)p;
+  uintptr_t pool_addr = (uintptr_t)pool;
 
-  return p_addr >= pool_addr && p_addr <  pool_addr+pool_size;
+  return p_addr >= pool_addr && p_addr <  pool_addr + pool_size;
 }
 
 /* Update the stats.  */
@@ -138,7 +136,7 @@ mb_get_next (memblock_t *mb)
 {
   memblock_t *mb_next;
 
-  mb_next = (memblock_t *) ((char *) mb + BLOCK_HEAD_SIZE + mb->size);
+  mb_next = (memblock_t *) (void *) ((char *) mb + BLOCK_HEAD_SIZE + mb->size);
 
   if (! ptr_into_pool_p (mb_next))
     mb_next = NULL;
@@ -206,7 +204,8 @@ mb_get_new (memblock_t *block, size_t size)
 	  {
 	    /* Split block.  */
 
-	    mb_split = (memblock_t *) (((char *) mb) + BLOCK_HEAD_SIZE + size);
+	    mb_split = (memblock_t *) (void *) (((char *) mb) + BLOCK_HEAD_SIZE
+						+ size);
 	    mb_split->size = mb->size - size - BLOCK_HEAD_SIZE;
 	    mb_split->flags = 0;
 
@@ -547,12 +546,7 @@ _gcry_secmem_init (size_t n)
 gcry_err_code_t
 _gcry_secmem_module_init ()
 {
-  int err;
-
-  err = ath_mutex_init (&secmem_lock);
-  if (err)
-    log_fatal ("could not allocate secmem lock\n");
-
+  /* Not anymore needed.  */
   return 0;
 }
 
@@ -623,7 +617,7 @@ _gcry_secmem_free_internal (void *a)
   /* This does not make much sense: probably this memory is held in the
    * cache. We do it anyway: */
 #define MB_WIPE_OUT(byte) \
-  wipememory2 ((memblock_t *) ((char *) mb + BLOCK_HEAD_SIZE), (byte), size);
+  wipememory2 (((char *) mb + BLOCK_HEAD_SIZE), (byte), size);
 
   MB_WIPE_OUT (0xff);
   MB_WIPE_OUT (0xaa);
@@ -658,7 +652,8 @@ _gcry_secmem_realloc (void *p, size_t newsize)
 
   SECMEM_LOCK;
 
-  mb = (memblock_t *) ((char *) p - ((size_t) &((memblock_t *) 0)->aligned.c));
+  mb = (memblock_t *) (void *) ((char *) p
+				- ((size_t) &((memblock_t *) 0)->aligned.c));
   size = mb->size;
   if (newsize < size)
     {

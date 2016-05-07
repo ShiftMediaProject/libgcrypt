@@ -43,6 +43,7 @@ _gcry_ecc_curve_free (elliptic_curve_t *E)
   mpi_free (E->b);  E->b = NULL;
   _gcry_mpi_point_free_parts (&E->G);
   mpi_free (E->n);  E->n = NULL;
+  mpi_free (E->h);  E->h = NULL;
 }
 
 
@@ -63,6 +64,7 @@ _gcry_ecc_curve_copy (elliptic_curve_t E)
   _gcry_mpi_point_init (&R.G);
   point_set (&R.G, &E.G);
   R.n = mpi_copy (E.n);
+  R.h = mpi_copy (E.h);
 
   return R;
 }
@@ -79,7 +81,7 @@ _gcry_ecc_model2str (enum gcry_mpi_ec_models model)
     {
     case MPI_EC_WEIERSTRASS:    str = "Weierstrass"; break;
     case MPI_EC_MONTGOMERY:     str = "Montgomery";  break;
-    case MPI_EC_TWISTEDEDWARDS: str = "Twisted Edwards"; break;
+    case MPI_EC_EDWARDS:        str = "Edwards"; break;
     }
   return str;
 }
@@ -252,7 +254,7 @@ _gcry_ecc_compute_public (mpi_point_t Q, mpi_ec_t ec,
 
   if (!d || !G || !ec->p || !ec->a)
     return NULL;
-  if (ec->model == MPI_EC_TWISTEDEDWARDS && !ec->b)
+  if (ec->model == MPI_EC_EDWARDS && !ec->b)
     return NULL;
 
   if (ec->dialect == ECC_DIALECT_ED25519
@@ -284,4 +286,84 @@ _gcry_ecc_compute_public (mpi_point_t Q, mpi_ec_t ec,
     }
 
   return Q;
+}
+
+
+gpg_err_code_t
+_gcry_ecc_mont_decodepoint (gcry_mpi_t pk, mpi_ec_t ctx, mpi_point_t result)
+{
+  unsigned char *rawmpi;
+  unsigned int rawmpilen;
+
+  if (mpi_is_opaque (pk))
+    {
+      const unsigned char *buf;
+      unsigned char *p;
+
+      buf = mpi_get_opaque (pk, &rawmpilen);
+      if (!buf)
+        return GPG_ERR_INV_OBJ;
+      rawmpilen = (rawmpilen + 7)/8;
+
+      if (rawmpilen > 1 && (rawmpilen%2) && buf[0] == 0x40)
+        {
+          rawmpilen--;
+          buf++;
+        }
+
+      rawmpi = xtrymalloc (rawmpilen? rawmpilen:1);
+      if (!rawmpi)
+        return gpg_err_code_from_syserror ();
+
+      p = rawmpi + rawmpilen;
+      while (p > rawmpi)
+        *--p = *buf++;
+    }
+  else
+    {
+      unsigned int nbytes = (ctx->nbits+7)/8;
+
+      rawmpi = _gcry_mpi_get_buffer (pk, nbytes, &rawmpilen, NULL);
+      if (!rawmpi)
+        return gpg_err_code_from_syserror ();
+      /*
+       * It is not reliable to assume that 0x40 means the prefix.
+       *
+       * For newer implementation, it is reliable since we always put
+       * 0x40 for x-only coordinate.
+       *
+       * For data with older implementation (non-released development
+       * version), it is possibe to have the 0x40 as a part of data.
+       * Besides, when data was parsed as MPI, we might have 0x00
+       * prefix.
+       *
+       * So, we need to check if it's really the prefix or not.
+       * Only when it's the prefix, we remove it.
+       */
+      if (pk->nlimbs * BYTES_PER_MPI_LIMB < nbytes)
+        {/*
+          * It is possible for data created by older implementation
+          * to have shorter length when it was parsed as MPI.
+          */
+          unsigned int len = pk->nlimbs * BYTES_PER_MPI_LIMB;
+
+          memmove (rawmpi + nbytes - len, rawmpi, len);
+          memset (rawmpi, 0, nbytes - len);
+        }
+
+      /*
+       * When we have the prefix (0x40 or 0x00), it comes at the end,
+       * since it is taken by _gcry_mpi_get_buffer with little endian.
+       * Just setting RAWMPILEN to NBYTES is enough in this case.
+       * Othewise, RAWMPILEN is NBYTES already.
+       */
+      rawmpilen = nbytes;
+    }
+
+  rawmpi[0] &= (1 << (ctx->nbits % 8)) - 1;
+  _gcry_mpi_set_buffer (result->x, rawmpi, rawmpilen, 0);
+  xfree (rawmpi);
+  mpi_set_ui (result->z, 1);
+
+  return 0;
 }

@@ -26,7 +26,6 @@
 
 #include "g10lib.h"
 #include "cipher.h"
-#include "ath.h"
 #include "kdf-internal.h"
 
 
@@ -126,7 +125,7 @@ _gcry_kdf_pkdf2 (const void *passphrase, size_t passphraselen,
   gpg_err_code_t ec;
   gcry_md_hd_t md;
   int secmode;
-  unsigned int dklen = keysize;
+  unsigned long dklen = keysize;
   char *dk = keybuffer;
   unsigned int hlen;   /* Output length of the digest function.  */
   unsigned int l;      /* Rounded up number of blocks.  */
@@ -139,7 +138,7 @@ _gcry_kdf_pkdf2 (const void *passphrase, size_t passphraselen,
   unsigned long iter;  /* Current iteration number.  */
   unsigned int i;
 
-  /* NWe allow for a saltlen of 0 here to support scrypt.  It is not
+  /* We allow for a saltlen of 0 here to support scrypt.  It is not
      clear whether rfc2898 allows for this this, thus we do a test on
      saltlen > 0 only in gcry_kdf_derive.  */
   if (!salt || !iterations || !dklen)
@@ -151,8 +150,16 @@ _gcry_kdf_pkdf2 (const void *passphrase, size_t passphraselen,
 
   secmode = _gcry_is_secure (passphrase) || _gcry_is_secure (keybuffer);
 
-  /* We ignore step 1 from pksc5v2.1 which demands a check that dklen
-     is not larger that 0xffffffff * hlen.  */
+  /* Step 1 */
+  /* If dkLen > (2^32 - 1) * hLen, output "derived key too long" and
+   * stop.  We use a stronger inequality but only if our type can hold
+   * a larger value.  */
+
+#if SIZEOF_UNSIGNED_LONG > 4
+  if (dklen > 0xffffffffU)
+    return GPG_ERR_INV_VALUE;
+#endif
+
 
   /* Step 2 */
   l = ((dklen - 1)/ hlen) + 1;

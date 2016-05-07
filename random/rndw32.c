@@ -251,7 +251,7 @@ static int system_is_w2000;     /* True if running on W2000.  */
 
 
 
-
+
 /* Try and connect to the system RNG if there's one present. */
 static void
 init_system_rng (void)
@@ -834,9 +834,9 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
     byte buffer[20*sizeof(intptr_t)], *bufptr;
 
     bufptr = buffer;
-#define ADDINT(f)  do { ulong along = (ulong)(f);                  \
-                        memcpy (bufptr, &along, sizeof (along) );  \
-                        bufptr += sizeof (along);                  \
+#define ADDINT(f)  do { intptr_t along = (intptr_t)(f);               \
+                        memcpy (bufptr, &along, sizeof (intptr_t) );  \
+                        bufptr += sizeof (along);                     \
                       } while (0)
 #define ADDPTR(f)  do { void *aptr = (f);                          \
                         ADDINT((SIZE_T)aptr);                      \
@@ -955,7 +955,7 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
      However, the kernel appears to synchronise the TSCs across CPUs at
      boot time (it resets the TSC as part of its system init), so this
      shouldn't really be a problem.  Under WinCE it's completely platform-
-     dependant, if there's no hardware performance counter available, it
+     dependent, if there's no hardware performance counter available, it
      uses the 1ms system timer.
 
      Another feature of the TSC (although it doesn't really affect us here)

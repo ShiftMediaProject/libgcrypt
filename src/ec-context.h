@@ -38,6 +38,7 @@ struct mpi_ec_ctx_s
   gcry_mpi_t b;         /* Second coefficient of the Weierstrass equation.  */
   gcry_mpi_point_t G;   /* Base point (generator).  */
   gcry_mpi_t n;         /* Order of G.  */
+  gcry_mpi_t h;         /* Cofactor.  */
 
   /* The actual key.  May not be set.  */
   gcry_mpi_point_t Q;   /* Public key.   */
@@ -79,6 +80,18 @@ gpg_err_code_t   _gcry_ecc_set_mpi (const char *name,
                                     gcry_mpi_t newvalue, mpi_ec_t ec);
 gpg_err_code_t   _gcry_ecc_set_point (const char *name,
                                       gcry_mpi_point_t newvalue, mpi_ec_t ec);
+
+/*-- cipher/ecc-misc.c --*/
+gcry_err_code_t _gcry_ecc_os2ec (mpi_point_t result, gcry_mpi_t value);
+gpg_err_code_t _gcry_ecc_mont_decodepoint (gcry_mpi_t pk, mpi_ec_t ctx,
+                                           mpi_point_t result);
+
+/*-- cipher/ecc-eddsa.c --*/
+gpg_err_code_t _gcry_ecc_eddsa_decodepoint (gcry_mpi_t pk, mpi_ec_t ctx,
+                                            mpi_point_t result,
+                                            unsigned char **r_encpk,
+                                            unsigned int *r_encpklen);
+
 
 
 #endif /*GCRY_EC_CONTEXT_H*/

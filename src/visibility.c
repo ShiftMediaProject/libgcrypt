@@ -544,6 +544,15 @@ gcry_mpi_ec_set_point (const char *name, gcry_mpi_point_t newvalue,
   return gpg_error (_gcry_mpi_ec_set_point (name, newvalue, ctx));
 }
 
+gpg_error_t
+gcry_mpi_ec_decode_point (gcry_mpi_point_t result, gcry_mpi_t value,
+                          gcry_ctx_t ctx)
+{
+  return gpg_error (_gcry_mpi_ec_decode_point
+                    (result, value,
+                     ctx? _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC) : NULL));
+}
+
 int
 gcry_mpi_ec_get_affine (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_point_t point,
                         gcry_ctx_t ctx)
@@ -563,6 +572,14 @@ gcry_mpi_ec_add (gcry_mpi_point_t w,
                  gcry_mpi_point_t u, gcry_mpi_point_t v, gcry_ctx_t ctx)
 {
   _gcry_mpi_ec_add_points (w, u, v,
+                           _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC));
+}
+
+void
+gcry_mpi_ec_sub (gcry_mpi_point_t w,
+                 gcry_mpi_point_t u, gcry_mpi_point_t v, gcry_ctx_t ctx)
+{
+  _gcry_mpi_ec_sub_points (w, u, v,
                            _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC));
 }
 
@@ -853,6 +870,12 @@ int
 gcry_mac_map_name (const char *string)
 {
   return _gcry_mac_map_name (string);
+}
+
+int
+gcry_mac_get_algo (gcry_mac_hd_t hd)
+{
+  return _gcry_mac_get_algo (hd);
 }
 
 unsigned int
@@ -1149,6 +1172,12 @@ unsigned char *
 gcry_md_read (gcry_md_hd_t hd, int algo)
 {
   return _gcry_md_read (hd, algo);
+}
+
+gcry_err_code_t
+gcry_md_extract (gcry_md_hd_t hd, int algo, void *buffer, size_t length)
+{
+  return _gcry_md_extract(hd, algo, buffer, length);
 }
 
 void

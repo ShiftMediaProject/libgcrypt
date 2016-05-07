@@ -442,6 +442,7 @@ do_slope_benchmark (struct bench_obj *obj)
 	       &overhead);
 
   free (measurement_raw);
+  free (measurements);
   free (real_buffer);
   obj->ops->finalize (obj);
 
@@ -519,8 +520,6 @@ bench_print_result_std (double nsecs_per_byte)
   char mbpsec_buf[16];
   char cpbyte_buf[16];
 
-  strcpy (cpbyte_buf, "-");
-
   double_to_str (nsecpbyte_buf, sizeof (nsecpbyte_buf), nsecs_per_byte);
 
   /* If user didn't provide CPU speed, we cannot show cycles/byte results.  */
@@ -529,16 +528,15 @@ bench_print_result_std (double nsecs_per_byte)
       cycles_per_byte = nsecs_per_byte * cpu_ghz;
       double_to_str (cpbyte_buf, sizeof (cpbyte_buf), cycles_per_byte);
     }
+  else
+    strcpy (cpbyte_buf, "-");
 
   mbytes_per_sec =
     (1000.0 * 1000.0 * 1000.0) / (nsecs_per_byte * 1024 * 1024);
   double_to_str (mbpsec_buf, sizeof (mbpsec_buf), mbytes_per_sec);
 
-  strncat (nsecpbyte_buf, " ns/B", sizeof (nsecpbyte_buf) - 1);
-  strncat (mbpsec_buf, " MiB/s", sizeof (mbpsec_buf) - 1);
-  strncat (cpbyte_buf, " c/B", sizeof (cpbyte_buf) - 1);
-
-  printf ("%14s %15s %13s\n", nsecpbyte_buf, mbpsec_buf, cpbyte_buf);
+  printf ("%9s ns/B %9s MiB/s %9s c/B\n",
+          nsecpbyte_buf, mbpsec_buf, cpbyte_buf);
 }
 
 static void
@@ -740,7 +738,6 @@ static struct bench_ops decrypt_ops = {
 };
 
 
-#ifdef HAVE_U64_TYPEDEF
 static void
 bench_ccm_encrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
 {
@@ -903,20 +900,19 @@ static struct bench_ops ccm_authenticate_ops = {
   &bench_encrypt_free,
   &bench_ccm_authenticate_do_bench
 };
-#endif /*HAVE_U64_TYPEDEF*/
 
 
 static void
-bench_gcm_encrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
+bench_aead_encrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen,
+			     const char *nonce, size_t noncelen)
 {
   gcry_cipher_hd_t hd = obj->priv;
   int err;
   char tag[16];
-  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
-                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88, };
 
-  gcry_cipher_setiv (hd, nonce, sizeof (nonce));
+  gcry_cipher_setiv (hd, nonce, noncelen);
 
+  gcry_cipher_final (hd);
   err = gcry_cipher_encrypt (hd, buf, buflen, buf, buflen);
   if (err)
     {
@@ -937,16 +933,16 @@ bench_gcm_encrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
 }
 
 static void
-bench_gcm_decrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
+bench_aead_decrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen,
+			     const char *nonce, size_t noncelen)
 {
   gcry_cipher_hd_t hd = obj->priv;
   int err;
   char tag[16] = { 0, };
-  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
-                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88, };
 
-  gcry_cipher_setiv (hd, nonce, sizeof (nonce));
+  gcry_cipher_setiv (hd, nonce, noncelen);
 
+  gcry_cipher_final (hd);
   err = gcry_cipher_decrypt (hd, buf, buflen, buf, buflen);
   if (err)
     {
@@ -969,17 +965,23 @@ bench_gcm_decrypt_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
 }
 
 static void
-bench_gcm_authenticate_do_bench (struct bench_obj *obj, void *buf,
-           size_t buflen)
+bench_aead_authenticate_do_bench (struct bench_obj *obj, void *buf,
+				  size_t buflen, const char *nonce,
+				  size_t noncelen)
 {
   gcry_cipher_hd_t hd = obj->priv;
   int err;
   char tag[16] = { 0, };
-  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
-                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88, };
   char data = 0xff;
 
-  gcry_cipher_setiv (hd, nonce, sizeof (nonce));
+  err = gcry_cipher_setiv (hd, nonce, noncelen);
+  if (err)
+    {
+      fprintf (stderr, PGM ": gcry_cipher_setiv failed: %s\n",
+           gpg_strerror (err));
+      gcry_cipher_close (hd);
+      exit (1);
+    }
 
   err = gcry_cipher_authenticate (hd, buf, buflen);
   if (err)
@@ -990,6 +992,7 @@ bench_gcm_authenticate_do_bench (struct bench_obj *obj, void *buf,
       exit (1);
     }
 
+  gcry_cipher_final (hd);
   err = gcry_cipher_encrypt (hd, &data, sizeof (data), &data, sizeof (data));
   if (err)
     {
@@ -1007,6 +1010,34 @@ bench_gcm_authenticate_do_bench (struct bench_obj *obj, void *buf,
       gcry_cipher_close (hd);
       exit (1);
     }
+}
+
+
+static void
+bench_gcm_encrypt_do_bench (struct bench_obj *obj, void *buf,
+			    size_t buflen)
+{
+  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88 };
+  bench_aead_encrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_gcm_decrypt_do_bench (struct bench_obj *obj, void *buf,
+			    size_t buflen)
+{
+  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88 };
+  bench_aead_decrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_gcm_authenticate_do_bench (struct bench_obj *obj, void *buf,
+				 size_t buflen)
+{
+  char nonce[12] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88 };
+  bench_aead_authenticate_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
 }
 
 static struct bench_ops gcm_encrypt_ops = {
@@ -1028,6 +1059,98 @@ static struct bench_ops gcm_authenticate_ops = {
 };
 
 
+static void
+bench_ocb_encrypt_do_bench (struct bench_obj *obj, void *buf,
+			    size_t buflen)
+{
+  char nonce[15] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88,
+                     0x00, 0x00, 0x01 };
+  bench_aead_encrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_ocb_decrypt_do_bench (struct bench_obj *obj, void *buf,
+			    size_t buflen)
+{
+  char nonce[15] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88,
+                     0x00, 0x00, 0x01 };
+  bench_aead_decrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_ocb_authenticate_do_bench (struct bench_obj *obj, void *buf,
+				 size_t buflen)
+{
+  char nonce[15] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                     0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88,
+                     0x00, 0x00, 0x01 };
+  bench_aead_authenticate_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static struct bench_ops ocb_encrypt_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_ocb_encrypt_do_bench
+};
+
+static struct bench_ops ocb_decrypt_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_ocb_decrypt_do_bench
+};
+
+static struct bench_ops ocb_authenticate_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_ocb_authenticate_do_bench
+};
+
+
+static void
+bench_poly1305_encrypt_do_bench (struct bench_obj *obj, void *buf,
+				 size_t buflen)
+{
+  char nonce[8] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad };
+  bench_aead_encrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_poly1305_decrypt_do_bench (struct bench_obj *obj, void *buf,
+				 size_t buflen)
+{
+  char nonce[8] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad };
+  bench_aead_decrypt_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static void
+bench_poly1305_authenticate_do_bench (struct bench_obj *obj, void *buf,
+				      size_t buflen)
+{
+  char nonce[8] = { 0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad };
+  bench_aead_authenticate_do_bench (obj, buf, buflen, nonce, sizeof(nonce));
+}
+
+static struct bench_ops poly1305_encrypt_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_poly1305_encrypt_do_bench
+};
+
+static struct bench_ops poly1305_decrypt_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_poly1305_decrypt_do_bench
+};
+
+static struct bench_ops poly1305_authenticate_ops = {
+  &bench_encrypt_init,
+  &bench_encrypt_free,
+  &bench_poly1305_authenticate_do_bench
+};
+
+
 static struct bench_cipher_mode cipher_modes[] = {
   {GCRY_CIPHER_MODE_ECB, "ECB enc", &encrypt_ops},
   {GCRY_CIPHER_MODE_ECB, "ECB dec", &decrypt_ops},
@@ -1039,14 +1162,18 @@ static struct bench_cipher_mode cipher_modes[] = {
   {GCRY_CIPHER_MODE_OFB, "OFB dec", &decrypt_ops},
   {GCRY_CIPHER_MODE_CTR, "CTR enc", &encrypt_ops},
   {GCRY_CIPHER_MODE_CTR, "CTR dec", &decrypt_ops},
-#ifdef HAVE_U64_TYPEDEF
   {GCRY_CIPHER_MODE_CCM, "CCM enc", &ccm_encrypt_ops},
   {GCRY_CIPHER_MODE_CCM, "CCM dec", &ccm_decrypt_ops},
   {GCRY_CIPHER_MODE_CCM, "CCM auth", &ccm_authenticate_ops},
-#endif
   {GCRY_CIPHER_MODE_GCM, "GCM enc", &gcm_encrypt_ops},
   {GCRY_CIPHER_MODE_GCM, "GCM dec", &gcm_decrypt_ops},
   {GCRY_CIPHER_MODE_GCM, "GCM auth", &gcm_authenticate_ops},
+  {GCRY_CIPHER_MODE_OCB, "OCB enc",  &ocb_encrypt_ops},
+  {GCRY_CIPHER_MODE_OCB, "OCB dec",  &ocb_decrypt_ops},
+  {GCRY_CIPHER_MODE_OCB, "OCB auth", &ocb_authenticate_ops},
+  {GCRY_CIPHER_MODE_POLY1305, "POLY1305 enc", &poly1305_encrypt_ops},
+  {GCRY_CIPHER_MODE_POLY1305, "POLY1305 dec", &poly1305_decrypt_ops},
+  {GCRY_CIPHER_MODE_POLY1305, "POLY1305 auth", &poly1305_authenticate_ops},
   {0},
 };
 
@@ -1066,8 +1193,9 @@ cipher_bench_one (int algo, struct bench_cipher_mode *pmode)
   if (!blklen)
     return;
 
-  /* Stream cipher? Only test with ECB. */
-  if (blklen == 1 && mode.mode != GCRY_CIPHER_MODE_ECB)
+  /* Stream cipher? Only test with "ECB" and POLY1305. */
+  if (blklen == 1 && (mode.mode != GCRY_CIPHER_MODE_ECB &&
+		      mode.mode != GCRY_CIPHER_MODE_POLY1305))
     return;
   if (blklen == 1 && mode.mode == GCRY_CIPHER_MODE_ECB)
     {
@@ -1075,12 +1203,20 @@ cipher_bench_one (int algo, struct bench_cipher_mode *pmode)
       mode.name = mode.ops == &encrypt_ops ? "STREAM enc" : "STREAM dec";
     }
 
+  /* Poly1305 has restriction for cipher algorithm */
+  if (mode.mode == GCRY_CIPHER_MODE_POLY1305 && algo != GCRY_CIPHER_CHACHA20)
+    return;
+
   /* CCM has restrictions for block-size */
   if (mode.mode == GCRY_CIPHER_MODE_CCM && blklen != GCRY_CCM_BLOCK_LEN)
     return;
 
-  /* CCM has restrictions for block-size */
+  /* GCM has restrictions for block-size */
   if (mode.mode == GCRY_CIPHER_MODE_GCM && blklen != GCRY_GCM_BLOCK_LEN)
+    return;
+
+  /* Our OCB implementaion has restrictions for block-size.  */
+  if (mode.mode == GCRY_CIPHER_MODE_OCB && blklen != 16)
     return;
 
   bench_print_mode (14, mode.name);
@@ -1121,17 +1257,17 @@ cipher_bench (char **argv, int argc)
   if (argv && argc)
     {
       for (i = 0; i < argc; i++)
-	{
-	  algo = gcry_cipher_map_name (argv[i]);
-	  if (algo)
-	    _cipher_bench (algo);
-	}
+        {
+          algo = gcry_cipher_map_name (argv[i]);
+          if (algo)
+            _cipher_bench (algo);
+        }
     }
   else
     {
       for (i = 1; i < 400; i++)
-	if (!gcry_cipher_test_algo (i))
-	  _cipher_bench (i);
+        if (!gcry_cipher_test_algo (i))
+          _cipher_bench (i);
     }
 }
 
@@ -1308,16 +1444,30 @@ bench_mac_init (struct bench_obj *obj)
     }
 
   err = gcry_mac_setkey (hd, key, keylen);
-  free (key);
   if (err)
     {
       fprintf (stderr, PGM ": error setting key for mac `%s'\n",
 	       gcry_mac_algo_name (mode->algo));
+      free (key);
       exit (1);
+    }
+
+  switch (mode->algo)
+    {
+    default:
+      break;
+    case GCRY_MAC_POLY1305_AES:
+    case GCRY_MAC_POLY1305_CAMELLIA:
+    case GCRY_MAC_POLY1305_TWOFISH:
+    case GCRY_MAC_POLY1305_SERPENT:
+    case GCRY_MAC_POLY1305_SEED:
+      gcry_mac_setiv (hd, key, 16);
+      break;
     }
 
   obj->priv = hd;
 
+  free (key);
   return 0;
 }
 
@@ -1405,12 +1555,181 @@ mac_bench (char **argv, int argc)
     }
   else
     {
-      for (i = 1; i < 500; i++)
+      for (i = 1; i < 600; i++)
 	if (!gcry_mac_test_algo (i))
 	  _mac_bench (i);
     }
 
   bench_print_footer (18);
+}
+
+
+/************************************************************ KDF benchmarks. */
+
+struct bench_kdf_mode
+{
+  struct bench_ops *ops;
+
+  int algo;
+  int subalgo;
+};
+
+
+static int
+bench_kdf_init (struct bench_obj *obj)
+{
+  struct bench_kdf_mode *mode = obj->priv;
+
+  if (mode->algo == GCRY_KDF_PBKDF2)
+    {
+      obj->min_bufsize = 2;
+      obj->max_bufsize = 2 * 32;
+      obj->step_size = 2;
+    }
+
+  obj->num_measure_repetitions = num_measurement_repetitions;
+
+  return 0;
+}
+
+static void
+bench_kdf_free (struct bench_obj *obj)
+{
+  (void)obj;
+}
+
+static void
+bench_kdf_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
+{
+  struct bench_kdf_mode *mode = obj->priv;
+  char keybuf[16];
+
+  (void)buf;
+
+  if (mode->algo == GCRY_KDF_PBKDF2)
+    {
+      gcry_kdf_derive("qwerty", 6, mode->algo, mode->subalgo, "01234567", 8,
+		      buflen, sizeof(keybuf), keybuf);
+    }
+}
+
+static struct bench_ops kdf_ops = {
+  &bench_kdf_init,
+  &bench_kdf_free,
+  &bench_kdf_do_bench
+};
+
+
+static void
+kdf_bench_one (int algo, int subalgo)
+{
+  struct bench_kdf_mode mode = { &kdf_ops };
+  struct bench_obj obj = { 0 };
+  double nsecs_per_iteration;
+  double cycles_per_iteration;
+  char algo_name[32];
+  char nsecpiter_buf[16];
+  char cpiter_buf[16];
+
+  mode.algo = algo;
+  mode.subalgo = subalgo;
+
+  switch (subalgo)
+    {
+    case GCRY_MD_CRC32:
+    case GCRY_MD_CRC32_RFC1510:
+    case GCRY_MD_CRC24_RFC2440:
+    case GCRY_MD_MD4:
+      /* Skip CRC32s. */
+      return;
+    }
+
+  if (gcry_md_get_algo_dlen (subalgo) == 0)
+    {
+      /* Skip XOFs */
+      return;
+    }
+
+  *algo_name = 0;
+
+  if (algo == GCRY_KDF_PBKDF2)
+    {
+      snprintf (algo_name, sizeof(algo_name), "PBKDF2-HMAC-%s",
+		gcry_md_algo_name (subalgo));
+    }
+
+  bench_print_algo (-24, algo_name);
+
+  obj.ops = mode.ops;
+  obj.priv = &mode;
+
+  nsecs_per_iteration = do_slope_benchmark (&obj);
+
+  strcpy(cpiter_buf, csv_mode ? "" : "-");
+
+  double_to_str (nsecpiter_buf, sizeof (nsecpiter_buf), nsecs_per_iteration);
+
+  /* If user didn't provide CPU speed, we cannot show cycles/iter results.  */
+  if (cpu_ghz > 0.0)
+    {
+      cycles_per_iteration = nsecs_per_iteration * cpu_ghz;
+      double_to_str (cpiter_buf, sizeof (cpiter_buf), cycles_per_iteration);
+    }
+
+  if (csv_mode)
+    {
+      printf ("%s,%s,%s,,,,,,,,,%s,ns/iter,%s,c/iter\n",
+	      current_section_name,
+	      current_algo_name ? current_algo_name : "",
+	      current_mode_name ? current_mode_name : "",
+	      nsecpiter_buf,
+	      cpiter_buf);
+    }
+  else
+    {
+      printf ("%14s %13s\n", nsecpiter_buf, cpiter_buf);
+    }
+}
+
+void
+kdf_bench (char **argv, int argc)
+{
+  char algo_name[32];
+  int i, j;
+
+  bench_print_section ("kdf", "KDF");
+
+  if (!csv_mode)
+    {
+      printf (" %-*s | ", 24, "");
+      printf ("%14s %13s\n", "nanosecs/iter", "cycles/iter");
+    }
+
+  if (argv && argc)
+    {
+      for (i = 0; i < argc; i++)
+	{
+	  for (j = 1; j < 400; j++)
+	    {
+	      if (gcry_md_test_algo (j))
+		continue;
+
+	      snprintf (algo_name, sizeof(algo_name), "PBKDF2-HMAC-%s",
+			gcry_md_algo_name (j));
+
+	      if (!strcmp(argv[i], algo_name))
+		kdf_bench_one (GCRY_KDF_PBKDF2, j);
+	    }
+	}
+    }
+  else
+    {
+      for (i = 1; i < 400; i++)
+	if (!gcry_md_test_algo (i))
+	  kdf_bench_one (GCRY_KDF_PBKDF2, i);
+    }
+
+  bench_print_footer (24);
 }
 
 
@@ -1420,7 +1739,7 @@ void
 print_help (void)
 {
   static const char *help_lines[] = {
-    "usage: bench-slope [options] [hash|mac|cipher [algonames]]",
+    "usage: bench-slope [options] [hash|mac|cipher|kdf [algonames]]",
     "",
     " options:",
     "   --cpu-mhz <mhz>           Set CPU speed for calculating cycles",
@@ -1587,6 +1906,7 @@ main (int argc, char **argv)
       hash_bench (NULL, 0);
       mac_bench (NULL, 0);
       cipher_bench (NULL, 0);
+      kdf_bench (NULL, 0);
     }
   else if (!strcmp (*argv, "hash"))
     {
@@ -1611,6 +1931,14 @@ main (int argc, char **argv)
 
       warm_up_cpu ();
       cipher_bench ((argc == 0) ? NULL : argv, argc);
+    }
+  else if (!strcmp (*argv, "kdf"))
+    {
+      argc--;
+      argv++;
+
+      warm_up_cpu ();
+      kdf_bench ((argc == 0) ? NULL : argv, argc);
     }
   else
     {

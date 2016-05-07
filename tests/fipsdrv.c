@@ -41,7 +41,7 @@
 # define PACKAGE_BUGREPORT "devnull@example.org"
 # define PACKAGE_VERSION "[build on " __DATE__ " " __TIME__ "]"
 #endif
-
+#include "../src/gcrypt-testapi.h"
 
 #define PGM "fipsdrv"
 
@@ -56,12 +56,6 @@
 #define DIM(v)               (sizeof(v)/sizeof((v)[0]))
 #define DIMof(type,member)   DIM(((type *)0)->member)
 
-
-#define PRIV_CTL_INIT_EXTRNG_TEST   58
-#define PRIV_CTL_RUN_EXTRNG_TEST    59
-#define PRIV_CTL_DEINIT_EXTRNG_TEST 60
-#define PRIV_CTL_DISABLE_WEAK_KEY   61
-#define PRIV_CTL_GET_INPUT_VECTOR   62
 
 
 /* Verbose mode flag.  */
@@ -1069,7 +1063,7 @@ run_encrypt_decrypt (int encrypt_mode,
   blocklen = gcry_cipher_get_algo_blklen (cipher_algo);
   assert (blocklen);
 
-  gcry_cipher_ctl (hd, PRIV_CTL_DISABLE_WEAK_KEY, NULL, 0);
+  gcry_cipher_ctl (hd, PRIV_CIPHERCTL_DISABLE_WEAK_KEY, NULL, 0);
 
   err = gcry_cipher_setkey (hd, key_buffer, key_buflen);
   if (err)
@@ -1124,7 +1118,7 @@ get_current_iv (gcry_cipher_hd_t hd, void *buffer, size_t buflen)
 {
   unsigned char tmp[17];
 
-  if (gcry_cipher_ctl (hd, PRIV_CTL_GET_INPUT_VECTOR, tmp, sizeof tmp))
+  if (gcry_cipher_ctl (hd, PRIV_CIPHERCTL_GET_INPUT_VECTOR, tmp, sizeof tmp))
     die ("error getting current input vector\n");
   if (buflen > *tmp)
     die ("buffer too short to store the current input vector\n");
@@ -1159,7 +1153,7 @@ run_cipher_mct_loop (int encrypt_mode, int cipher_algo, int cipher_mode,
     die ("invalid block length %d\n", blocklen);
 
 
-  gcry_cipher_ctl (hd, PRIV_CTL_DISABLE_WEAK_KEY, NULL, 0);
+  gcry_cipher_ctl (hd, PRIV_CIPHERCTL_DISABLE_WEAK_KEY, NULL, 0);
 
   err = gcry_cipher_setkey (hd, key_buffer, key_buflen);
   if (err)
@@ -1322,6 +1316,69 @@ run_rsa_derive (const void *data, size_t datalen)
       gcry_sexp_release (l1);
       gcry_sexp_release (s_top);
     }
+
+  /* Parse and print the parameters.  */
+  l1 = gcry_sexp_find_token (s_key, "private-key", 0);
+  s_top = gcry_sexp_find_token (l1, "rsa", 0);
+  gcry_sexp_release (l1);
+  if (!s_top)
+    die ("private-key part not found in result\n");
+
+  for (idx=0; parmlist[idx]; idx++)
+    {
+      l1 = gcry_sexp_find_token (s_top, parmlist+idx, 1);
+      mpi = gcry_sexp_nth_mpi (l1, 1, GCRYMPI_FMT_USG);
+      gcry_sexp_release (l1);
+      if (!mpi)
+        die ("parameter %c missing in private-key\n", parmlist[idx]);
+      print_mpi_line (mpi, 1);
+      gcry_mpi_release (mpi);
+    }
+
+  gcry_sexp_release (s_top);
+  gcry_sexp_release (s_key);
+}
+
+
+/* Generate RSA key using the S-expression in (DATA,DATALEN).  This
+   S-expression is used directly as input to gcry_pk_genkey.  The
+   result is printed to stdout with one parameter per line in hex
+   format and in this order: e, p, q, n, d.  */
+static void
+run_rsa_keygen (const void *data, size_t datalen, int test)
+{
+  gpg_error_t err;
+  gcry_sexp_t s_keyspec, s_key, s_top, l1;
+  gcry_mpi_t mpi;
+  const char *parmlist;
+  int idx;
+
+  if (!datalen)
+    err = gpg_error (GPG_ERR_NO_DATA);
+  else
+    err = gcry_sexp_new (&s_keyspec, data, datalen, 1);
+  if (err)
+    die ("gcry_sexp_new failed for RSA key generation: %s\n",
+         gpg_strerror (err));
+
+  err = gcry_pk_genkey (&s_key, s_keyspec);
+
+  gcry_sexp_release (s_keyspec);
+
+  if (test) {
+	if (err)
+		printf("F\n");
+	else {
+		gcry_sexp_release (s_key);
+		printf("P\n");
+	}
+	return;
+  }
+
+  if (err)
+    die ("gcry_pk_genkey failed for RSA: %s\n", gpg_strerror (err));
+
+  parmlist = "epqnd";
 
   /* Parse and print the parameters.  */
   l1 = gcry_sexp_find_token (s_key, "private-key", 0);
@@ -1526,7 +1583,7 @@ run_rsa_gen (int keysize, int pubexp)
    encoded KEYFILE and the hash algorithm HASHALGO.  */
 static void
 run_rsa_sign (const void *data, size_t datalen,
-              int hashalgo, int pkcs1, const char *keyfile)
+              int hashalgo, int pkcs1, int pss, const char *keyfile)
 
 {
   gpg_error_t err;
@@ -1547,6 +1604,20 @@ run_rsa_sign (const void *data, size_t datalen,
       gcry_md_hash_buffer (hashalgo, hash, data, datalen);
       err = gcry_sexp_build (&s_data, NULL,
                              "(data (flags pkcs1)(hash %s %b))",
+                             gcry_md_algo_name (hashalgo),
+                             (int)hashsize, hash);
+    }
+  else if (pss)
+    {
+      unsigned char hash[64];
+      unsigned int hashsize;
+
+      hashsize = gcry_md_get_algo_dlen (hashalgo);
+      if (!hashsize || hashsize > sizeof hash)
+        die ("digest too long for buffer or unknown hash algorithm\n");
+      gcry_md_hash_buffer (hashalgo, hash, data, datalen);
+      err = gcry_sexp_build (&s_data, NULL,
+                             "(data (flags pss)(salt-length #00#)(hash %s %b))",
                              gcry_md_algo_name (hashalgo),
                              (int)hashsize, hash);
     }
@@ -1617,7 +1688,7 @@ run_rsa_sign (const void *data, size_t datalen,
    binary signature in SIGFILE.  */
 static void
 run_rsa_verify (const void *data, size_t datalen, int hashalgo, int pkcs1,
-                const char *keyfile, const char *sigfile)
+                int pss, const char *keyfile, const char *sigfile)
 
 {
   gpg_error_t err;
@@ -1634,6 +1705,20 @@ run_rsa_verify (const void *data, size_t datalen, int hashalgo, int pkcs1,
       gcry_md_hash_buffer (hashalgo, hash, data, datalen);
       err = gcry_sexp_build (&s_data, NULL,
                              "(data (flags pkcs1)(hash %s %b))",
+                             gcry_md_algo_name (hashalgo),
+                             (int)hashsize, hash);
+    }
+  else if (pss)
+    {
+      unsigned char hash[64];
+      unsigned int hashsize;
+
+      hashsize = gcry_md_get_algo_dlen (hashalgo);
+      if (!hashsize || hashsize > sizeof hash)
+        die ("digest too long for buffer or unknown hash algorithm\n");
+      gcry_md_hash_buffer (hashalgo, hash, data, datalen);
+      err = gcry_sexp_build (&s_data, NULL,
+                             "(data (flags pss)(salt-length #00#)(hash %s %b))",
                              gcry_md_algo_name (hashalgo),
                              (int)hashsize, hash);
     }
@@ -1720,6 +1805,33 @@ dsa_gen_with_seed (int keysize, const void *seed, size_t seedlen)
   err = gcry_pk_genkey (&key, keyspec);
   if (err)
     die ("gcry_pk_genkey failed for DSA: %s\n", gpg_strerror (err));
+
+  gcry_sexp_release (keyspec);
+
+  return key;
+}
+
+
+/* Generate an ECDSA key on the specified curve and return the complete
+   S-expression. */
+static gcry_sexp_t
+ecdsa_gen_key (const char *curve)
+{
+  gpg_error_t err;
+  gcry_sexp_t keyspec, key;
+
+  err = gcry_sexp_build (&keyspec, NULL,
+                         "(genkey"
+                         "  (ecc"
+                         "    (use-fips186)"
+                         "    (curve %s)))",
+                         curve);
+  if (err)
+    die ("gcry_sexp_build failed for ECDSA key generation: %s\n",
+         gpg_strerror (err));
+  err = gcry_pk_genkey (&key, keyspec);
+  if (err)
+    die ("gcry_pk_genkey failed for ECDSA: %s\n", gpg_strerror (err));
 
   gcry_sexp_release (keyspec);
 
@@ -1814,6 +1926,46 @@ print_dsa_domain_parameters (gcry_sexp_t key)
   print_mpi_line (mpi, 1);
   gcry_mpi_release (mpi);
   gcry_sexp_release (l2);
+
+  gcry_sexp_release (l1);
+}
+
+
+/* Print public key Q (in octet-string format) and private key d.
+   KEY is the complete key as returned by ecdsa_gen_key.
+   with one parameter per line in hex format using this order: d, Q. */
+static void
+print_ecdsa_dq (gcry_sexp_t key)
+{
+  gcry_sexp_t l1, l2;
+  gcry_mpi_t mpi;
+  int idx;
+
+  l1 = gcry_sexp_find_token (key, "private-key", 0);
+  if (!l1)
+    die ("private key not found in genkey result\n");
+
+  l2 = gcry_sexp_find_token (l1, "ecc", 0);
+  if (!l2)
+    die ("returned private key not formed as expected\n");
+  gcry_sexp_release (l1);
+  l1 = l2;
+
+  /* Extract the parameters from the S-expression and print them to stdout.  */
+  for (idx=0; "dq"[idx]; idx++)
+    {
+      l2 = gcry_sexp_find_token (l1, "dq"+idx, 1);
+      if (!l2)
+        die ("no %c parameter in returned public key\n", "dq"[idx]);
+      mpi = gcry_sexp_nth_mpi (l2, 1, GCRYMPI_FMT_USG);
+      if (!mpi)
+        die ("no value for %c parameter in returned private key\n","dq"[idx]);
+      gcry_sexp_release (l2);
+      if (standalone_mode)
+        printf ("%c = ", "dQ"[idx]);
+      print_mpi_line (mpi, 1);
+      gcry_mpi_release (mpi);
+    }
 
   gcry_sexp_release (l1);
 }
@@ -1998,6 +2150,138 @@ run_dsa_verify (const void *data, size_t datalen,
 }
 
 
+
+/* Sign DATA of length DATALEN using the key taken from the S-expression
+   encoded KEYFILE. */
+static void
+run_ecdsa_sign (const void *data, size_t datalen,
+                const char *keyfile, const int algo)
+
+{
+  gpg_error_t err;
+  gcry_sexp_t s_data, s_key, s_sig, s_tmp;
+  char hash[128];
+  gcry_mpi_t tmpmpi;
+
+  s_key = read_sexp_from_file (keyfile);
+
+  gcry_md_hash_buffer (algo, hash, data, datalen);
+  err = gcry_mpi_scan (&tmpmpi, GCRYMPI_FMT_USG, hash,
+                       gcry_md_get_algo_dlen(algo), NULL);
+  if (!err)
+    {
+      err = gcry_sexp_build (&s_data, NULL,
+                             "(data (flags raw)(hash %s %M))",
+                             gcry_md_algo_name(algo), tmpmpi);
+      gcry_mpi_release (tmpmpi);
+    }
+  if (err)
+    die ("gcry_sexp_build failed for ECDSA data input: %s\n",
+         gpg_strerror (err));
+
+  err = gcry_pk_sign (&s_sig, s_data, s_key);
+  if (err)
+    {
+      die ("gcry_pk_signed failed: %s\n", gpg_strerror (err));
+    }
+  gcry_sexp_release (s_data);
+  gcry_sexp_release (s_key);
+
+  /* Now return the actual signature.  */
+  s_tmp = gcry_sexp_find_token (s_sig, "sig-val", 0);
+  if (!s_tmp)
+    die ("no sig-val element in returned S-expression\n");
+
+  gcry_sexp_release (s_sig);
+  s_sig = s_tmp;
+  s_tmp = gcry_sexp_find_token (s_sig, "ecdsa", 0);
+  if (!s_tmp)
+    die ("no ecdsa element in returned S-expression\n");
+
+  gcry_sexp_release (s_sig);
+  s_sig = s_tmp;
+
+  s_tmp = gcry_sexp_find_token (s_sig, "r", 0);
+  tmpmpi = gcry_sexp_nth_mpi (s_tmp, 1, GCRYMPI_FMT_USG);
+  if (!tmpmpi)
+    die ("no r parameter in returned S-expression\n");
+  print_mpi_line (tmpmpi, 1);
+  gcry_mpi_release (tmpmpi);
+  gcry_sexp_release (s_tmp);
+
+  s_tmp = gcry_sexp_find_token (s_sig, "s", 0);
+  tmpmpi = gcry_sexp_nth_mpi (s_tmp, 1, GCRYMPI_FMT_USG);
+  if (!tmpmpi)
+    die ("no s parameter in returned S-expression\n");
+  print_mpi_line (tmpmpi, 1);
+  gcry_mpi_release (tmpmpi);
+  gcry_sexp_release (s_tmp);
+
+  gcry_sexp_release (s_sig);
+}
+
+
+
+/* Verify DATA of length DATALEN using the public key taken from the
+   S-expression in KEYFILE against the S-expression formatted
+   signature in SIGFILE.  */
+static void
+run_ecdsa_verify (const void *data, size_t datalen,
+                const char *keyfile, const int algo, const char *sigfile)
+
+{
+  gpg_error_t err;
+  gcry_sexp_t s_data, s_key, s_sig;
+  char hash[128];
+  gcry_mpi_t tmpmpi;
+
+  s_key = read_sexp_from_file (keyfile);
+
+  gcry_md_hash_buffer (algo, hash, data, datalen);
+  /* Note that we can't simply use %b with HASH to build the
+     S-expression, because that might yield a negative value.  */
+  err = gcry_mpi_scan (&tmpmpi, GCRYMPI_FMT_USG, hash,
+                       gcry_md_get_algo_dlen(algo), NULL);
+  if (!err)
+    {
+      err = gcry_sexp_build (&s_data, NULL,
+                             "(data (flags raw)(hash %s %M))",
+                             gcry_md_algo_name(algo), tmpmpi);
+      gcry_mpi_release (tmpmpi);
+    }
+  if (err)
+    die ("gcry_sexp_build failed for DSA data input: %s\n",
+         gpg_strerror (err));
+
+  s_sig = read_sexp_from_file (sigfile);
+
+  err = gcry_pk_verify (s_sig, s_data, s_key);
+  if (!err)
+    puts ("GOOD signature");
+  else if (gpg_err_code (err) == GPG_ERR_BAD_SIGNATURE)
+    puts ("BAD signature");
+  else
+    printf ("ERROR (%s)\n", gpg_strerror (err));
+
+  gcry_sexp_release (s_sig);
+  gcry_sexp_release (s_key);
+  gcry_sexp_release (s_data);
+}
+
+
+/* Generate an ECDSA key with specified domain parameters
+   and print the d and Q values, in the standard octet-string format. */
+static void
+run_ecdsa_gen_key (const char *curve)
+{
+  gcry_sexp_t key;
+
+  key = ecdsa_gen_key (curve);
+  print_ecdsa_dq (key);
+
+  gcry_sexp_release (key);
+}
+
 
 
 static void
@@ -2014,7 +2298,8 @@ usage (int show_help)
      "Run a crypto operation using hex encoded input and output.\n"
      "MODE:\n"
      "  encrypt, decrypt, digest, random, hmac-sha,\n"
-     "  rsa-{derive,gen,sign,verify}, dsa-{pqg-gen,gen,sign,verify}\n"
+     "  rsa-{derive,gen,sign,verify},\n"
+     "  dsa-{pqg-gen,gen,sign,verify}, ecdsa-{gen-key,sign,verify}\n"
      "OPTIONS:\n"
      "  --verbose        Print additional information\n"
      "  --binary         Input and output is in binary form\n"
@@ -2023,10 +2308,12 @@ usage (int show_help)
      "  --iv IV          Use the hex encoded IV\n"
      "  --dt DT          Use the hex encoded DT for the RNG\n"
      "  --algo NAME      Use algorithm NAME\n"
+     "  --curve NAME     Select ECC curve spec NAME\n"
      "  --keysize N      Use a keysize of N bits\n"
      "  --signature NAME Take signature from file NAME\n"
      "  --chunk N        Read in chunks of N bytes (implies --binary)\n"
      "  --pkcs1          Use PKCS#1 encoding\n"
+     "  --pss            Use PSS encoding with a zero length salt\n"
      "  --mct-server     Run a monte carlo test server\n"
      "  --loop           Enable random loop mode\n"
      "  --progress       Print pogress indicators\n"
@@ -2044,7 +2331,9 @@ main (int argc, char **argv)
   int no_fips = 0;
   int progress = 0;
   int use_pkcs1 = 0;
+  int use_pss = 0;
   const char *mode_string;
+  const char *curve_string = NULL;
   const char *key_string = NULL;
   const char *iv_string = NULL;
   const char *dt_string = NULL;
@@ -2160,9 +2449,22 @@ main (int argc, char **argv)
           binary_input = binary_output = 1;
           argc--; argv++;
         }
+      else if (!strcmp (*argv, "--curve"))
+        {
+          argc--; argv++;
+          if (!argc)
+            usage (0);
+          curve_string = *argv;
+          argc--; argv++;
+        }
       else if (!strcmp (*argv, "--pkcs1"))
         {
           use_pkcs1 = 1;
+          argc--; argv++;
+        }
+      else if (!strcmp (*argv, "--pss"))
+        {
+          use_pss = 1;
           argc--; argv++;
         }
       else if (!strcmp (*argv, "--mct-server"))
@@ -2179,7 +2481,11 @@ main (int argc, char **argv)
 
   if (!argc || argc > 2)
     usage (0);
+
   mode_string = *argv;
+
+  if (use_pkcs1 && use_pss)
+    die ("Only one of --pkcs or --pss may be given\n");
 
   if (!strcmp (mode_string, "rsa-derive"))
     binary_input = 1;
@@ -2217,7 +2523,10 @@ main (int argc, char **argv)
       && !mct_server
       && strcmp (mode_string, "random")
       && strcmp (mode_string, "rsa-gen")
-      && strcmp (mode_string, "dsa-gen") )
+      && strcmp (mode_string, "rsa-keygen")
+      && strcmp (mode_string, "rsa-keygen-kat")
+      && strcmp (mode_string, "dsa-gen")
+      && strcmp (mode_string, "ecdsa-gen-key") )
     {
       data = read_file (input, !binary_input, &datalen);
       if (!data)
@@ -2406,6 +2715,20 @@ main (int argc, char **argv)
         die ("no data available (do not use --chunk)\n");
       run_rsa_derive (data, datalen);
     }
+  else if (!strcmp (mode_string, "rsa-keygen"))
+    {
+      data = read_file (input, 0, &datalen);
+      if (!data)
+        die ("no data available (do not use --chunk)\n");
+      run_rsa_keygen (data, datalen, 0);
+    }
+  else if (!strcmp (mode_string, "rsa-keygen-kat"))
+    {
+      data = read_file (input, 0, &datalen);
+      if (!data)
+        die ("no data available (do not use --chunk)\n");
+      run_rsa_keygen (data, datalen, 1);
+    }
   else if (!strcmp (mode_string, "rsa-gen"))
     {
       int keysize;
@@ -2434,7 +2757,7 @@ main (int argc, char **argv)
       if (!data)
         die ("no data available (do not use --chunk)\n");
 
-      run_rsa_sign (data, datalen, algo, use_pkcs1, key_string);
+      run_rsa_sign (data, datalen, algo, use_pkcs1, use_pss, key_string);
 
     }
   else if (!strcmp (mode_string, "rsa-verify"))
@@ -2457,7 +2780,7 @@ main (int argc, char **argv)
       if (access (signature_string, R_OK))
         die ("option --signature needs to specify an existing file\n");
 
-      run_rsa_verify (data, datalen, algo, use_pkcs1, key_string,
+      run_rsa_verify (data, datalen, algo, use_pkcs1, use_pss, key_string,
                       signature_string);
 
     }
@@ -2506,6 +2829,53 @@ main (int argc, char **argv)
         die ("option --signature needs to specify an existing file\n");
 
       run_dsa_verify (data, datalen, key_string, signature_string);
+    }
+  else if (!strcmp (mode_string, "ecdsa-gen-key"))
+    {
+      if (!curve_string)
+        die ("option --curve containing name of the specified curve is required in this mode\n");
+      run_ecdsa_gen_key (curve_string);
+    }
+  else if (!strcmp (mode_string, "ecdsa-sign"))
+    {
+      int algo;
+
+      if (!key_string)
+        die ("option --key is required in this mode\n");
+      if (access (key_string, R_OK))
+        die ("option --key needs to specify an existing keyfile\n");
+      if (!algo_string)
+        die ("use --algo to specify the digest algorithm\n");
+      algo = gcry_md_map_name (algo_string);
+      if (!algo)
+        die ("digest algorithm `%s' is not supported\n", algo_string);
+
+      if (!data)
+        die ("no data available (do not use --chunk)\n");
+
+      run_ecdsa_sign (data, datalen, key_string, algo);
+    }
+  else if (!strcmp (mode_string, "ecdsa-verify"))
+    {
+      int algo;
+
+      if (!key_string)
+        die ("option --key is required in this mode\n");
+      if (access (key_string, R_OK))
+        die ("option --key needs to specify an existing keyfile\n");
+      if (!algo_string)
+        die ("use --algo to specify the digest algorithm\n");
+      algo = gcry_md_map_name (algo_string);
+      if (!algo)
+        die ("digest algorithm `%s' is not supported\n", algo_string);
+      if (!data)
+        die ("no data available (do not use --chunk)\n");
+      if (!signature_string)
+        die ("option --signature is required in this mode\n");
+      if (access (signature_string, R_OK))
+        die ("option --signature needs to specify an existing file\n");
+
+      run_ecdsa_verify (data, datalen, key_string, algo, signature_string);
     }
   else
     usage (0);

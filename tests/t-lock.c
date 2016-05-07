@@ -27,13 +27,14 @@
 #include <assert.h>
 #include <errno.h>
 #include <unistd.h>
-#if USE_POSIX_THREADS
+#if HAVE_PTHREAD
 # include <pthread.h>
 #endif
 
-#define PGM "t-lock"
+#define PGMNAME "t-lock"
 
 #include "t-common.h"
+#include "../src/gcrypt-testapi.h"
 
 /* Mingw requires us to include windows.h after winsock2.h which is
    included by gcrypt.h.  */
@@ -48,12 +49,6 @@
 # define THREAD_RET_TYPE  void *
 # define THREAD_RET_VALUE NULL
 #endif
-
-#define PRIV_CTL_EXTERNAL_LOCK_TEST   61
-#define EXTERNAL_LOCK_TEST_INIT       30111
-#define EXTERNAL_LOCK_TEST_LOCK       30112
-#define EXTERNAL_LOCK_TEST_UNLOCK     30113
-#define EXTERNAL_LOCK_TEST_DESTROY    30114
 
 
 /* Number of threads to run.  */
@@ -152,7 +147,7 @@ nonce_thread (void *argarg)
     {
       gcry_create_nonce (nonce, sizeof nonce);
       if (i && !(i%100))
-        show ("thread %d created %d nonces so far", arg->no, i);
+        info ("thread %d created %d nonces so far", arg->no, i);
     }
 
   gcry_free (arg);
@@ -186,14 +181,14 @@ check_nonce_lock (void)
     {
       rc = WaitForSingleObject (threads[i], INFINITE);
       if (rc == WAIT_OBJECT_0)
-        show ("nonce thread %d has terminated", i);
+        info ("nonce thread %d has terminated", i);
       else
         fail ("waiting for nonce thread %d failed: %d",
               i, (int)GetLastError ());
       CloseHandle (threads[i]);
     }
 
-#elif USE_POSIX_THREADS
+#elif HAVE_PTHREAD
   pthread_t threads[N_NONCE_THREADS];
   int rc, i;
 
@@ -211,7 +206,7 @@ check_nonce_lock (void)
         fail ("pthread_join failed for nonce thread %d: %s",
               i, strerror (errno));
       else
-        show ("nonce thread %d has terminated", i);
+        info ("nonce thread %d has terminated", i);
     }
 
 #endif /*!_WIN32*/
@@ -229,7 +224,7 @@ init_accounts (void)
 }
 
 
-/* Check that the sum of all accounts matches the intial sum.  */
+/* Check that the sum of all accounts matches the initial sum.  */
 static void
 check_accounts (void)
 {
@@ -261,7 +256,7 @@ get_rand (int high)
 }
 
 
-/* Pick a random account.  Note that this fucntion is not
+/* Pick a random account.  Note that this function is not
    thread-safe. */
 static int
 pick_account (void)
@@ -345,7 +340,7 @@ run_test (void)
     {
       rc = WaitForSingleObject (athreads[i], INFINITE);
       if (rc == WAIT_OBJECT_0)
-        show ("accountant thread %d has terminated", i);
+        info ("accountant thread %d has terminated", i);
       else
         fail ("waiting for accountant thread %d failed: %d",
               i, (int)GetLastError ());
@@ -355,12 +350,12 @@ run_test (void)
 
   rc = WaitForSingleObject (rthread, INFINITE);
   if (rc == WAIT_OBJECT_0)
-    show ("revision thread has terminated");
+    info ("revision thread has terminated");
   else
     fail ("waiting for revision thread failed: %d", (int)GetLastError ());
   CloseHandle (rthread);
 
-#elif USE_POSIX_THREADS
+#else /*!_WIN32*/
   pthread_t rthread;
   pthread_t athreads[N_ACCOUNTANTS];
   int rc, i;
@@ -379,7 +374,7 @@ run_test (void)
         fail ("pthread_join failed for accountant thread %d: %s",
               i, strerror (errno));
       else
-        show ("accountant thread %d has terminated", i);
+        info ("accountant thread %d has terminated", i);
     }
 
   stop_revision_thread = 1;
@@ -387,9 +382,9 @@ run_test (void)
   if (rc)
     fail ("pthread_join failed for the revision thread: %s", strerror (errno));
   else
-    show ("revision thread has terminated");
+    info ("revision thread has terminated");
 
-#endif /*USE_POSIX_THREADS*/
+#endif /*!_WIN32*/
 
   external_lock_test_destroy (__LINE__);
 }
@@ -438,11 +433,11 @@ main (int argc, char **argv)
   gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch");
+  /* We are using non-public interfaces - check the exact version.  */
+  if (strcmp (gcry_check_version (NULL), GCRYPT_VERSION))
+    die ("exact version match failed");
   gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
   gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
-
-  if (debug)
-    gcry_control (GCRYCTL_PRINT_CONFIG, NULL);
 
   check_nonce_lock ();
 

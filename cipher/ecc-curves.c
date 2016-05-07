@@ -40,7 +40,7 @@ static const struct
   const char *other; /* Other name. */
 } curve_aliases[] =
   {
-  /*{ "Curve25519", "1.3.6.1.4.1.3029.1.5.1" },*/
+    { "Curve25519", "1.3.6.1.4.1.3029.1.5.1" },
     { "Ed25519",    "1.3.6.1.4.1.11591.15.1" },
 
     { "NIST P-192", "1.2.840.10045.3.1.1" }, /* X9.62 OID  */
@@ -73,6 +73,20 @@ static const struct
     { "brainpoolP384r1", "1.3.36.3.3.2.8.1.1.11"},
     { "brainpoolP512r1", "1.3.36.3.3.2.8.1.1.13"},
 
+    { "GOST2001-test", "1.2.643.2.2.35.0" },
+    { "GOST2001-CryptoPro-A", "1.2.643.2.2.35.1" },
+    { "GOST2001-CryptoPro-B", "1.2.643.2.2.35.2" },
+    { "GOST2001-CryptoPro-C", "1.2.643.2.2.35.3" },
+    { "GOST2001-CryptoPro-A", "GOST2001-CryptoPro-XchA" },
+    { "GOST2001-CryptoPro-C", "GOST2001-CryptoPro-XchB" },
+    { "GOST2001-CryptoPro-A", "1.2.643.2.2.36.0" },
+    { "GOST2001-CryptoPro-C", "1.2.643.2.2.36.1" },
+
+    { "GOST2012-tc26-A", "1.2.643.7.1.2.1.2.1" },
+    { "GOST2012-tc26-B", "1.2.643.7.1.2.1.2.2" },
+
+    { "secp256k1", "1.3.132.0.10" },
+
     { NULL, NULL}
   };
 
@@ -93,9 +107,11 @@ typedef struct
 
   const char *p;              /* The prime defining the field.  */
   const char *a, *b;          /* The coefficients.  For Twisted Edwards
-                                 Curves b is used for d.  */
+                                 Curves b is used for d.  For Montgomery
+                                 Curves (a,b) has ((A-2)/4,B^-1).  */
   const char *n;              /* The order of the base point.  */
   const char *g_x, *g_y;      /* Base point.  */
+  const char *h;              /* Cofactor.  */
 } ecc_domain_parms_t;
 
 
@@ -105,16 +121,46 @@ static const ecc_domain_parms_t domain_parms[] =
     {
       /* (-x^2 + y^2 = 1 + dx^2y^2) */
       "Ed25519", 256, 0,
-      MPI_EC_TWISTEDEDWARDS, ECC_DIALECT_ED25519,
+      MPI_EC_EDWARDS, ECC_DIALECT_ED25519,
       "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
       "-0x01",
       "-0x2DFC9311D490018C7338BF8688861767FF8FF5B2BEBE27548A14B235ECA6874A",
       "0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED",
       "0x216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A",
-      "0x6666666666666666666666666666666666666666666666666666666666666658"
+      "0x6666666666666666666666666666666666666666666666666666666666666658",
+      "0x08"
     },
     {
-      "NIST P-192", 192, 1,
+      /* (y^2 = x^3 + 486662*x^2 + x) */
+      "Curve25519", 256, 0,
+      MPI_EC_MONTGOMERY, ECC_DIALECT_STANDARD,
+      "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
+      "0x01DB41",
+      "0x01",
+      "0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED",
+      "0x0000000000000000000000000000000000000000000000000000000000000009",
+      "0x20AE19A1B8A086B4E01EDD2C7748D14C923D4D7E6D7C61B229E9C5A27ECED3D9",
+      "0x08"
+    },
+#if 0 /* No real specs yet found.  */
+    {
+      /* x^2 + y^2 = 1 + 3617x^2y^2 mod 2^414 - 17 */
+      "Curve3617",
+      "0x3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+      "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEF",
+      MPI_EC_EDWARDS, 0,
+      "0x01",
+      "0x0e21",
+      "0x07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEB3CC92414CF"
+      "706022B36F1C0338AD63CF181B0E71A5E106AF79",
+      "0x1A334905141443300218C0631C326E5FCD46369F44C03EC7F57FF35498A4AB4D"
+      "6D6BA111301A73FAA8537C64C4FD3812F3CBC595",
+      "0x22",
+      "0x08"
+    },
+#endif /*0*/
+    {
+      "NIST P-192", 192, 0,
       MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
       "0xfffffffffffffffffffffffffffffffeffffffffffffffff",
       "0xfffffffffffffffffffffffffffffffefffffffffffffffc",
@@ -122,7 +168,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0xffffffffffffffffffffffff99def836146bc9b1b4d22831",
 
       "0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012",
-      "0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811"
+      "0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811",
+      "0x01"
     },
     {
       "NIST P-224", 224, 1,
@@ -133,7 +180,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0xffffffffffffffffffffffffffff16a2e0b8f03e13dd29455c5c2a3d" ,
 
       "0xb70e0cbd6bb4bf7f321390b94a03c1d356c21122343280d6115c1d21",
-      "0xbd376388b5f723fb4c22dfe6cd4375a05a07476444d5819985007e34"
+      "0xbd376388b5f723fb4c22dfe6cd4375a05a07476444d5819985007e34",
+      "0x01"
     },
     {
       "NIST P-256", 256, 1,
@@ -144,7 +192,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
 
       "0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
-      "0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+      "0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5",
+      "0x01"
     },
     {
       "NIST P-384", 384, 1,
@@ -161,7 +210,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a38"
       "5502f25dbf55296c3a545e3872760ab7",
       "0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c0"
-      "0a60b1ce1d7e819d7a431d7c90ea0e5f"
+      "0a60b1ce1d7e819d7a431d7c90ea0e5f",
+      "0x01"
     },
     {
       "NIST P-521", 521, 1,
@@ -178,7 +228,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x00c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d"
       "3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66",
       "0x011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e"
-      "662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650"
+      "662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650",
+      "0x01"
     },
 
     { "brainpoolP160r1", 160, 0,
@@ -188,7 +239,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x1e589a8595423412134faa2dbdec95c8d8675e58",
       "0xe95e4a5f737059dc60df5991d45029409e60fc09",
       "0xbed5af16ea3f6a4f62938c4631eb5af7bdbcdbc3",
-      "0x1667cb477a1a8ec338f94741669c976316da6321"
+      "0x1667cb477a1a8ec338f94741669c976316da6321",
+      "0x01"
     },
 
     { "brainpoolP192r1", 192, 0,
@@ -198,7 +250,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x469a28ef7c28cca3dc721d044f4496bcca7ef4146fbf25c9",
       "0xc302f41d932a36cda7a3462f9e9e916b5be8f1029ac4acc1",
       "0xc0a0647eaab6a48753b033c56cb0f0900a2f5c4853375fd6",
-      "0x14b690866abd5bb88b5f4828c1490002e6773fa2fa299b8f"
+      "0x14b690866abd5bb88b5f4828c1490002e6773fa2fa299b8f",
+      "0x01"
     },
 
     { "brainpoolP224r1", 224, 0,
@@ -208,7 +261,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x2580f63ccfe44138870713b1a92369e33e2135d266dbb372386c400b",
       "0xd7c134aa264366862a18302575d0fb98d116bc4b6ddebca3a5a7939f",
       "0x0d9029ad2c7e5cf4340823b2a87dc68c9e4ce3174c1e6efdee12c07d",
-      "0x58aa56f772c0726f24c6b89e4ecdac24354b9e99caa3f6d3761402cd"
+      "0x58aa56f772c0726f24c6b89e4ecdac24354b9e99caa3f6d3761402cd",
+      "0x01"
     },
 
     { "brainpoolP256r1", 256, 0,
@@ -218,7 +272,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x26dc5c6ce94a4b44f330b5d9bbd77cbf958416295cf7e1ce6bccdc18ff8c07b6",
       "0xa9fb57dba1eea9bc3e660a909d838d718c397aa3b561a6f7901e0e82974856a7",
       "0x8bd2aeb9cb7e57cb2c4b482ffc81b7afb9de27e1e3bd23c23a4453bd9ace3262",
-      "0x547ef835c3dac4fd97f8461a14611dc9c27745132ded8e545c1d54c72f046997"
+      "0x547ef835c3dac4fd97f8461a14611dc9c27745132ded8e545c1d54c72f046997",
+      "0x01"
     },
 
     { "brainpoolP320r1", 320, 0,
@@ -234,7 +289,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x43bd7e9afb53d8b85289bcc48ee5bfe6f20137d10a087eb6e7871e2a10a599c7"
       "10af8d0d39e20611",
       "0x14fdd05545ec1cc8ab4093247f77275e0743ffed117182eaa9c77877aaac6ac7"
-      "d35245d1692e8ee1"
+      "d35245d1692e8ee1",
+      "0x01"
     },
 
     { "brainpoolP384r1", 384, 0,
@@ -250,7 +306,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x1d1c64f068cf45ffa2a63a81b7c13f6b8847a3e77ef14fe3db7fcafe0cbd10e8"
       "e826e03436d646aaef87b2e247d4af1e",
       "0x8abe1d7520f9c2a45cb1eb8e95cfd55262b70b29feec5864e19c054ff9912928"
-      "0e4646217791811142820341263c5315"
+      "0e4646217791811142820341263c5315",
+      "0x01"
     },
 
     { "brainpoolP512r1", 512, 0,
@@ -266,7 +323,8 @@ static const ecc_domain_parms_t domain_parms[] =
       "0x81aee4bdd82ed9645a21322e9c4c6a9385ed9f70b5d916c1b43b62eef4d0098e"
       "ff3b1f78e2d0d48d50d1687b93b97d5f7c6d5047406a5e688b352209bcb9f822",
       "0x7dde385d566332ecc0eabfa9cf7822fdf209f70024a57b1aa000c55b881f8111"
-      "b2dcde494a5f485e5bca4bd88a2763aed1ca2b2fa8f0540678cd1e0f3ad80892"
+      "b2dcde494a5f485e5bca4bd88a2763aed1ca2b2fa8f0540678cd1e0f3ad80892",
+      "0x01"
     },
     {
       "GOST2001-test", 256, 0,
@@ -278,8 +336,41 @@ static const ecc_domain_parms_t domain_parms[] =
 
       "0x0000000000000000000000000000000000000000000000000000000000000002",
       "0x08e2a8a0e65147d4bd6316030e16d19c85c97f0a9ca267122b96abbcea7e8fc8",
+      "0x01"
     },
-
+    {
+      "GOST2001-CryptoPro-A", 256, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd97",
+      "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd94",
+      "0x00000000000000000000000000000000000000000000000000000000000000a6",
+      "0xffffffffffffffffffffffffffffffff6c611070995ad10045841b09b761b893",
+      "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "0x8d91e471e0989cda27df505a453f2b7635294f2ddf23e3b122acc99c9e9f1e14",
+      "0x01"
+    },
+    {
+      "GOST2001-CryptoPro-B", 256, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0x8000000000000000000000000000000000000000000000000000000000000c99",
+      "0x8000000000000000000000000000000000000000000000000000000000000c96",
+      "0x3e1af419a269a5f866a7d3c25c3df80ae979259373ff2b182f49d4ce7e1bbc8b",
+      "0x800000000000000000000000000000015f700cfff1a624e5e497161bcc8a198f",
+      "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "0x3fa8124359f96680b83d1c3eb2c070e5c545c9858d03ecfb744bf8d717717efc",
+      "0x01"
+    },
+    {
+      "GOST2001-CryptoPro-C", 256, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0x9b9f605f5a858107ab1ec85e6b41c8aacf846e86789051d37998f7b9022d759b",
+      "0x9b9f605f5a858107ab1ec85e6b41c8aacf846e86789051d37998f7b9022d7598",
+      "0x000000000000000000000000000000000000000000000000000000000000805a",
+      "0x9b9f605f5a858107ab1ec85e6b41c8aa582ca3511eddfb74f02f3a6598980bb9",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x41ece55743711a8c3cbf3783cd08c0ee4d4dc440d4641a8f366e550dfdb3bb67",
+      "0x01"
+    },
     {
       "GOST2012-test", 511, 0,
       MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
@@ -295,9 +386,56 @@ static const ecc_domain_parms_t domain_parms[] =
       "fd60611262cd838dc6b60aa7eee804e28bc849977fac33b4b530f1b120248a9a",
       "0x2bb312a43bd2ce6e0d020613c857acddcfbf061e91e5f2c3f32447c259f39b2"
       "c83ab156d77f1496bf7eb3351e1ee4e43dc1a18b91b24640b6dbb92cb1add371e",
+      "0x01"
+    },
+    {
+      "GOST2012-tc26-A", 512, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdc7",
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdc4",
+      "0xe8c2505dedfc86ddc1bd0b2b6667f1da34b82574761cb0e879bd081cfd0b6265"
+        "ee3cb090f30d27614cb4574010da90dd862ef9d4ebee4761503190785a71c760",
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "27e69532f48d89116ff22b8d4e0560609b4b38abfad2b85dcacdb1411f10b275",
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000003",
+      "0x7503cfe87a836ae3a61b8816e25450e6ce5e1c93acf1abc1778064fdcbefa921"
+        "df1626be4fd036e93d75e6a50e3a41e98028fe5fc235f5b889a589cb5215f2a4",
+      "0x01"
+    },
+    {
+      "GOST2012-tc26-B", 512, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0x8000000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000000000000000000006f",
+      "0x8000000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000000000000000000006c",
+      "0x687d1b459dc841457e3e06cf6f5e2517b97c7d614af138bcbf85dc806c4b289f"
+        "3e965d2db1416d217f8b276fad1ab69c50f78bee1fa3106efb8ccbc7c5140116",
+      "0x8000000000000000000000000000000000000000000000000000000000000001"
+        "49a1ec142565a545acfdb77bd9d40cfa8b996712101bea0ec6346c54374f25bd",
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000002",
+      "0x1a8f7eda389b094c2c071e3647a8940f3c123b697578c213be6dd9e6c8ec7335"
+        "dcb228fd1edf4a39152cbcaaf8c0398828041055f94ceeec7e21340780fe41bd",
+      "0x01"
     },
 
-    { NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL }
+    {
+      "secp256k1", 256, 0,
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000007",
+      "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+      "0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+      "0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8",
+      "0x01"
+    },
+
+    { NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL }
   };
 
 
@@ -404,10 +542,9 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
   switch (domain_parms[idx].model)
     {
     case MPI_EC_WEIERSTRASS:
-    case MPI_EC_TWISTEDEDWARDS:
-      break;
+    case MPI_EC_EDWARDS:
     case MPI_EC_MONTGOMERY:
-      return GPG_ERR_NOT_SUPPORTED;
+      break;
     default:
       return GPG_ERR_BUG;
     }
@@ -423,11 +560,21 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
       if (!curve->p)
         curve->p = scanval (domain_parms[idx].p);
       if (!curve->a)
-        curve->a = scanval (domain_parms[idx].a);
+        {
+          curve->a = scanval (domain_parms[idx].a);
+          if (curve->a->sign)
+            mpi_add (curve->a, curve->p, curve->a);
+        }
       if (!curve->b)
-        curve->b = scanval (domain_parms[idx].b);
+        {
+          curve->b = scanval (domain_parms[idx].b);
+          if (curve->b->sign)
+            mpi_add (curve->b, curve->p, curve->b);
+        }
       if (!curve->n)
         curve->n = scanval (domain_parms[idx].n);
+      if (!curve->h)
+        curve->h = scanval (domain_parms[idx].h);
       if (!curve->G.x)
         curve->G.x = scanval (domain_parms[idx].g_x);
       if (!curve->G.y)
@@ -443,7 +590,7 @@ _gcry_ecc_fill_in_curve (unsigned int nbits, const char *name,
 
 
 /* Give the name of the curve NAME, store the curve parameters into P,
-   A, B, G, and N if they point to NULL value.  Note that G is returned
+   A, B, G, N, and H if they point to NULL value.  Note that G is returned
    in standard uncompressed format.  Also update MODEL and DIALECT if
    they are not NULL. */
 gpg_err_code_t
@@ -451,7 +598,7 @@ _gcry_ecc_update_curve_param (const char *name,
                               enum gcry_mpi_ec_models *model,
                               enum ecc_dialects *dialect,
                               gcry_mpi_t *p, gcry_mpi_t *a, gcry_mpi_t *b,
-                              gcry_mpi_t *g, gcry_mpi_t *n)
+                              gcry_mpi_t *g, gcry_mpi_t *n, gcry_mpi_t *h)
 {
   int idx;
 
@@ -501,6 +648,11 @@ _gcry_ecc_update_curve_param (const char *name,
       _gcry_mpi_release (*n);
       *n = scanval (domain_parms[idx].n);
     }
+  if (h)
+    {
+      _gcry_mpi_release (*h);
+      *h = scanval (domain_parms[idx].h);
+    }
   return 0;
 }
 
@@ -538,8 +690,8 @@ _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
   /*
    * Extract the curve parameters..
    */
-  rc = gpg_err_code (sexp_extract_param (keyparms, NULL, "-pabgn",
-                                         &E.p, &E.a, &E.b, &mpi_g, &E.n,
+  rc = gpg_err_code (sexp_extract_param (keyparms, NULL, "-pabgnh",
+                                         &E.p, &E.a, &E.b, &mpi_g, &E.n, &E.h,
                                          NULL));
   if (rc == GPG_ERR_NO_OBJ)
     {
@@ -597,17 +749,22 @@ _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
                   if (!mpi_cmp (tmp, E.n))
                     {
                       mpi_free (tmp);
-                      tmp = scanval (domain_parms[idx].g_x);
-                      if (!mpi_cmp (tmp, E.G.x))
+                      tmp = scanval (domain_parms[idx].h);
+                      if (!mpi_cmp (tmp, E.h))
                         {
                           mpi_free (tmp);
-                          tmp = scanval (domain_parms[idx].g_y);
-                          if (!mpi_cmp (tmp, E.G.y))
+                          tmp = scanval (domain_parms[idx].g_x);
+                          if (!mpi_cmp (tmp, E.G.x))
                             {
-                              result = domain_parms[idx].desc;
-                              if (r_nbits)
-                                *r_nbits = domain_parms[idx].nbits;
-                              goto leave;
+                              mpi_free (tmp);
+                              tmp = scanval (domain_parms[idx].g_y);
+                              if (!mpi_cmp (tmp, E.G.y))
+                                {
+                                  result = domain_parms[idx].desc;
+                                  if (r_nbits)
+                                    *r_nbits = domain_parms[idx].nbits;
+                                  goto leave;
+                                }
                             }
                         }
                     }
@@ -624,6 +781,7 @@ _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
   _gcry_mpi_release (mpi_g);
   _gcry_mpi_point_free_parts (&E.G);
   _gcry_mpi_release (E.n);
+  _gcry_mpi_release (E.h);
   return result;
 }
 
@@ -755,6 +913,7 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
   gcry_mpi_t b = NULL;
   gcry_mpi_point_t G = NULL;
   gcry_mpi_t n = NULL;
+  gcry_mpi_t h = NULL;
   gcry_mpi_point_t Q = NULL;
   gcry_mpi_t d = NULL;
   int flags = 0;
@@ -795,6 +954,9 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
           if (errc)
             goto leave;
           errc = mpi_from_keyparam (&n, keyparam, "n");
+          if (errc)
+            goto leave;
+          errc = mpi_from_keyparam (&h, keyparam, "h");
           if (errc)
             goto leave;
         }
@@ -870,6 +1032,11 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
           n = E->n;
           E->n = NULL;
         }
+      if (!h)
+        {
+          h = E->h;
+          E->h = NULL;
+        }
       _gcry_ecc_curve_free (E);
       xfree (E);
     }
@@ -895,6 +1062,11 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
         {
           ec->n = n;
           n = NULL;
+        }
+      if (h)
+        {
+          ec->h = h;
+          h = NULL;
         }
 
       /* Now that we know the curve name we can look for the public key
@@ -934,6 +1106,7 @@ _gcry_mpi_ec_new (gcry_ctx_t *r_ctx,
   mpi_free (b);
   _gcry_mpi_point_release (G);
   mpi_free (n);
+  mpi_free (h);
   _gcry_mpi_point_release (Q);
   mpi_free (d);
   return errc;
@@ -948,7 +1121,7 @@ _gcry_ecc_get_param_sexp (const char *name)
   elliptic_curve_t E;
   mpi_ec_t ctx;
   gcry_mpi_t g_x, g_y;
-  gcry_mpi_t pkey[6];
+  gcry_mpi_t pkey[7];
   gcry_sexp_t result;
   int i;
 
@@ -972,14 +1145,15 @@ _gcry_ecc_get_param_sexp (const char *name)
   pkey[2] = E.b;
   pkey[3] = _gcry_ecc_ec2os (g_x, g_y, E.p);
   pkey[4] = E.n;
-  pkey[5] = NULL;
+  pkey[5] = E.h;
+  pkey[6] = NULL;
 
   mpi_free (g_x);
   mpi_free (g_y);
 
   if (sexp_build (&result, NULL,
-                  "(public-key(ecc(p%m)(a%m)(b%m)(g%m)(n%m)))",
-                  pkey[0], pkey[1], pkey[2], pkey[3], pkey[4]))
+                  "(public-key(ecc(p%m)(a%m)(b%m)(g%m)(n%m)(h%m)))",
+                  pkey[0], pkey[1], pkey[2], pkey[3], pkey[4], pkey[5]))
     result = NULL;
 
   for (i=0; pkey[i]; i++)
@@ -1006,6 +1180,8 @@ _gcry_ecc_get_mpi (const char *name, mpi_ec_t ec, int copy)
     return mpi_is_const (ec->b) && !copy? ec->b : mpi_copy (ec->b);
   if (!strcmp (name, "n") && ec->n)
     return mpi_is_const (ec->n) && !copy? ec->n : mpi_copy (ec->n);
+  if (!strcmp (name, "h") && ec->h)
+    return mpi_is_const (ec->h) && !copy? ec->h : mpi_copy (ec->h);
   if (!strcmp (name, "d") && ec->d)
     return mpi_is_const (ec->d) && !copy? ec->d : mpi_copy (ec->d);
 
@@ -1039,7 +1215,7 @@ _gcry_ecc_get_mpi (const char *name, mpi_ec_t ec, int copy)
       if (name[1] != '@')
         return _gcry_mpi_ec_ec2os (ec->Q, ec);
 
-      if (!strcmp (name+2, "eddsa") && ec->model == MPI_EC_TWISTEDEDWARDS)
+      if (!strcmp (name+2, "eddsa") && ec->model == MPI_EC_EDWARDS)
         {
           unsigned char *encpk;
           unsigned int encpklen;
@@ -1103,6 +1279,11 @@ _gcry_ecc_set_mpi (const char *name, gcry_mpi_t newvalue, mpi_ec_t ec)
     {
       mpi_free (ec->n);
       ec->n = mpi_copy (newvalue);
+    }
+  else if (!strcmp (name, "h"))
+    {
+      mpi_free (ec->h);
+      ec->h = mpi_copy (newvalue);
     }
   else if (*name == 'q' && (!name[1] || name[1] == '@'))
     {

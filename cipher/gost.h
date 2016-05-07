@@ -22,10 +22,11 @@
 
 typedef struct {
   u32 key[8];
+  const u32 *sbox;
 } GOST28147_context;
 
 /* This is a simple interface that will be used by GOST R 34.11-94 */
-extern unsigned int _gcry_gost_enc_one (GOST28147_context *c, const byte *key,
-    byte *out, byte *in);
+unsigned int _gcry_gost_enc_data (GOST28147_context *c, const u32 *key,
+    u32 *o1, u32 *o2, u32 n1, u32 n2, int cryptopro);
 
 #endif

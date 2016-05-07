@@ -41,6 +41,7 @@
 #define PUBKEY_FLAG_EDDSA          (1 << 12)
 #define PUBKEY_FLAG_GOST           (1 << 13)
 #define PUBKEY_FLAG_NO_KEYTEST     (1 << 14)
+#define PUBKEY_FLAG_DJB_TWEAK      (1 << 15)
 
 
 enum pk_operation
@@ -55,6 +56,7 @@ enum pk_encoding
   {
     PUBKEY_ENC_RAW,
     PUBKEY_ENC_PKCS1,
+    PUBKEY_ENC_PKCS1_RAW,
     PUBKEY_ENC_OAEP,
     PUBKEY_ENC_PSS,
     PUBKEY_ENC_UNKNOWN
@@ -135,6 +137,10 @@ void _gcry_aes_cbc_dec (void *context, unsigned char *iv,
 void _gcry_aes_ctr_enc (void *context, unsigned char *ctr,
                         void *outbuf_arg, const void *inbuf_arg,
                         size_t nblocks);
+size_t _gcry_aes_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
+			    const void *inbuf_arg, size_t nblocks, int encrypt);
+size_t _gcry_aes_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
+			   size_t nblocks);
 
 /*-- blowfish.c --*/
 void _gcry_blowfish_cfb_dec (void *context, unsigned char *iv,
@@ -172,6 +178,24 @@ void _gcry_camellia_cbc_dec (void *context, unsigned char *iv,
 void _gcry_camellia_cfb_dec (void *context, unsigned char *iv,
                              void *outbuf_arg, const void *inbuf_arg,
                              size_t nblocks);
+size_t _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
+				 const void *inbuf_arg, size_t nblocks,
+				 int encrypt);
+size_t _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
+				size_t nblocks);
+
+/*-- des.c --*/
+void _gcry_3des_ctr_enc (void *context, unsigned char *ctr,
+                         void *outbuf_arg, const void *inbuf_arg,
+                         size_t nblocks);
+
+void _gcry_3des_cbc_dec (void *context, unsigned char *iv,
+                         void *outbuf_arg, const void *inbuf_arg,
+                         size_t nblocks);
+
+void _gcry_3des_cfb_dec (void *context, unsigned char *iv,
+                         void *outbuf_arg, const void *inbuf_arg,
+                         size_t nblocks);
 
 /*-- serpent.c --*/
 void _gcry_serpent_ctr_enc (void *context, unsigned char *ctr,
@@ -183,6 +207,11 @@ void _gcry_serpent_cbc_dec (void *context, unsigned char *iv,
 void _gcry_serpent_cfb_dec (void *context, unsigned char *iv,
                             void *outbuf_arg, const void *inbuf_arg,
                             size_t nblocks);
+size_t _gcry_serpent_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
+				const void *inbuf_arg, size_t nblocks,
+				int encrypt);
+size_t _gcry_serpent_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
+			       size_t nblocks);
 
 /*-- twofish.c --*/
 void _gcry_twofish_ctr_enc (void *context, unsigned char *ctr,
@@ -194,6 +223,11 @@ void _gcry_twofish_cbc_dec (void *context, unsigned char *iv,
 void _gcry_twofish_cfb_dec (void *context, unsigned char *iv,
                             void *outbuf_arg, const void *inbuf_arg,
                             size_t nblocks);
+size_t _gcry_twofish_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
+				const void *inbuf_arg, size_t nblocks,
+				int encrypt);
+size_t _gcry_twofish_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
+			       size_t nblocks);
 
 /*-- dsa.c --*/
 void _gcry_register_pk_dsa_progress (gcry_handler_progress_t cbc, void *cb_data);
@@ -238,22 +272,31 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_idea;
 extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20;
 extern gcry_cipher_spec_t _gcry_cipher_spec_salsa20r12;
 extern gcry_cipher_spec_t _gcry_cipher_spec_gost28147;
+extern gcry_cipher_spec_t _gcry_cipher_spec_chacha20;
 
 /* Declarations for the digest specifications.  */
 extern gcry_md_spec_t _gcry_digest_spec_crc32;
 extern gcry_md_spec_t _gcry_digest_spec_crc32_rfc1510;
 extern gcry_md_spec_t _gcry_digest_spec_crc24_rfc2440;
 extern gcry_md_spec_t _gcry_digest_spec_gost3411_94;
+extern gcry_md_spec_t _gcry_digest_spec_gost3411_cp;
 extern gcry_md_spec_t _gcry_digest_spec_stribog_256;
 extern gcry_md_spec_t _gcry_digest_spec_stribog_512;
+extern gcry_md_spec_t _gcry_digest_spec_md2;
 extern gcry_md_spec_t _gcry_digest_spec_md4;
 extern gcry_md_spec_t _gcry_digest_spec_md5;
 extern gcry_md_spec_t _gcry_digest_spec_rmd160;
 extern gcry_md_spec_t _gcry_digest_spec_sha1;
 extern gcry_md_spec_t _gcry_digest_spec_sha224;
 extern gcry_md_spec_t _gcry_digest_spec_sha256;
-extern gcry_md_spec_t _gcry_digest_spec_sha512;
 extern gcry_md_spec_t _gcry_digest_spec_sha384;
+extern gcry_md_spec_t _gcry_digest_spec_sha512;
+extern gcry_md_spec_t _gcry_digest_spec_sha3_224;
+extern gcry_md_spec_t _gcry_digest_spec_sha3_256;
+extern gcry_md_spec_t _gcry_digest_spec_sha3_512;
+extern gcry_md_spec_t _gcry_digest_spec_sha3_384;
+extern gcry_md_spec_t _gcry_digest_spec_shake128;
+extern gcry_md_spec_t _gcry_digest_spec_shake256;
 extern gcry_md_spec_t _gcry_digest_spec_tiger;
 extern gcry_md_spec_t _gcry_digest_spec_tiger1;
 extern gcry_md_spec_t _gcry_digest_spec_tiger2;

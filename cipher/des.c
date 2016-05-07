@@ -49,7 +49,7 @@
  * encrypt or decrypt data in 64bit blocks in Electronic Codebook Mode.
  *
  * (In the examples below the slashes at the beginning and ending of comments
- * are omited.)
+ * are omitted.)
  *
  * DES Example
  * -----------
@@ -68,7 +68,7 @@
  *     * Encrypt the plaintext *
  *     des_ecb_encrypt(context, plaintext, ciphertext);
  *
- *     * To recover the orginal plaintext from ciphertext use: *
+ *     * To recover the original plaintext from ciphertext use: *
  *     des_ecb_decrypt(context, ciphertext, recoverd);
  *
  *
@@ -119,17 +119,38 @@
 #include "g10lib.h"
 #include "cipher.h"
 #include "bufhelp.h"
+#include "cipher-selftest.h"
+
+
+#define DES_BLOCKSIZE 8
+
+
+/* USE_AMD64_ASM indicates whether to use AMD64 assembly code. */
+#undef USE_AMD64_ASM
+#if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+    defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_AMD64_ASM 1
+#endif
+
+/* Helper macro to force alignment to 16 bytes.  */
+#ifdef HAVE_GCC_ATTRIBUTE_ALIGNED
+# define ATTR_ALIGNED_16  __attribute__ ((aligned (16)))
+#else
+# define ATTR_ALIGNED_16
+#endif
 
 #if ( defined(__GNUC__) && defined(__GNU_LIBRARY__) ) || defined(_MSC_VER)
-#define working_memcmp memcmp
+# define working_memcmp memcmp
 #else
 /*
  * According to the SunOS man page, memcmp returns indeterminate sign
  * depending on whether characters are signed or not.
  */
 static int
-working_memcmp( const char *a, const char *b, size_t n )
+working_memcmp( const void *_a, const void *_b, size_t n )
 {
+    const char *a = _a;
+    const char *b = _b;
     for( ; n; n--, a++, b++ )
 	if( *a != *b )
 	    return (int)(*(byte*)a) - (int)(*(byte*)b);
@@ -171,6 +192,12 @@ static int tripledes_ecb_crypt (struct _tripledes_ctx *,
                                 const byte *, byte *, int);
 static int is_weak_key ( const byte *key );
 static const char *selftest (void);
+static unsigned int do_tripledes_encrypt(void *context, byte *outbuf,
+					 const byte *inbuf );
+static unsigned int do_tripledes_decrypt(void *context, byte *outbuf,
+					 const byte *inbuf );
+static gcry_err_code_t do_tripledes_setkey(void *context, const byte *key,
+                                           unsigned keylen);
 
 static int initialized;
 
@@ -727,6 +754,98 @@ tripledes_set3keys (struct _tripledes_ctx *ctx,
 
 
 
+#ifdef USE_AMD64_ASM
+
+/* Assembly implementation of triple-DES. */
+extern void _gcry_3des_amd64_crypt_block(const void *keys, byte *out,
+                                         const byte *in);
+
+/* These assembly implementations process three blocks in parallel. */
+extern void _gcry_3des_amd64_ctr_enc(const void *keys, byte *out,
+                                     const byte *in, byte *ctr);
+
+extern void _gcry_3des_amd64_cbc_dec(const void *keys, byte *out,
+                                     const byte *in, byte *iv);
+
+extern void _gcry_3des_amd64_cfb_dec(const void *keys, byte *out,
+                                     const byte *in, byte *iv);
+
+#define TRIPLEDES_ECB_BURN_STACK (8 * sizeof(void *))
+
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+static inline void
+call_sysv_fn (const void *fn, const void *arg1, const void *arg2,
+              const void *arg3, const void *arg4)
+{
+  /* Call SystemV ABI function without storing non-volatile XMM registers,
+   * as target function does not use vector instruction sets. */
+  asm volatile ("callq *%0\n\t"
+                : "+a" (fn),
+                  "+D" (arg1),
+                  "+S" (arg2),
+                  "+d" (arg3),
+                  "+c" (arg4)
+                :
+                : "cc", "memory", "r8", "r9", "r10", "r11");
+}
+#endif
+
+/*
+ * Electronic Codebook Mode Triple-DES encryption/decryption of data
+ * according to 'mode'.  Sometimes this mode is named 'EDE' mode
+ * (Encryption-Decryption-Encryption).
+ */
+static inline int
+tripledes_ecb_crypt (struct _tripledes_ctx *ctx, const byte * from,
+                     byte * to, int mode)
+{
+  u32 *keys;
+
+  keys = mode ? ctx->decrypt_subkeys : ctx->encrypt_subkeys;
+
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+  call_sysv_fn (_gcry_3des_amd64_crypt_block, keys, to, from, NULL);
+#else
+  _gcry_3des_amd64_crypt_block(keys, to, from);
+#endif
+
+  return 0;
+}
+
+static inline void
+tripledes_amd64_ctr_enc(const void *keys, byte *out, const byte *in, byte *ctr)
+{
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+  call_sysv_fn (_gcry_3des_amd64_ctr_enc, keys, out, in, ctr);
+#else
+  _gcry_3des_amd64_ctr_enc(keys, out, in, ctr);
+#endif
+}
+
+static inline void
+tripledes_amd64_cbc_dec(const void *keys, byte *out, const byte *in, byte *iv)
+{
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+  call_sysv_fn (_gcry_3des_amd64_cbc_dec, keys, out, in, iv);
+#else
+  _gcry_3des_amd64_cbc_dec(keys, out, in, iv);
+#endif
+}
+
+static inline void
+tripledes_amd64_cfb_dec(const void *keys, byte *out, const byte *in, byte *iv)
+{
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+  call_sysv_fn (_gcry_3des_amd64_cfb_dec, keys, out, in, iv);
+#else
+  _gcry_3des_amd64_cfb_dec(keys, out, in, iv);
+#endif
+}
+
+#else /*USE_AMD64_ASM*/
+
+#define TRIPLEDES_ECB_BURN_STACK 32
+
 /*
  * Electronic Codebook Mode Triple-DES encryption/decryption of data
  * according to 'mode'.  Sometimes this mode is named 'EDE' mode
@@ -777,8 +896,158 @@ tripledes_ecb_crypt (struct _tripledes_ctx *ctx, const byte * from,
   return 0;
 }
 
+#endif /*!USE_AMD64_ASM*/
 
 
+
+/* Bulk encryption of complete blocks in CTR mode.  This function is only
+   intended for the bulk encryption feature of cipher.c.  CTR is expected to be
+   of size DES_BLOCKSIZE. */
+void
+_gcry_3des_ctr_enc(void *context, unsigned char *ctr, void *outbuf_arg,
+                   const void *inbuf_arg, size_t nblocks)
+{
+  struct _tripledes_ctx *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  unsigned char tmpbuf[DES_BLOCKSIZE];
+  int burn_stack_depth = TRIPLEDES_ECB_BURN_STACK;
+  int i;
+
+#ifdef USE_AMD64_ASM
+  {
+    int asm_burn_depth = 9 * sizeof(void *);
+
+    if (nblocks >= 3 && burn_stack_depth < asm_burn_depth)
+      burn_stack_depth = asm_burn_depth;
+
+    /* Process data in 3 block chunks. */
+    while (nblocks >= 3)
+      {
+        tripledes_amd64_ctr_enc(ctx->encrypt_subkeys, outbuf, inbuf, ctr);
+
+        nblocks -= 3;
+        outbuf += 3 * DES_BLOCKSIZE;
+        inbuf  += 3 * DES_BLOCKSIZE;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      /* Encrypt the counter. */
+      tripledes_ecb_encrypt (ctx, ctr, tmpbuf);
+      /* XOR the input with the encrypted counter and store in output.  */
+      buf_xor(outbuf, tmpbuf, inbuf, DES_BLOCKSIZE);
+      outbuf += DES_BLOCKSIZE;
+      inbuf  += DES_BLOCKSIZE;
+      /* Increment the counter.  */
+      for (i = DES_BLOCKSIZE; i > 0; i--)
+        {
+          ctr[i-1]++;
+          if (ctr[i-1])
+            break;
+        }
+    }
+
+  wipememory(tmpbuf, sizeof(tmpbuf));
+  _gcry_burn_stack(burn_stack_depth);
+}
+
+
+/* Bulk decryption of complete blocks in CBC mode.  This function is only
+   intended for the bulk encryption feature of cipher.c. */
+void
+_gcry_3des_cbc_dec(void *context, unsigned char *iv, void *outbuf_arg,
+                   const void *inbuf_arg, size_t nblocks)
+{
+  struct _tripledes_ctx *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  unsigned char savebuf[DES_BLOCKSIZE];
+  int burn_stack_depth = TRIPLEDES_ECB_BURN_STACK;
+
+#ifdef USE_AMD64_ASM
+  {
+    int asm_burn_depth = 10 * sizeof(void *);
+
+    if (nblocks >= 3 && burn_stack_depth < asm_burn_depth)
+      burn_stack_depth = asm_burn_depth;
+
+    /* Process data in 3 block chunks. */
+    while (nblocks >= 3)
+      {
+        tripledes_amd64_cbc_dec(ctx->decrypt_subkeys, outbuf, inbuf, iv);
+
+        nblocks -= 3;
+        outbuf += 3 * DES_BLOCKSIZE;
+        inbuf  += 3 * DES_BLOCKSIZE;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      /* INBUF is needed later and it may be identical to OUTBUF, so store
+         the intermediate result to SAVEBUF.  */
+      tripledes_ecb_decrypt (ctx, inbuf, savebuf);
+
+      buf_xor_n_copy_2(outbuf, savebuf, iv, inbuf, DES_BLOCKSIZE);
+      inbuf += DES_BLOCKSIZE;
+      outbuf += DES_BLOCKSIZE;
+    }
+
+  wipememory(savebuf, sizeof(savebuf));
+  _gcry_burn_stack(burn_stack_depth);
+}
+
+
+/* Bulk decryption of complete blocks in CFB mode.  This function is only
+   intended for the bulk encryption feature of cipher.c. */
+void
+_gcry_3des_cfb_dec(void *context, unsigned char *iv, void *outbuf_arg,
+		   const void *inbuf_arg, size_t nblocks)
+{
+  struct _tripledes_ctx *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = TRIPLEDES_ECB_BURN_STACK;
+
+#ifdef USE_AMD64_ASM
+  {
+    int asm_burn_depth = 9 * sizeof(void *);
+
+    if (nblocks >= 3 && burn_stack_depth < asm_burn_depth)
+      burn_stack_depth = asm_burn_depth;
+
+    /* Process data in 3 block chunks. */
+    while (nblocks >= 3)
+      {
+        tripledes_amd64_cfb_dec(ctx->encrypt_subkeys, outbuf, inbuf, iv);
+
+        nblocks -= 3;
+        outbuf += 3 * DES_BLOCKSIZE;
+        inbuf  += 3 * DES_BLOCKSIZE;
+      }
+
+    /* Use generic code to handle smaller chunks... */
+  }
+#endif
+
+  for ( ;nblocks; nblocks-- )
+    {
+      tripledes_ecb_encrypt (ctx, iv, iv);
+      buf_xor_n_copy(outbuf, iv, inbuf, DES_BLOCKSIZE);
+      outbuf += DES_BLOCKSIZE;
+      inbuf  += DES_BLOCKSIZE;
+    }
+
+  _gcry_burn_stack(burn_stack_depth);
+}
 
 
 /*
@@ -815,6 +1084,67 @@ is_weak_key ( const byte *key )
 }
 
 
+/* Alternative setkey for selftests; need larger key than default. */
+static gcry_err_code_t
+bulk_selftest_setkey (void *context, const byte *__key, unsigned __keylen)
+{
+  static const unsigned char key[24] ATTR_ALIGNED_16 = {
+      0x66,0x9A,0x00,0x7F,0xC7,0x6A,0x45,0x9F,
+      0x98,0xBA,0xF9,0x17,0xFE,0xDF,0x95,0x22,
+      0x18,0x2A,0x39,0x47,0x5E,0x6F,0x75,0x82
+    };
+
+  (void)__key;
+  (void)__keylen;
+
+  return do_tripledes_setkey(context, key, sizeof(key));
+}
+
+
+/* Run the self-tests for DES-CTR, tests IV increment of bulk CTR
+   encryption.  Returns NULL on success. */
+static const char *
+selftest_ctr (void)
+{
+  const int nblocks = 3+1;
+  const int blocksize = DES_BLOCKSIZE;
+  const int context_size = sizeof(struct _tripledes_ctx);
+
+  return _gcry_selftest_helper_ctr("3DES", &bulk_selftest_setkey,
+           &do_tripledes_encrypt, &_gcry_3des_ctr_enc, nblocks, blocksize,
+           context_size);
+}
+
+
+/* Run the self-tests for DES-CBC, tests bulk CBC decryption.
+   Returns NULL on success. */
+static const char *
+selftest_cbc (void)
+{
+  const int nblocks = 3+2;
+  const int blocksize = DES_BLOCKSIZE;
+  const int context_size = sizeof(struct _tripledes_ctx);
+
+  return _gcry_selftest_helper_cbc("3DES", &bulk_selftest_setkey,
+           &do_tripledes_encrypt, &_gcry_3des_cbc_dec, nblocks, blocksize,
+           context_size);
+}
+
+
+/* Run the self-tests for DES-CFB, tests bulk CBC decryption.
+   Returns NULL on success. */
+static const char *
+selftest_cfb (void)
+{
+  const int nblocks = 3+2;
+  const int blocksize = DES_BLOCKSIZE;
+  const int context_size = sizeof(struct _tripledes_ctx);
+
+  return _gcry_selftest_helper_cfb("3DES", &bulk_selftest_setkey,
+           &do_tripledes_encrypt, &_gcry_3des_cfb_dec, nblocks, blocksize,
+           context_size);
+}
+
 
 /*
  * Performs a selftest of this DES/Triple-DES implementation.
@@ -824,6 +1154,8 @@ is_weak_key ( const byte *key )
 static const char *
 selftest (void)
 {
+  const char *r;
+
   /*
    * Check if 'u32' is really 32 bits wide. This DES / 3DES implementation
    * need this.
@@ -1003,6 +1335,15 @@ selftest (void)
         return "DES weak key detection failed";
   }
 
+  if ( (r = selftest_cbc ()) )
+    return r;
+
+  if ( (r = selftest_cfb ()) )
+    return r;
+
+  if ( (r = selftest_ctr ()) )
+    return r;
+
   return 0;
 }
 
@@ -1060,7 +1401,7 @@ do_tripledes_encrypt( void *context, byte *outbuf, const byte *inbuf )
   struct _tripledes_ctx *ctx = (struct _tripledes_ctx *) context;
 
   tripledes_ecb_encrypt ( ctx, inbuf, outbuf );
-  return /*burn_stack*/ (32);
+  return /*burn_stack*/ TRIPLEDES_ECB_BURN_STACK;
 }
 
 static unsigned int
@@ -1068,7 +1409,7 @@ do_tripledes_decrypt( void *context, byte *outbuf, const byte *inbuf )
 {
   struct _tripledes_ctx *ctx = (struct _tripledes_ctx *) context;
   tripledes_ecb_decrypt ( ctx, inbuf, outbuf );
-  return /*burn_stack*/ (32);
+  return /*burn_stack*/ TRIPLEDES_ECB_BURN_STACK;
 }
 
 static gcry_err_code_t
@@ -1111,7 +1452,7 @@ do_des_decrypt( void *context, byte *outbuf, const byte *inbuf )
 
 
 
-
+
 /*
      Self-test section.
  */
@@ -1166,7 +1507,7 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 }
 
 
-
+
 gcry_cipher_spec_t _gcry_cipher_spec_des =
   {
     GCRY_CIPHER_DES, {0, 0},
