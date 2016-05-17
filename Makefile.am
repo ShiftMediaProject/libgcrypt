@@ -30,9 +30,15 @@ else
 doc =
 endif
 
+if BUILD_TESTS
+tests = tests
+else
+tests =
+endif
+
 
 DIST_SUBDIRS = m4 compat mpi cipher random src doc tests
-SUBDIRS =         compat mpi cipher random src $(doc) tests
+SUBDIRS =         compat mpi cipher random src $(doc) $(tests)
 
 EXTRA_DIST = autogen.sh autogen.rc README.GIT LICENSES      	           \
              ChangeLog-2011 build-aux/ChangeLog-2011 doc/ChangeLog-2011    \
