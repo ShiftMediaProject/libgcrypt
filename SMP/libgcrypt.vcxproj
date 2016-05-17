@@ -68,10 +68,14 @@
     <ClInclude Include="..\cipher\gost.h" />
     <ClInclude Include="..\cipher\hash-common.h" />
     <ClInclude Include="..\cipher\kdf-internal.h" />
+    <ClInclude Include="..\cipher\keccak_permute_32.h" />
+    <ClInclude Include="..\cipher\keccak_permute_64.h" />
     <ClInclude Include="..\cipher\mac-internal.h" />
+    <ClInclude Include="..\cipher\poly1305-internal.h" />
     <ClInclude Include="..\cipher\pubkey-internal.h" />
+    <ClInclude Include="..\cipher\rijndael-internal.h" />
     <ClInclude Include="..\cipher\rijndael-tables.h" />
-    <ClInclude Include="..\cipher\rmd.h" />
+    <ClInclude Include="..\cipher\sha1.h" />
     <ClInclude Include="..\compat\libcompat.h" />
     <ClInclude Include="..\mpi\ec-internal.h" />
     <ClInclude Include="..\mpi\generic\mpi-asm-defs.h" />
@@ -80,7 +84,6 @@
     <ClInclude Include="..\mpi\mpi-internal.h" />
     <ClInclude Include="..\random\rand-internal.h" />
     <ClInclude Include="..\random\random.h" />
-    <ClInclude Include="..\src\ath.h" />
     <ClInclude Include="..\src\cipher-proto.h" />
     <ClInclude Include="..\src\cipher.h" />
     <ClInclude Include="..\src\context.h" />
@@ -108,16 +111,21 @@
     <ClCompile Include="..\cipher\camellia-glue.c" />
     <ClCompile Include="..\cipher\camellia.c" />
     <ClCompile Include="..\cipher\cast5.c" />
+    <ClCompile Include="..\cipher\chacha20.c" />
     <ClCompile Include="..\cipher\cipher-aeswrap.c" />
     <ClCompile Include="..\cipher\cipher-cbc.c" />
     <ClCompile Include="..\cipher\cipher-ccm.c" />
     <ClCompile Include="..\cipher\cipher-cfb.c" />
     <ClCompile Include="..\cipher\cipher-cmac.c" />
     <ClCompile Include="..\cipher\cipher-ctr.c" />
+    <ClCompile Include="..\cipher\cipher-gcm-intel-pclmul.c" />
     <ClCompile Include="..\cipher\cipher-gcm.c" />
+    <ClCompile Include="..\cipher\cipher-ocb.c" />
     <ClCompile Include="..\cipher\cipher-ofb.c" />
+    <ClCompile Include="..\cipher\cipher-poly1305.c" />
     <ClCompile Include="..\cipher\cipher-selftest.c" />
     <ClCompile Include="..\cipher\cipher.c" />
+    <ClCompile Include="..\cipher\crc-intel-pclmul.c" />
     <ClCompile Include="..\cipher\crc.c" />
     <ClCompile Include="..\cipher\des.c" />
     <ClCompile Include="..\cipher\dsa-common.c" />
@@ -135,17 +143,23 @@
     <ClCompile Include="..\cipher\hmac-tests.c" />
     <ClCompile Include="..\cipher\idea.c" />
     <ClCompile Include="..\cipher\kdf.c" />
+    <ClCompile Include="..\cipher\keccak.c" />
     <ClCompile Include="..\cipher\mac-cmac.c" />
     <ClCompile Include="..\cipher\mac-gmac.c" />
     <ClCompile Include="..\cipher\mac-hmac.c" />
+    <ClCompile Include="..\cipher\mac-poly1305.c" />
     <ClCompile Include="..\cipher\mac.c" />
     <ClCompile Include="..\cipher\md.c" />
     <ClCompile Include="..\cipher\md4.c" />
     <ClCompile Include="..\cipher\md5.c" />
+    <ClCompile Include="..\cipher\poly1305.c" />
     <ClCompile Include="..\cipher\primegen.c" />
     <ClCompile Include="..\cipher\pubkey-util.c" />
     <ClCompile Include="..\cipher\pubkey.c" />
     <ClCompile Include="..\cipher\rfc2268.c" />
+    <ClCompile Include="..\cipher\rijndael-aesni.c" />
+    <ClCompile Include="..\cipher\rijndael-padlock.c" />
+    <ClCompile Include="..\cipher\rijndael-ssse3-amd64.c" />
     <ClCompile Include="..\cipher\rijndael.c" />
     <ClCompile Include="..\cipher\rmd160.c" />
     <ClCompile Include="..\cipher\rsa-common.c" />
@@ -190,12 +204,11 @@
     <ClCompile Include="..\random\random-csprng.c">
       <ForcedIncludeFiles>compat.h;io.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
-    <ClCompile Include="..\random\random-fips.c" />
+    <ClCompile Include="..\random\random-drbg.c" />
     <ClCompile Include="..\random\random-system.c" />
     <ClCompile Include="..\random\random.c" />
     <ClCompile Include="..\random\rndhw.c" />
     <ClCompile Include="..\random\rndw32.c" />
-    <ClCompile Include="..\src\ath.c" />
     <ClCompile Include="..\src\context.c" />
     <ClCompile Include="..\src\fips.c">
       <ForcedIncludeFiles>compat.h;io.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
@@ -453,7 +466,7 @@
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(OutDir)\lib\x86\$(TargetName).pdb</ProgramDataBaseFileName>
@@ -505,7 +518,7 @@ del $(OutDir)\include\gcrypt.h
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(OutDir)\lib\x64\$(TargetName).pdb</ProgramDataBaseFileName>
@@ -557,7 +570,7 @@ del $(OutDir)\include\gcrypt.h
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
@@ -612,7 +625,7 @@ del $(OutDir)\include\gcrypt.h
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
@@ -667,7 +680,7 @@ del $(OutDir)\include\gcrypt.h
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -720,7 +733,7 @@ del $(OutDir)\include\gcrypt.h
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -783,7 +796,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
@@ -848,7 +861,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
@@ -913,7 +926,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
@@ -978,7 +991,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <InterproceduralOptimization>SingleFile</InterproceduralOptimization>
@@ -1043,7 +1056,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -1108,7 +1121,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__i386__;_WIN32_WINNT=0x0502;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -1173,7 +1186,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -1237,7 +1250,7 @@ del $(OutDir)\include\gcrypt.h
       <FloatingPointModel>Fast</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <PreprocessorDefinitions>HAVE_CONFIG_H;__builtin_bswap32=_byteswap_ulong;__builtin_bswap64=_byteswap_uint64;asm=__asm__;__x86_64__;_WIN32_WINNT=0x0600;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\;$(OutDir)\include;..\src;.\mpi;..\mpi;.\cipher;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4996;4244;4018;4028;4146;4267;4311;4334;4098;4715;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>

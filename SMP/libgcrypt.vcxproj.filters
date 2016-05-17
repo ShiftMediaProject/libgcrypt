@@ -45,9 +45,6 @@
     <ClInclude Include="config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\ath.h">
-      <Filter>Header Files\src</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\cipher.h">
       <Filter>Header Files\src</Filter>
     </ClInclude>
@@ -111,9 +108,6 @@
     <ClInclude Include="..\cipher\pubkey-internal.h">
       <Filter>Header Files\cipher</Filter>
     </ClInclude>
-    <ClInclude Include="..\cipher\rmd.h">
-      <Filter>Header Files\cipher</Filter>
-    </ClInclude>
     <ClInclude Include="..\cipher\camellia.h">
       <Filter>Header Files\cipher</Filter>
     </ClInclude>
@@ -168,6 +162,21 @@
     <ClInclude Include="mpi\asm-syntax.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\cipher\keccak_permute_32.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\keccak_permute_64.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\poly1305-internal.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\rijndael-internal.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\sha1.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\context.c">
@@ -201,9 +210,6 @@
       <Filter>Source Files\src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\visibility.c">
-      <Filter>Source Files\src</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ath.c">
       <Filter>Source Files\src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\hwf-x86.c">
@@ -461,9 +467,6 @@
     <ClCompile Include="..\mpi\generic\mpih-rshift.c">
       <Filter>Source Files\mpi</Filter>
     </ClCompile>
-    <ClCompile Include="..\random\random-fips.c">
-      <Filter>Source Files\random</Filter>
-    </ClCompile>
     <ClCompile Include="..\random\random-system.c">
       <Filter>Source Files\random</Filter>
     </ClCompile>
@@ -477,6 +480,42 @@
       <Filter>Source Files\random</Filter>
     </ClCompile>
     <ClCompile Include="..\random\random-csprng.c">
+      <Filter>Source Files\random</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\mac-poly1305.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\poly1305.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-aesni.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-padlock.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-ssse3-amd64.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\chacha20.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\cipher-gcm-intel-pclmul.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\cipher-ocb.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\cipher-poly1305.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\crc-intel-pclmul.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\keccak.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\random\random-drbg.c">
       <Filter>Source Files\random</Filter>
     </ClCompile>
   </ItemGroup>

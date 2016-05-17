@@ -52,10 +52,13 @@
 /* #undef HAVE_BROKEN_MLOCK */
 
 /* Defined if compiler has '__builtin_bswap32' intrinsic */
-#define HAVE_BUILTIN_BSWAP32 1
+/* #undef HAVE_BUILTIN_BSWAP32 */
 
 /* Defined if compiler has '__builtin_bswap64' intrinsic */
-#define HAVE_BUILTIN_BSWAP64 1
+/* #undef HAVE_BUILTIN_BSWAP64 */
+
+/* Defined if compiler has '__builtin_ctz' intrinsic */
+/* #undef HAVE_BUILTIN_CTZ */
 
 /* Defined if a `byte' is typedef'd */
 /* #undef HAVE_BYTE_TYPEDEF */
@@ -66,13 +69,19 @@
 /* Define to 1 if you have the `clock_gettime' function. */
 /* #undef HAVE_CLOCK_GETTIME */
 
+#if defined( __INTEL_COMPILER )
 /* Defined if underlying assembler is compatible with amd64 assembly
    implementations */
-/* #undef HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS */
+#define HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS 1
 
 /* Defined if underlying assembler is compatible with ARM assembly
    implementations */
 /* #undef HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS */
+
+/* Defined if underlying assembler is compatible with WIN64 assembly
+   implementations */
+#define HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS 1
+#endif
 
 /* Defined for Alpha platforms */
 /* #undef HAVE_CPU_ARCH_ALPHA */
@@ -125,12 +134,28 @@
 #define HAVE_FTRUNCATE 1
 
 #if defined( __INTEL_COMPILER )
-
 /* Define if inline asm memory barrier is supported */
 #define HAVE_GCC_ASM_VOLATILE_MEMORY 1
 
 /* Defined if a GCC style "__attribute__ ((aligned (n))" is supported */
 /* #undef HAVE_GCC_ATTRIBUTE_ALIGNED */
+
+/* Defined if compiler supports "__attribute__ ((ms_abi))" function attribute
+   */
+/* #undef HAVE_GCC_ATTRIBUTE_MS_ABI */
+
+/* Defined if a GCC style "__attribute__ ((packed))" is supported */
+/* #undef HAVE_GCC_ATTRIBUTE_PACKED */
+
+/* Defined if compiler supports "__attribute__ ((sysv_abi))" function
+   attribute */
+/* #undef HAVE_GCC_ATTRIBUTE_SYSV_ABI */
+
+/* Defined if default calling convention is 'ms_abi' */
+/* #undef HAVE_GCC_DEFAULT_ABI_IS_MS_ABI */
+
+/* Defined if default calling convention is 'sysv_abi' */
+/* #undef HAVE_GCC_DEFAULT_ABI_IS_SYSV_ABI */
 
 /* Defined if inline assembler supports AVX instructions */
 #define HAVE_GCC_INLINE_ASM_AVX 1
@@ -149,7 +174,6 @@
 
 /* Defined if inline assembler supports SSSE3 instructions */
 #define HAVE_GCC_INLINE_ASM_SSSE3 1
-
 #endif
 
 /* Define to 1 if you have the `gethrtime' function. */
@@ -192,11 +216,8 @@
 /* Defined if the GNU Pth is available */
 /* #undef HAVE_PTH */
 
-/* Define if the <pthread.h> defines PTHREAD_MUTEX_RECURSIVE. */
-/* #undef HAVE_PTHREAD_MUTEX_RECURSIVE */
-
-/* Define if the POSIX multithreading library has read/write locks. */
-/* #undef HAVE_PTHREAD_RWLOCK */
+/* Define if we have pthread. */
+/* #undef HAVE_PTHREAD */
 
 /* Define to 1 if you have the `raise' function. */
 #define HAVE_RAISE 1
@@ -301,13 +322,13 @@
 #define HAVE_WS2TCPIP_H 1
 
 /* Defined if this is not a regular release */
-#define IS_DEVELOPMENT_VERSION 1
+/* #undef IS_DEVELOPMENT_VERSION */
 
 /* List of available cipher algorithms */
-#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147"
+#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20"
 
 /* List of available digest algorithms */
-#define LIBGCRYPT_DIGESTS "crc:gostr3411-94:md4:md5:rmd160:sha1:sha256:sha512:tiger:whirlpool:stribog"
+#define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog"
 
 /* List of available KDF algorithms */
 #define LIBGCRYPT_KDFS "s2k:pkdf2:scrypt"
@@ -320,11 +341,11 @@
 /* A human readable text with the name of the OS */
 #define PRINTABLE_OS_NAME "W32"
 
-/* Define if the pthread_in_use() detection is hard. */
-/* #undef PTHREAD_IN_USE_DETECTION_HARD */
-
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
+
+/* The size of `uint64_t', as computed by sizeof. */
+#define SIZEOF_UINT64_T 8
 
 /* The size of `unsigned int', as computed by sizeof. */
 #define SIZEOF_UNSIGNED_INT 4
@@ -337,6 +358,13 @@
 
 /* The size of `unsigned short', as computed by sizeof. */
 #define SIZEOF_UNSIGNED_SHORT 2
+
+/* The size of `void *', as computed by sizeof. */
+#if defined(__x86_64) || defined(_M_X64)
+#define SIZEOF_VOID_P 8
+#else
+#define SIZEOF_VOID_P 4
+#endif
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -358,6 +386,9 @@
 
 /* Defined if this module should be included */
 #define USE_CAST5 1
+
+/* Defined if this module should be included */
+#define USE_CHACHA20 1
 
 /* Defined if this module should be included */
 #define USE_CRC 1
@@ -390,6 +421,9 @@
 #define USE_IDEA 1
 
 /* Defined if this module should be included */
+/* #undef USE_MD2 */
+
+/* Defined if this module should be included */
 #define USE_MD4 1
 
 /* Defined if this module should be included */
@@ -397,13 +431,6 @@
 
 /* set this to limit filenames to the 8.3 format */
 /* #undef USE_ONLY_8DOT3 */
-
-/* Define if the POSIX multithreading library can be used. */
-/* #undef USE_POSIX_THREADS */
-
-/* Define if references to the POSIX multithreading library should be made
-   weak. */
-/* #undef USE_POSIX_THREADS_WEAK */
 
 /* Define to support the experimental random daemon */
 /* #undef USE_RANDOM_DAEMON */
@@ -451,15 +478,10 @@
 #define USE_SHA256 1
 
 /* Defined if this module should be included */
+#define USE_SHA3 1
+
+/* Defined if this module should be included */
 #define USE_SHA512 1
-
-/* Define if the old Solaris multithreading library can be used. */
-/* #undef USE_SOLARIS_THREADS */
-
-/* Define if references to the old Solaris multithreading library should be
-   made weak. */
-/* #undef USE_SOLARIS_THREADS_WEAK */
-
 
 /* Defined if this module should be included */
 #define USE_TIGER 1
@@ -469,9 +491,6 @@
 
 /* Defined if this module should be included */
 #define USE_WHIRLPOOL 1
-
-/* Define if the native Windows multithreading API can be used. */
-#define USE_WINDOWS_THREADS 1
 
 /* Defined if compiled symbols have a leading underscore */
 /* #undef WITH_SYMBOL_UNDERSCORE */
