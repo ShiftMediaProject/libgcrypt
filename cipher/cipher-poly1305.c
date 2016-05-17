@@ -71,7 +71,7 @@ poly1305_fill_bytecounts (gcry_cipher_hd_t c)
 static void
 poly1305_do_padding (gcry_cipher_hd_t c, u32 ctr[2])
 {
-  static const byte zero_padding_buf[15] = {};
+  static const byte zero_padding_buf[15] = {0};
   u32 padding_count;
 
   /* Padding to 16 byte boundary. */
