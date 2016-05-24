@@ -507,5 +507,9 @@
    properly prefixed.  */
 #define CAMELLIA_EXT_SYM_PREFIX _gcry_
 
+#ifdef _MSC_VER
+#include "compat.h"
+#endif
+
 #endif /*_GCRYPT_CONFIG_H_INCLUDED*/
 
