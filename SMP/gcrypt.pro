@@ -2,9 +2,9 @@ TEMPLATE = lib
 TARGET = gcrypt
 CONFIG += qt warn_off
 
-DESTDIR = $$PWD/lib
+DESTDIR = $$PWD/../../bin
 
-LIBGPG_ERROR_DIR = ../../libgpg-error/SMP/lib
+LIBGPG_ERROR_DIR = $$PWD/../../bin
 
 LIBS += -L$$LIBGPG_ERROR_DIR  -lgpg-error
 
