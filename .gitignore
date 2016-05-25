@@ -1,5 +1,6 @@
 *.lo
 *.o
+.DS_Store
 .deps/
 .libs/
 build-*/

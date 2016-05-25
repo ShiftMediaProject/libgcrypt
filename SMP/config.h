@@ -101,8 +101,10 @@
 /* Defined for SPARC platforms */
 /* #undef HAVE_CPU_ARCH_SPARC */
 
+#if (defined(__i386__) || defined(__x86_64__))
 /* Defined for the x86 platforms */
 #define HAVE_CPU_ARCH_X86 1
+#endif
 
 /* Define to 1 if you have the declaration of `sys_siglist', and to 0 if you
    don't. */
@@ -117,9 +119,11 @@
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 /* #undef HAVE_DOPRNT */
 
+#if defined(WIN32)
 /* defined if we run on some of the PCDOS like systems (DOS, Windoze. OS/2)
    with special properties like no file modes */
 #define HAVE_DOSISH_SYSTEM 1
+#endif
 
 /* defined if we must run on a stupid file system */
 #define HAVE_DRIVE_LETTERS 1
@@ -231,8 +235,10 @@
 /* Define to 1 if you have the <stdlib.h> header file. */
 #define HAVE_STDLIB_H 1
 
+#if !defined(WIN32) && !defined(ANDROID)
 /* Define to 1 if you have the `stpcpy' function. */
-/* #undef HAVE_STPCPY */
+#define HAVE_STPCPY  1
+#endif
 
 /* Define to 1 if you have the `strcasecmp' function. */
 #define HAVE_STRCASECMP 1
@@ -240,8 +246,10 @@
 /* Define to 1 if you have the `strerror' function. */
 #define HAVE_STRERROR 1
 
+#if defined(WIN32)
 /* Define to 1 if you have the `stricmp' function. */
 #define HAVE_STRICMP 1
+#endif
 
 /* Define to 1 if you have the <strings.h> header file. */
 /* #undef HAVE_STRINGS_H */
@@ -312,8 +320,10 @@
 /* Define to 1 if you have the `wait4' function. */
 /* #undef HAVE_WAIT4 */
 
+#if !defined(WIN32)
 /* Define to 1 if you have the `waitpid' function. */
-/* #undef HAVE_WAITPID */
+#define HAVE_WAITPID 1
+#endif
 
 /* Define to 1 if you have the <winsock2.h> header file. */
 #define HAVE_WINSOCK2_H 1
@@ -444,14 +454,22 @@
 /* Defined if the EGD based RNG should be used. */
 /* #undef USE_RNDEGD */
 
+#if defined(__linux__)
 /* Defined if the /dev/random RNG should be used. */
-/* #undef USE_RNDLINUX */
+#define USE_RNDLINUX 1
+
+#define NAME_OF_DEV_RANDOM      "/dev/random"
+#define NAME_OF_DEV_URANDOM     "/dev/urandom"
+
+#endif
 
 /* Defined if the default Unix RNG should be used. */
 /* #undef USE_RNDUNIX */
 
+#if defined(WIN32)
 /* Defined if the Windows specific RNG should be used. */
 #define USE_RNDW32 1
+#endif
 
 /* Defined if the WindowsCE specific RNG should be used. */
 /* #undef USE_RNDW32CE */

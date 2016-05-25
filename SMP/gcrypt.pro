@@ -1,6 +1,8 @@
 TEMPLATE = lib
 TARGET = gcrypt
-CONFIG += qt warn_off
+CONFIG += warn_off
+
+message("App Binary architecture: $$QT_ARCH")
 
 DESTDIR = $$PWD/../../bin
 
@@ -15,7 +17,9 @@ win32 {
     LIBS += -lUser32 -lAdvapi32
     DEFINES += __builtin_bswap32=_byteswap_ulong  __builtin_bswap64=_byteswap_uint64  asm=__asm__  __i386__
     DEF_FILE = ../src/libgcrypt.def
-    CONFIG += shared dll  #CONFIG += staticlib
+    CONFIG += shared dll
+} else {
+    CONFIG += staticlib
 }
 
 HEADERS = \
@@ -170,7 +174,6 @@ SOURCES = \
     ../src/fips.c \
     ../src/global.c \
     ../src/hmac256.c \
-    ../src/hwf-x86.c \
     ../src/hwfeatures.c \
     ../src/misc.c \
     ../src/missing-string.c \
@@ -185,9 +188,21 @@ win32 {
     SOURCES += \
         ../cipher/rijndael-ssse3-amd64.c \
         ../random/rndw32.c 
-} else {
+}
+
+linux {
     SOURCES += \
         ../random/rndlinux.c
+}
+
+unix {
+    SOURCES += \
+        ../random/rndunix.c \
+        ../random/random-fips.c
+}
+
+equals(QT_ARCH, "i386") | equals(QT_ARCH, "x86_64") {
+    SOURCES += ../src/hwf-x86.c
 }
 
 #
