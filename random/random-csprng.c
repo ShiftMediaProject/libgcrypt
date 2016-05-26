@@ -249,7 +249,7 @@ static void read_random_source (enum random_origins origin,
 static void
 initialize_basics(void)
 {
-  static int initialized;
+  static int initialized = 0;
 
   if (!initialized)
     {
@@ -264,6 +264,10 @@ initialize_basics(void)
       gcry_assert (GCRY_WEAK_RANDOM == 0
                    && GCRY_STRONG_RANDOM == 1
                    && GCRY_VERY_STRONG_RANDOM == 2);
+
+      int err =  gpgrt_lock_init(&pool_lock);
+      if (err)
+        log_fatal ("failed to initialize the pool lock: %s\n", gpg_strerror (err));
     }
 }
 
