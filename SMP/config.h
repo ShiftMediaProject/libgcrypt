@@ -36,6 +36,9 @@
 /* Enable support for Intel PCLMUL instructions. */
 #define ENABLE_PCLMUL_SUPPORT 1
 
+/* Enable support for Intel SSE4.1 instructions. */
+#define ENABLE_SSE41_SUPPORT 1
+
 /* Define to use the GNU C visibility attribute. */
 /* #undef GCRY_USE_VISIBILITY */
 
@@ -251,6 +254,9 @@
 
 /* Define to 1 if you have the `strtoul' function. */
 #define HAVE_STRTOUL 1
+
+/* Define to 1 if you have the `syscall' function. */
+/* #undef HAVE_SYSCALL */
 
 /* Define to 1 if you have the `sysconf' function. */
 /* #undef HAVE_SYSCONF */
