@@ -30,7 +30,8 @@
 #include "bufhelp.h"
 
 
-#if defined(ENABLE_PCLMUL_SUPPORT) && __GNUC__ >= 4 && \
+#if defined(ENABLE_PCLMUL_SUPPORT) && defined(ENABLE_SSE41_SUPPORT) && \
+    __GNUC__ >= 4 &&                                                   \
     ((defined(__i386__) && SIZEOF_UNSIGNED_LONG == 4) || defined(__x86_64__))
 
 
@@ -143,7 +144,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [inbuf_2] "m" (inbuf[2 * 16]),
 		      [inbuf_3] "m" (inbuf[3 * 16]),
 		      [crc] "m" (*pcrc)
-		    : );
+		    );
 
       inbuf += 4 * 16;
       inlen -= 4 * 16;
@@ -151,7 +152,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
       asm volatile ("movdqa %[k1k2], %%xmm4\n\t"
 		    :
 		    : [k1k2] "m" (consts->k[1 - 1])
-		    : );
+		    );
 
       /* Fold by 4. */
       while (inlen >= 4 * 16)
@@ -188,7 +189,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 			  [inbuf_1] "m" (inbuf[1 * 16]),
 			  [inbuf_2] "m" (inbuf[2 * 16]),
 			  [inbuf_3] "m" (inbuf[3 * 16])
-			: );
+			);
 
 	  inbuf += 4 * 16;
 	  inlen -= 4 * 16;
@@ -199,7 +200,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    :
 		    : [k3k4] "m" (consts->k[3 - 1]),
 		      [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       /* Fold 4 to 1. */
 
@@ -222,7 +223,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    "pxor %%xmm4, %%xmm0\n\t"
 		    :
 		    :
-		    : );
+		    );
     }
   else
     {
@@ -236,7 +237,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [crc] "m" (*pcrc),
 		      [k3k4] "m" (consts->k[3 - 1]),
 		      [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       inbuf += 16;
       inlen -= 16;
@@ -256,7 +257,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 			"pxor %%xmm1, %%xmm0\n\t"
 			:
 			: [inbuf] "m" (*inbuf)
-			: );
+			);
 
 	  inbuf += 16;
 	  inlen -= 16;
@@ -288,7 +289,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [mask] "m" (crc32_partial_fold_input_mask[inlen]),
 		      [shl_shuf] "m" (crc32_refl_shuf_shift[inlen]),
 		      [shr_shuf] "m" (crc32_refl_shuf_shift[inlen + 16])
-		    : );
+		    );
 
       inbuf += inlen;
       inlen -= inlen;
@@ -318,7 +319,7 @@ crc32_reflected_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		"pextrd $2, %%xmm0, %[out]\n\t"
 		: [out] "=m" (*pcrc)
 		: [k5] "m" (consts->k[5 - 1])
-	        : );
+	        );
 }
 
 static inline void
@@ -333,7 +334,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
       asm volatile ("movdqa %[my_p], %%xmm5\n\t"
 		    :
 		    : [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       if (inlen == 1)
 	{
@@ -372,7 +373,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    : [out] "=m" (*pcrc)
 		    : [in] "rm" (data),
 		      [crc] "rm" (crc)
-		    : );
+		    );
     }
   else if (inlen == 4)
     {
@@ -391,7 +392,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    : [in] "m" (*inbuf),
 		      [crc] "m" (*pcrc),
 		      [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
     }
   else
     {
@@ -404,14 +405,14 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [crc] "m" (*pcrc),
 		      [my_p] "m" (consts->my_p[0]),
 		      [k3k4] "m" (consts->k[3 - 1])
-		    : );
+		    );
 
       if (inlen >= 8)
 	{
 	  asm volatile ("movq %[inbuf], %%xmm0\n\t"
 			:
 			: [inbuf] "m" (*inbuf)
-			: );
+			);
 	  if (inlen > 8)
 	    {
 	      asm volatile (/*"pinsrq $1, %[inbuf_tail], %%xmm0\n\t"*/
@@ -422,7 +423,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 			    : [inbuf_tail] "m" (inbuf[inlen - 8]),
 			      [merge_shuf] "m"
 				(*crc32_merge9to15_shuf[inlen - 9])
-			    : );
+			    );
 	    }
 	}
       else
@@ -435,7 +436,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 			  [inbuf_tail] "m" (inbuf[inlen - 4]),
 			  [merge_shuf] "m"
 			    (*crc32_merge5to7_shuf[inlen - 5])
-			: );
+			);
 	}
 
       /* Final fold. */
@@ -465,7 +466,7 @@ crc32_reflected_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    "pextrd $2, %%xmm0, %[out]\n\t"
 		    : [out] "=m" (*pcrc)
 		    : [k5] "m" (consts->k[5 - 1])
-		    : );
+		    );
     }
 }
 
@@ -477,7 +478,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
   asm volatile ("movdqa %[bswap], %%xmm7\n\t"
 		:
 		: [bswap] "m" (*crc32_bswap_shuf)
-		: );
+		);
 
   if (inlen >= 8 * 16)
     {
@@ -497,7 +498,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [inbuf_2] "m" (inbuf[2 * 16]),
 		      [inbuf_3] "m" (inbuf[3 * 16]),
 		      [crc] "m" (*pcrc)
-		    : );
+		    );
 
       inbuf += 4 * 16;
       inlen -= 4 * 16;
@@ -505,7 +506,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
       asm volatile ("movdqa %[k1k2], %%xmm4\n\t"
 		    :
 		    : [k1k2] "m" (consts->k[1 - 1])
-		    : );
+		    );
 
       /* Fold by 4. */
       while (inlen >= 4 * 16)
@@ -546,7 +547,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 			  [inbuf_1] "m" (inbuf[1 * 16]),
 			  [inbuf_2] "m" (inbuf[2 * 16]),
 			  [inbuf_3] "m" (inbuf[3 * 16])
-			: );
+			);
 
 	  inbuf += 4 * 16;
 	  inlen -= 4 * 16;
@@ -557,7 +558,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    :
 		    : [k3k4] "m" (consts->k[3 - 1]),
 		      [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       /* Fold 4 to 1. */
 
@@ -580,7 +581,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		    "pxor %%xmm4, %%xmm0\n\t"
 		    :
 		    :
-		    : );
+		    );
     }
   else
     {
@@ -595,7 +596,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [crc] "m" (*pcrc),
 		      [k3k4] "m" (consts->k[3 - 1]),
 		      [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       inbuf += 16;
       inlen -= 16;
@@ -616,7 +617,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 			"pxor %%xmm1, %%xmm0\n\t"
 			:
 			: [inbuf] "m" (*inbuf)
-			: );
+			);
 
 	  inbuf += 16;
 	  inlen -= 16;
@@ -650,7 +651,7 @@ crc32_bulk (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [mask] "m" (crc32_partial_fold_input_mask[inlen]),
 		      [shl_shuf] "m" (crc32_refl_shuf_shift[32 - inlen]),
 		      [shr_shuf] "m" (crc32_shuf_shift[inlen + 16])
-		    : );
+		    );
 
       inbuf += inlen;
       inlen -= inlen;
@@ -697,7 +698,7 @@ crc32_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
       asm volatile ("movdqa %[my_p], %%xmm5\n\t"
 		    :
 		    : [my_p] "m" (consts->my_p[0])
-		    : );
+		    );
 
       if (inlen == 1)
 	{
@@ -774,14 +775,14 @@ crc32_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 		      [crc] "m" (*pcrc),
 		      [my_p] "m" (consts->my_p[0]),
 		      [k3k4] "m" (consts->k[3 - 1])
-		    : );
+		    );
 
       if (inlen >= 8)
 	{
 	  asm volatile ("movq %[inbuf], %%xmm0\n\t"
 			:
 			: [inbuf] "m" (*inbuf)
-			: );
+			);
 	  if (inlen > 8)
 	    {
 	      asm volatile (/*"pinsrq $1, %[inbuf_tail], %%xmm0\n\t"*/
@@ -792,7 +793,7 @@ crc32_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 			    : [inbuf_tail] "m" (inbuf[inlen - 8]),
 			      [merge_shuf] "m"
 				(*crc32_merge9to15_shuf[inlen - 9])
-			    : );
+			    );
 	    }
 	}
       else
@@ -805,7 +806,7 @@ crc32_less_than_16 (u32 *pcrc, const byte *inbuf, size_t inlen,
 			  [inbuf_tail] "m" (inbuf[inlen - 4]),
 			  [merge_shuf] "m"
 			    (*crc32_merge5to7_shuf[inlen - 5])
-			: );
+			);
 	}
 
       /* Final fold. */

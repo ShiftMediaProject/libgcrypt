@@ -30,7 +30,7 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [7])
-m4_define(mym4_version_micro, [0])
+m4_define(mym4_version_micro, [1])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=21
 LIBGCRYPT_LT_AGE=1
-LIBGCRYPT_LT_REVISION=0
+LIBGCRYPT_LT_REVISION=1
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -597,6 +597,14 @@ AC_ARG_ENABLE(pclmul-support,
 	      pclmulsupport=$enableval,pclmulsupport=yes)
 AC_MSG_RESULT($pclmulsupport)
 
+# Implementation of the --disable-sse41-support switch.
+AC_MSG_CHECKING([whether SSE4.1 support is requested])
+AC_ARG_ENABLE(sse41-support,
+              AC_HELP_STRING([--disable-sse41-support],
+                 [Disable support for the Intel SSE4.1 instructions]),
+	      sse41support=$enableval,sse41support=yes)
+AC_MSG_RESULT($sse41support)
+
 # Implementation of the --disable-drng-support switch.
 AC_MSG_CHECKING([whether DRNG support is requested])
 AC_ARG_ENABLE(drng-support,
@@ -1109,6 +1117,7 @@ AM_CONDITIONAL(MPI_MOD_C_UDIV_QRNND, test "$mpi_mod_c_udiv_qrnnd" = yes)
 if test "$mpi_cpu_arch" != "x86" ; then
    aesnisupport="n/a"
    pclmulsupport="n/a"
+   sse41support="n/a"
    avxsupport="n/a"
    avx2support="n/a"
    padlocksupport="n/a"
@@ -1255,6 +1264,27 @@ AC_CACHE_CHECK([whether GCC inline assembler supports PCLMUL instructions],
 if test "$gcry_cv_gcc_inline_asm_pclmul" = "yes" ; then
    AC_DEFINE(HAVE_GCC_INLINE_ASM_PCLMUL,1,
      [Defined if inline assembler supports PCLMUL instructions])
+fi
+
+#
+# Check whether GCC inline assembler supports SSE4.1 instructions.
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports SSE4.1 instructions],
+       [gcry_cv_gcc_inline_asm_sse41],
+       [if test "$mpi_cpu_arch" != "x86" ; then
+          gcry_cv_gcc_inline_asm_sse41="n/a"
+        else
+          gcry_cv_gcc_inline_asm_sse41=no
+          AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[void a(void) {
+              int i;
+              __asm__("pextrd \$2, %%xmm0, %[out]\n\t" : [out] "=m" (i));
+            }]])],
+          [gcry_cv_gcc_inline_asm_sse41=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_sse41" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_SSE41,1,
+     [Defined if inline assembler supports SSE4.1 instructions])
 fi
 
 
@@ -1514,7 +1544,7 @@ AC_CHECK_FUNCS(strtoul memmove stricmp atexit raise)
 # Other checks
 AC_CHECK_FUNCS(strerror rand mmap getpagesize sysconf waitpid wait4)
 AC_CHECK_FUNCS(gettimeofday getrusage gethrtime clock_gettime syslog)
-AC_CHECK_FUNCS(fcntl ftruncate flockfile)
+AC_CHECK_FUNCS(syscall fcntl ftruncate flockfile)
 
 GNUPG_CHECK_MLOCK
 
@@ -1723,6 +1753,11 @@ if test x"$pclmulsupport" = xyes ; then
     pclmulsupport="no (unsupported by compiler)"
   fi
 fi
+if test x"$sse41support" = xyes ; then
+  if test "$gcry_cv_gcc_inline_asm_sse41" != "yes" ; then
+    sse41support="no (unsupported by compiler)"
+  fi
+fi
 if test x"$avxsupport" = xyes ; then
   if test "$gcry_cv_gcc_inline_asm_avx" != "yes" ; then
     avxsupport="no (unsupported by compiler)"
@@ -1746,6 +1781,10 @@ fi
 if test x"$pclmulsupport" = xyes ; then
   AC_DEFINE(ENABLE_PCLMUL_SUPPORT, 1,
             [Enable support for Intel PCLMUL instructions.])
+fi
+if test x"$sse41support" = xyes ; then
+  AC_DEFINE(ENABLE_SSE41_SUPPORT, 1,
+            [Enable support for Intel SSE4.1 instructions.])
 fi
 if test x"$avxsupport" = xyes ; then
   AC_DEFINE(ENABLE_AVX_SUPPORT,1,
@@ -2362,6 +2401,7 @@ GCRY_MSG_SHOW([Using linux capabilities: ],[$use_capabilities])
 GCRY_MSG_SHOW([Try using Padlock crypto: ],[$padlocksupport])
 GCRY_MSG_SHOW([Try using AES-NI crypto:  ],[$aesnisupport])
 GCRY_MSG_SHOW([Try using Intel PCLMUL:   ],[$pclmulsupport])
+GCRY_MSG_SHOW([Try using Intel SSE4.1:   ],[$sse41support])
 GCRY_MSG_SHOW([Try using DRNG (RDRAND):  ],[$drngsupport])
 GCRY_MSG_SHOW([Try using Intel AVX:      ],[$avxsupport])
 GCRY_MSG_SHOW([Try using Intel AVX2:     ],[$avx2support])
