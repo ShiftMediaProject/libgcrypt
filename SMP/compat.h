@@ -30,9 +30,7 @@
 #   define strcasecmp _stricmp
 #   define strncasecmp _strnicmp
 #   include <crtversion.h>
-#   if _VC_CRT_MAJOR_VERSION >= 14
-#       pragma comment(lib, "legacy_stdio_definitions.lib")
-#   else
+#   if _VC_CRT_MAJOR_VERSION < 14
 #       define snprintf _snprintf
 #       define strtoll _strtoi64
 #   endif
