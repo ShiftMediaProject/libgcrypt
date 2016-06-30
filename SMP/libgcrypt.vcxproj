@@ -500,7 +500,10 @@
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -564,7 +567,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -631,7 +637,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -698,7 +707,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -763,7 +775,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -828,7 +843,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -905,7 +923,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -982,7 +1003,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1059,7 +1083,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1136,7 +1163,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1213,7 +1243,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1290,7 +1323,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1366,7 +1402,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
@@ -1442,7 +1481,10 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <Command>mkdir $(OutDir)\include
 copy .\gcrypt.h $(OutDir)\include\
 mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt</Command>
+copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
+copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+)</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if exist ..\config.h (
