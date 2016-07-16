@@ -238,7 +238,7 @@ _gcry_aes_arm_encrypt_block:
 	push {%r4-%r11, %ip, %lr};
 
 	/* read input block */
-#ifndef __ARM_FEATURE_UNALIGNED
+
 	/* test if src is unaligned */
 	tst	%r2, #3;
 	beq	1f;
@@ -251,7 +251,6 @@ _gcry_aes_arm_encrypt_block:
 	b	2f;
 .ltorg
 1:
-#endif
 	/* aligned load */
 	ldm	%r2, {RA, RB, RC, RD};
 #ifndef __ARMEL__
@@ -290,7 +289,7 @@ _gcry_aes_arm_encrypt_block:
 	add	%sp, #16;
 
 	/* store output block */
-#ifndef __ARM_FEATURE_UNALIGNED
+
 	/* test if dst is unaligned */
 	tst	RT0, #3;
 	beq	1f;
@@ -303,7 +302,6 @@ _gcry_aes_arm_encrypt_block:
 	b	2f;
 .ltorg
 1:
-#endif
 	/* aligned store */
 #ifndef __ARMEL__
 	rev	RA, RA;
@@ -497,7 +495,7 @@ _gcry_aes_arm_decrypt_block:
 	push {%r4-%r11, %ip, %lr};
 
 	/* read input block */
-#ifndef __ARM_FEATURE_UNALIGNED
+
 	/* test if src is unaligned */
 	tst	%r2, #3;
 	beq	1f;
@@ -510,7 +508,6 @@ _gcry_aes_arm_decrypt_block:
 	b	2f;
 .ltorg
 1:
-#endif
 	/* aligned load */
 	ldm	%r2, {RA, RB, RC, RD};
 #ifndef __ARMEL__
@@ -546,7 +543,7 @@ _gcry_aes_arm_decrypt_block:
 	add	%sp, #16;
 
 	/* store output block */
-#ifndef __ARM_FEATURE_UNALIGNED
+
 	/* test if dst is unaligned */
 	tst	RT0, #3;
 	beq	1f;
@@ -559,7 +556,6 @@ _gcry_aes_arm_decrypt_block:
 	b	2f;
 .ltorg
 1:
-#endif
 	/* aligned store */
 #ifndef __ARMEL__
 	rev	RA, RA;

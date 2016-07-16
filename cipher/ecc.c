@@ -790,7 +790,8 @@ ecc_check_secret_key (gcry_sexp_t keyparms)
     }
   if (mpi_g)
     {
-      point_init (&sk.E.G);
+      if (!sk.E.G.x)
+        point_init (&sk.E.G);
       rc = _gcry_ecc_os2ec (&sk.E.G, mpi_g);
       if (rc)
         goto leave;
@@ -806,6 +807,8 @@ ecc_check_secret_key (gcry_sexp_t keyparms)
       sk.E.dialect = ((flags & PUBKEY_FLAG_EDDSA)
                       ? ECC_DIALECT_ED25519
                       : ECC_DIALECT_STANDARD);
+      if (!sk.E.h)
+	sk.E.h = mpi_const (MPI_C_ONE);
     }
   if (DBG_CIPHER)
     {
@@ -941,6 +944,8 @@ ecc_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
       sk.E.dialect = ((ctx.flags & PUBKEY_FLAG_EDDSA)
                       ? ECC_DIALECT_ED25519
                       : ECC_DIALECT_STANDARD);
+      if (!sk.E.h)
+	sk.E.h = mpi_const (MPI_C_ONE);
     }
   if (DBG_CIPHER)
     {
@@ -1107,6 +1112,8 @@ ecc_verify (gcry_sexp_t s_sig, gcry_sexp_t s_data, gcry_sexp_t s_keyparms)
       pk.E.dialect = ((sigflags & PUBKEY_FLAG_EDDSA)
                       ? ECC_DIALECT_ED25519
                       : ECC_DIALECT_STANDARD);
+      if (!pk.E.h)
+	pk.E.h = mpi_const (MPI_C_ONE);
     }
 
   if (DBG_CIPHER)
@@ -1322,6 +1329,8 @@ ecc_encrypt_raw (gcry_sexp_t *r_ciph, gcry_sexp_t s_data, gcry_sexp_t keyparms)
     {
       pk.E.model = MPI_EC_WEIERSTRASS;
       pk.E.dialect = ECC_DIALECT_STANDARD;
+      if (!pk.E.h)
+	pk.E.h = mpi_const (MPI_C_ONE);
     }
 
   /*
@@ -1577,6 +1586,8 @@ ecc_decrypt_raw (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
     {
       sk.E.model = MPI_EC_WEIERSTRASS;
       sk.E.dialect = ECC_DIALECT_STANDARD;
+      if (!sk.E.h)
+	sk.E.h = mpi_const (MPI_C_ONE);
     }
   if (DBG_CIPHER)
     {
@@ -1859,6 +1870,8 @@ compute_keygrip (gcry_md_hd_t md, gcry_sexp_t keyparms)
       dialect = ((flags & PUBKEY_FLAG_EDDSA)
                  ? ECC_DIALECT_ED25519
                  : ECC_DIALECT_STANDARD);
+      if (!values[5])
+	values[5] = mpi_const (MPI_C_ONE);
     }
 
   /* Check that all parameters are known and normalize all MPIs (that
