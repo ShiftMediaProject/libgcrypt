@@ -62,11 +62,11 @@ extern "C" {
    return the same version.  The purpose of this macro is to let
    autoconf (using the AM_PATH_GCRYPT macro) check that this header
    matches the installed library.  */
-#define GCRYPT_VERSION "1.7.3"
+#define GCRYPT_VERSION "1.7.4"
 
 /* The version number of this header.  It may be used to handle minor
    API incompatibilities.  */
-#define GCRYPT_VERSION_NUMBER 0x010703
+#define GCRYPT_VERSION_NUMBER 0x010704
 
 
 /* Internal: We can't use the convenience macros for the multi
@@ -1061,7 +1061,7 @@ gcry_error_t gcry_cipher_checktag (gcry_cipher_hd_t hd, const void *intag,
                                                                    NULL, on )
 
 #define gcry_cipher_set_sbox(h,oid) gcry_cipher_ctl( (h), GCRYCTL_SET_SBOX, \
-                                                     (oid), 0);
+                                                     (void *) oid, 0);
 
 /* Indicate to the encrypt and decrypt functions that the next call
    provides the final data.  Only used with some modes.  */
