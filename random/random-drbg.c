@@ -289,6 +289,8 @@ struct drbg_state_ops_s
   gpg_err_code_t (*generate) (drbg_state_t drbg,
 			      unsigned char *buf, unsigned int buflen,
 			      drbg_string_t *addtl);
+  gpg_err_code_t (*crypto_init) (drbg_state_t drbg);
+  void		 (*crypto_fini) (drbg_state_t drbg);
 };
 
 struct drbg_test_data_s
@@ -309,6 +311,10 @@ struct drbg_state_s
 				 * 10.1.1.1 1c) */
   unsigned char *scratchpad;	/* some memory the DRBG can use for its
 				 * operation -- allocated during init */
+  void *priv_data;		/* Cipher handle */
+  gcry_cipher_hd_t ctr_handle;	/* CTR mode cipher handle */
+#define DRBG_CTR_NULL_LEN 128
+  unsigned char *ctr_null;	/* CTR mode zero buffer */
   int seeded:1;			/* DRBG fully seeded? */
   int pr:1;			/* Prediction resistance enabled? */
   /* Taken from libgcrypt ANSI X9.31 DRNG: We need to keep track of the
@@ -363,14 +369,21 @@ static const struct drbg_core_s drbg_cores[] = {
   {DRBG_CTRAES | DRBG_SYM256, 48, 16, GCRY_CIPHER_AES256}
 };
 
-static gpg_err_code_t drbg_sym (drbg_state_t drbg,
-                                const unsigned char *key,
-                                unsigned char *outval,
-                                const drbg_string_t *buf);
-static gpg_err_code_t drbg_hmac (drbg_state_t drbg,
-                                 const unsigned char *key,
-                                 unsigned char *outval,
-                                 const drbg_string_t *buf);
+static gpg_err_code_t drbg_hash_init (drbg_state_t drbg);
+static gpg_err_code_t drbg_hmac_init (drbg_state_t drbg);
+static gpg_err_code_t drbg_hmac_setkey (drbg_state_t drbg,
+					const unsigned char *key);
+static void drbg_hash_fini (drbg_state_t drbg);
+static byte *drbg_hash (drbg_state_t drbg, const drbg_string_t *buf);
+static gpg_err_code_t drbg_sym_init (drbg_state_t drbg);
+static void drbg_sym_fini (drbg_state_t drbg);
+static gpg_err_code_t drbg_sym_setkey (drbg_state_t drbg,
+				       const unsigned char *key);
+static gpg_err_code_t drbg_sym (drbg_state_t drbg, unsigned char *outval,
+				const drbg_string_t *buf);
+static gpg_err_code_t drbg_sym_ctr (drbg_state_t drbg,
+			const unsigned char *inbuf, unsigned int inbuflen,
+			unsigned char *outbuf, unsigned int outbuflen);
 
 /******************************************************************
  ******************************************************************
@@ -666,6 +679,10 @@ drbg_ctr_bcc (drbg_state_t drbg,
   /* 10.4.3 step 1 */
   memset (out, 0, drbg_blocklen (drbg));
 
+  ret = drbg_sym_setkey(drbg, key);
+  if (ret)
+    return ret;
+
   /* 10.4.3 step 2 / 4 */
   while (inpos)
     {
@@ -698,7 +715,7 @@ drbg_ctr_bcc (drbg_state_t drbg,
 	    }
 	}
       /* 10.4.3 step 4.2 */
-      ret = drbg_sym (drbg, key, out, &data);
+      ret = drbg_sym (drbg, out, &data);
       if (ret)
 	return ret;
       /* 10.4.3 step 2 */
@@ -839,6 +856,9 @@ drbg_ctr_df (drbg_state_t drbg, unsigned char *df_data,
   /* 10.4.2 step 12: overwriting of outval */
 
   /* 10.4.2 step 13 */
+  ret = drbg_sym_setkey(drbg, temp);
+  if (ret)
+    goto out;
   while (generated_len < bytes_to_return)
     {
       short blocklen = 0;
@@ -846,11 +866,10 @@ drbg_ctr_df (drbg_state_t drbg, unsigned char *df_data,
       /* the truncation of the key length is implicit as the key
        * is only drbg_blocklen in size -- check for the implementation
        * of the cipher function callback */
-      ret = drbg_sym (drbg, temp, X, &cipherin);
+      ret = drbg_sym (drbg, X, &cipherin);
       if (ret)
 	goto out;
-      blocklen = (drbg_blocklen (drbg) <
-		  (bytes_to_return - generated_len)) ?
+      blocklen = (drbg_blocklen (drbg) < (bytes_to_return - generated_len)) ?
 	drbg_blocklen (drbg) : (bytes_to_return - generated_len);
       /* 10.4.2 step 13.2 and 14 */
       memcpy (df_data + generated_len, X, blocklen);
@@ -889,18 +908,29 @@ drbg_ctr_update (drbg_state_t drbg, drbg_string_t *addtl, int reseed)
   unsigned char *temp = drbg->scratchpad;
   unsigned char *df_data = drbg->scratchpad +
     drbg_statelen (drbg) + drbg_blocklen (drbg);
-  unsigned char *temp_p, *df_data_p;	/* pointer to iterate over buffers */
-  unsigned int len = 0;
-  drbg_string_t cipherin;
   unsigned char prefix = DRBG_PREFIX1;
 
   memset (temp, 0, drbg_statelen (drbg) + drbg_blocklen (drbg));
   if (3 > reseed)
     memset (df_data, 0, drbg_statelen (drbg));
 
+  if (!reseed)
+    {
+      /*
+       * The DRBG uses the CTR mode of the underlying AES cipher. The
+       * CTR mode increments the counter value after the AES operation
+       * but SP800-90A requires that the counter is incremented before
+       * the AES operation. Hence, we increment it at the time we set
+       * it by one.
+       */
+      drbg_add_buf (drbg->V, drbg_blocklen (drbg), &prefix, 1);
+
+      ret = _gcry_cipher_setkey (drbg->ctr_handle, drbg->C, drbg_keylen (drbg));
+      if (ret)
+        goto out;
+    }
+
   /* 10.2.1.3.2 step 2 and 10.2.1.4.2 step 2 */
-  /* TODO use reseed variable to avoid re-doing DF operation */
-  (void) reseed;
   if (addtl && 0 < addtl->len)
     {
       ret =
@@ -909,36 +939,20 @@ drbg_ctr_update (drbg_state_t drbg, drbg_string_t *addtl, int reseed)
 	goto out;
     }
 
-  drbg_string_fill (&cipherin, drbg->V, drbg_blocklen (drbg));
-  /* 10.2.1.3.2 step 2 and 3 -- are already covered as we memset(0)
-   * all memory during initialization */
-  while (len < (drbg_statelen (drbg)))
-    {
-      /* 10.2.1.2 step 2.1 */
-      drbg_add_buf (drbg->V, drbg_blocklen (drbg), &prefix, 1);
-      /* 10.2.1.2 step 2.2 */
-      /* using target of temp + len: 10.2.1.2 step 2.3 and 3 */
-      ret = drbg_sym (drbg, drbg->C, temp + len, &cipherin);
-      if (ret)
-	goto out;
-      /* 10.2.1.2 step 2.3 and 3 */
-      len += drbg_blocklen (drbg);
-    }
-
-  /* 10.2.1.2 step 4 */
-  temp_p = temp;
-  df_data_p = df_data;
-  for (len = 0; len < drbg_statelen (drbg); len++)
-    {
-      *temp_p ^= *df_data_p;
-      df_data_p++;
-      temp_p++;
-    }
+  ret = drbg_sym_ctr (drbg, df_data, drbg_statelen(drbg),
+		      temp, drbg_statelen(drbg));
+  if (ret)
+    goto out;
 
   /* 10.2.1.2 step 5 */
-  memcpy (drbg->C, temp, drbg_keylen (drbg));
+  ret = _gcry_cipher_setkey (drbg->ctr_handle, temp, drbg_keylen (drbg));
+  if (ret)
+    goto out;
+
   /* 10.2.1.2 step 6 */
   memcpy (drbg->V, temp + drbg_keylen (drbg), drbg_blocklen (drbg));
+  /* See above: increment counter by one to compensate timing of CTR op */
+  drbg_add_buf (drbg->V, drbg_blocklen (drbg), &prefix, 1);
   ret = 0;
 
  out:
@@ -959,9 +973,6 @@ drbg_ctr_generate (drbg_state_t drbg,
                    drbg_string_t *addtl)
 {
   gpg_err_code_t ret = 0;
-  unsigned int len = 0;
-  drbg_string_t data;
-  unsigned char prefix = DRBG_PREFIX1;
 
   memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
 
@@ -975,24 +986,9 @@ drbg_ctr_generate (drbg_state_t drbg,
     }
 
   /* 10.2.1.5.2 step 4.1 */
-  drbg_add_buf (drbg->V, drbg_blocklen (drbg), &prefix, 1);
-  drbg_string_fill (&data, drbg->V, drbg_blocklen (drbg));
-  while (len < buflen)
-    {
-      unsigned int outlen = 0;
-      /* 10.2.1.5.2 step 4.2 */
-      ret = drbg_sym (drbg, drbg->C, drbg->scratchpad, &data);
-      if (ret)
-	goto out;
-      outlen = (drbg_blocklen (drbg) < (buflen - len)) ?
-	drbg_blocklen (drbg) : (buflen - len);
-      /* 10.2.1.5.2 step 4.3 */
-      memcpy (buf + len, drbg->scratchpad, outlen);
-      len += outlen;
-      /* 10.2.1.5.2 step 6 */
-      if (len < buflen)
-	drbg_add_buf (drbg->V, drbg_blocklen (drbg), &prefix, 1);
-    }
+  ret = drbg_sym_ctr (drbg, drbg->ctr_null, DRBG_CTR_NULL_LEN, buf, buflen);
+  if (ret)
+    goto out;
 
   /* 10.2.1.5.2 step 6 */
   if (addtl)
@@ -1000,13 +996,14 @@ drbg_ctr_generate (drbg_state_t drbg,
   ret = drbg_ctr_update (drbg, addtl, 3);
 
  out:
-  memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
   return ret;
 }
 
 static struct drbg_state_ops_s drbg_ctr_ops = {
   drbg_ctr_update,
-  drbg_ctr_generate
+  drbg_ctr_generate,
+  drbg_sym_init,
+  drbg_sym_fini,
 };
 
 /******************************************************************
@@ -1025,6 +1022,9 @@ drbg_hmac_update (drbg_state_t drbg, drbg_string_t *seed, int reseed)
       /* 10.1.2.3 step 2 already implicitly covered with
        * the initial memset(0) of drbg->C */
       memset (drbg->V, 1, drbg_statelen (drbg));
+      ret = drbg_hmac_setkey (drbg, drbg->C);
+      if (ret)
+	return ret;
     }
 
   /* build linked list which implements the concatenation and fill
@@ -1040,20 +1040,21 @@ drbg_hmac_update (drbg_state_t drbg, drbg_string_t *seed, int reseed)
   /* we execute two rounds of V/K massaging */
   for (i = 2; 0 < i; i--)
     {
+      byte *retval;
       /* first round uses 0x0, second 0x1 */
       unsigned char prefix = DRBG_PREFIX0;
       if (1 == i)
 	prefix = DRBG_PREFIX1;
       /* 10.1.2.2 step 1 and 4 -- concatenation and HMAC for key */
       seed2.buf = &prefix;
-      ret = drbg_hmac (drbg, drbg->C, drbg->C, &seed1);
+      retval = drbg_hash (drbg, &seed1);
+      ret = drbg_hmac_setkey (drbg, retval);
       if (ret)
 	return ret;
 
       /* 10.1.2.2 step 2 and 5 -- HMAC for V */
-      ret = drbg_hmac (drbg, drbg->C, drbg->V, &cipherin);
-      if (ret)
-	return ret;
+      retval = drbg_hash (drbg, &cipherin);
+      memcpy(drbg->V, retval, drbg_blocklen (drbg));
 
       /* 10.1.2.2 step 3 */
       if (!seed || 0 == seed->len)
@@ -1085,9 +1086,8 @@ drbg_hmac_generate (drbg_state_t drbg, unsigned char *buf, unsigned int buflen,
     {
       unsigned int outlen = 0;
       /* 10.1.2.5 step 4.1 */
-      ret = drbg_hmac (drbg, drbg->C, drbg->V, &data);
-      if (ret)
-	return ret;
+      byte *retval = drbg_hash (drbg, &data);
+      memcpy(drbg->V, retval, drbg_blocklen (drbg));
       outlen = (drbg_blocklen (drbg) < (buflen - len)) ?
 	drbg_blocklen (drbg) : (buflen - len);
 
@@ -1106,7 +1106,9 @@ drbg_hmac_generate (drbg_state_t drbg, unsigned char *buf, unsigned int buflen,
 
 static struct drbg_state_ops_s drbg_hmac_ops = {
   drbg_hmac_update,
-  drbg_hmac_generate
+  drbg_hmac_generate,
+  drbg_hmac_init,
+  drbg_hash_fini,
 };
 
 /******************************************************************
@@ -1129,13 +1131,9 @@ drbg_hash_df (drbg_state_t drbg,
               unsigned char *outval, size_t outlen,
               drbg_string_t *entropy)
 {
-  gpg_err_code_t ret = 0;
   size_t len = 0;
   unsigned char input[5];
-  unsigned char *tmp = drbg->scratchpad + drbg_statelen (drbg);
   drbg_string_t data1;
-
-  memset (tmp, 0, drbg_blocklen (drbg));
 
   /* 10.4.1 step 3 */
   input[0] = 1;
@@ -1150,20 +1148,16 @@ drbg_hash_df (drbg_state_t drbg,
     {
       short blocklen = 0;
       /* 10.4.1 step 4.1 */
-      ret = drbg_hmac (drbg, NULL, tmp, &data1);
-      if (ret)
-	goto out;
+      byte *retval = drbg_hash (drbg, &data1);
       /* 10.4.1 step 4.2 */
       input[0]++;
       blocklen = (drbg_blocklen (drbg) < (outlen - len)) ?
 	drbg_blocklen (drbg) : (outlen - len);
-      memcpy (outval + len, tmp, blocklen);
+      memcpy (outval + len, retval, blocklen);
       len += blocklen;
     }
 
- out:
-  memset (tmp, 0, drbg_blocklen (drbg));
-  return ret;
+  return 0;
 }
 
 /* update function for Hash DRBG as defined in 10.1.1.2 / 10.1.1.3 */
@@ -1219,13 +1213,10 @@ drbg_hash_update (drbg_state_t drbg, drbg_string_t *seed, int reseed)
 static gpg_err_code_t
 drbg_hash_process_addtl (drbg_state_t drbg, drbg_string_t *addtl)
 {
-  gpg_err_code_t ret = 0;
   drbg_string_t data1, data2;
   drbg_string_t *data3;
   unsigned char prefix = DRBG_PREFIX2;
-
-  /* this is value w as per documentation */
-  memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
+  byte *retval;
 
   /* 10.1.1.4 step 2 */
   if (!addtl || 0 == addtl->len)
@@ -1239,36 +1230,24 @@ drbg_hash_process_addtl (drbg_state_t drbg, drbg_string_t *addtl)
   data2.next = data3;
   data3->next = NULL;
   /* 10.1.1.4 step 2a -- cipher invocation */
-  ret = drbg_hmac (drbg, NULL, drbg->scratchpad, &data1);
-  if (ret)
-    goto out;
+  retval = drbg_hash (drbg, &data1);
 
   /* 10.1.1.4 step 2b */
-  drbg_add_buf (drbg->V, drbg_statelen (drbg),
-		     drbg->scratchpad, drbg_blocklen (drbg));
+  drbg_add_buf (drbg->V, drbg_statelen (drbg), retval, drbg_blocklen (drbg));
 
- out:
-  memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
-  return ret;
+  return 0;
 }
 
 /*
  * Hashgen defined in 10.1.1.4
  */
 static gpg_err_code_t
-drbg_hash_hashgen (drbg_state_t drbg,
-                   unsigned char *buf, unsigned int buflen)
+drbg_hash_hashgen (drbg_state_t drbg, unsigned char *buf, unsigned int buflen)
 {
-  gpg_err_code_t ret = 0;
   unsigned int len = 0;
   unsigned char *src = drbg->scratchpad;
-  unsigned char *dst = drbg->scratchpad + drbg_statelen (drbg);
   drbg_string_t data;
   unsigned char prefix = DRBG_PREFIX1;
-
-  /* use the scratchpad as a lookaside buffer */
-  memset (src, 0, drbg_statelen (drbg));
-  memset (dst, 0, drbg_blocklen (drbg));
 
   /* 10.1.1.4 step hashgen 2 */
   memcpy (src, drbg->V, drbg_statelen (drbg));
@@ -1278,44 +1257,36 @@ drbg_hash_hashgen (drbg_state_t drbg,
     {
       unsigned int outlen = 0;
       /* 10.1.1.4 step hashgen 4.1 */
-      ret = drbg_hmac (drbg, NULL, dst, &data);
-      if (ret)
-	goto out;
+      byte *retval = drbg_hash (drbg, &data);
       outlen = (drbg_blocklen (drbg) < (buflen - len)) ?
 	drbg_blocklen (drbg) : (buflen - len);
       /* 10.1.1.4 step hashgen 4.2 */
-      memcpy (buf + len, dst, outlen);
+      memcpy (buf + len, retval, outlen);
       len += outlen;
       /* 10.1.1.4 hashgen step 4.3 */
       if (len < buflen)
 	drbg_add_buf (src, drbg_statelen (drbg), &prefix, 1);
     }
 
- out:
-  memset (drbg->scratchpad, 0,
-	  (drbg_statelen (drbg) + drbg_blocklen (drbg)));
-  return ret;
+  memset (drbg->scratchpad, 0, drbg_statelen (drbg));
+  return 0;
 }
 
 /* Generate function for Hash DRBG as defined in 10.1.1.4  */
 static gpg_err_code_t
-drbg_hash_generate (drbg_state_t drbg,
-			 unsigned char *buf, unsigned int buflen,
-			 drbg_string_t *addtl)
+drbg_hash_generate (drbg_state_t drbg, unsigned char *buf, unsigned int buflen,
+		    drbg_string_t *addtl)
 {
-  gpg_err_code_t ret = 0;
+  gpg_err_code_t ret;
   unsigned char prefix = DRBG_PREFIX3;
   drbg_string_t data1, data2;
+  byte *retval;
   union
   {
     unsigned char req[8];
     u64 req_int;
   } u;
 
-  /*
-   * scratchpad usage: drbg_hash_process_addtl uses the scratchpad, but
-   * fully completes before returning. Thus, we can reuse the scratchpad
-   */
   /* 10.1.1.4 step 2 */
   ret = drbg_hash_process_addtl (drbg, addtl);
   if (ret)
@@ -1326,27 +1297,20 @@ drbg_hash_generate (drbg_state_t drbg,
   if (ret)
     return ret;
 
-  /* this is the value H as documented in 10.1.1.4 */
-  memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
   /* 10.1.1.4 step 4 */
   drbg_string_fill (&data1, &prefix, 1);
   drbg_string_fill (&data2, drbg->V, drbg_statelen (drbg));
   data1.next = &data2;
-  ret = drbg_hmac (drbg, NULL, drbg->scratchpad, &data1);
-  if (ret)
-    goto out;
+
+  /* this is the value H as documented in 10.1.1.4 */
+  retval = drbg_hash (drbg, &data1);
 
   /* 10.1.1.4 step 5 */
-  drbg_add_buf (drbg->V, drbg_statelen (drbg),
-		     drbg->scratchpad, drbg_blocklen (drbg));
-  drbg_add_buf (drbg->V, drbg_statelen (drbg), drbg->C,
-		     drbg_statelen (drbg));
+  drbg_add_buf (drbg->V, drbg_statelen (drbg), retval, drbg_blocklen (drbg));
+  drbg_add_buf (drbg->V, drbg_statelen (drbg), drbg->C, drbg_statelen (drbg));
   u.req_int = be_bswap64 (drbg->reseed_ctr);
-  drbg_add_buf (drbg->V, drbg_statelen (drbg), u.req,
-		     sizeof (u.req));
+  drbg_add_buf (drbg->V, drbg_statelen (drbg), u.req, sizeof (u.req));
 
- out:
-  memset (drbg->scratchpad, 0, drbg_blocklen (drbg));
   return ret;
 }
 
@@ -1356,7 +1320,9 @@ drbg_hash_generate (drbg_state_t drbg,
  */
 static struct drbg_state_ops_s drbg_hash_ops = {
   drbg_hash_update,
-  drbg_hash_generate
+  drbg_hash_generate,
+  drbg_hash_init,
+  drbg_hash_fini,
 };
 
 /******************************************************************
@@ -1601,6 +1567,7 @@ drbg_uninstantiate (drbg_state_t drbg)
 {
   if (!drbg)
     return GPG_ERR_INV_ARG;
+  drbg->d_ops->crypto_fini(drbg);
   xfree (drbg->V);
   drbg->V = NULL;
   xfree (drbg->C);
@@ -1668,13 +1635,16 @@ drbg_instantiate (drbg_state_t drbg,
 
   /* 9.1 step 4 is implicit in  drbg_sec_strength */
 
-  /* no allocation of drbg as this is done by the kernel crypto API */
+  ret = drbg->d_ops->crypto_init(drbg);
+  if (ret)
+    goto err;
+
   drbg->V = xcalloc_secure (1, drbg_statelen (drbg));
   if (!drbg->V)
-    goto err;
+    goto fini;
   drbg->C = xcalloc_secure (1, drbg_statelen (drbg));
   if (!drbg->C)
-    goto err;
+    goto fini;
   /* scratchpad is only generated for CTR and Hash */
   if (drbg->core->flags & DRBG_HMAC)
     sb_size = 0;
@@ -1685,25 +1655,27 @@ drbg_instantiate (drbg_state_t drbg,
       drbg_blocklen (drbg) +	/* iv */
       drbg_statelen (drbg) + drbg_blocklen (drbg);	/* temp */
   else
-    sb_size = drbg_statelen (drbg) + drbg_blocklen (drbg);
+    sb_size = drbg_statelen (drbg);
 
   if (0 < sb_size)
     {
       drbg->scratchpad = xcalloc_secure (1, sb_size);
       if (!drbg->scratchpad)
-	goto err;
+	goto fini;
     }
   dbg (("DRBG: state allocated with scratchpad size %u bytes\n", sb_size));
 
   /* 9.1 step 6 through 11 */
   ret = drbg_seed (drbg, pers, 0);
   if (ret)
-    goto err;
+    goto fini;
 
   dbg (("DRBG: core %d %s prediction resistance successfully initialized\n",
 	coreref, pr ? "with" : "without"));
   return 0;
 
+ fini:
+  drbg->d_ops->crypto_fini(drbg);
  err:
   drbg_uninstantiate (drbg);
   return ret;
@@ -2565,59 +2537,158 @@ _gcry_rngdrbg_selftest (selftest_report_func_t report)
  ***************************************************************/
 
 static gpg_err_code_t
-drbg_hmac (drbg_state_t drbg, const unsigned char *key,
-		unsigned char *outval, const drbg_string_t *buf)
+drbg_hash_init (drbg_state_t drbg)
 {
-  gpg_error_t err;
   gcry_md_hd_t hd;
+  gpg_error_t err;
 
-  if (key)
-    {
-      err =
-	_gcry_md_open (&hd, drbg->core->backend_cipher, GCRY_MD_FLAG_HMAC);
-      if (err)
-	return err;
-      err = _gcry_md_setkey (hd, key, drbg_statelen (drbg));
-      if (err)
-	return err;
-    }
-  else
-    {
-      err = _gcry_md_open (&hd, drbg->core->backend_cipher, 0);
-      if (err)
-	return err;
-    }
-  for (; NULL != buf; buf = buf->next)
-    _gcry_md_write (hd, buf->buf, buf->len);
-  _gcry_md_final (hd);
-  memcpy (outval, _gcry_md_read (hd, drbg->core->backend_cipher),
-	  drbg_blocklen (drbg));
-  _gcry_md_close (hd);
+  err = _gcry_md_open (&hd, drbg->core->backend_cipher, 0);
+  if (err)
+    return err;
+
+  drbg->priv_data = hd;
+
   return 0;
 }
 
 static gpg_err_code_t
-drbg_sym (drbg_state_t drbg, const unsigned char *key,
-          unsigned char *outval, const drbg_string_t *buf)
+drbg_hmac_init (drbg_state_t drbg)
 {
+  gcry_md_hd_t hd;
   gpg_error_t err;
+
+  err = _gcry_md_open (&hd, drbg->core->backend_cipher, GCRY_MD_FLAG_HMAC);
+  if (err)
+    return err;
+
+  drbg->priv_data = hd;
+
+  return 0;
+}
+
+static gpg_err_code_t
+drbg_hmac_setkey (drbg_state_t drbg, const unsigned char *key)
+{
+  gcry_md_hd_t hd = (gcry_md_hd_t)drbg->priv_data;
+
+  return _gcry_md_setkey (hd, key, drbg_statelen (drbg));
+}
+
+static void
+drbg_hash_fini (drbg_state_t drbg)
+{
+  gcry_md_hd_t hd = (gcry_md_hd_t)drbg->priv_data;
+
+  _gcry_md_close (hd);
+}
+
+static byte *
+drbg_hash (drbg_state_t drbg, const drbg_string_t *buf)
+{
+  gcry_md_hd_t hd = (gcry_md_hd_t)drbg->priv_data;
+
+  _gcry_md_reset(hd);
+  for (; NULL != buf; buf = buf->next)
+    _gcry_md_write (hd, buf->buf, buf->len);
+  _gcry_md_final (hd);
+  return _gcry_md_read (hd, drbg->core->backend_cipher);
+}
+
+static void
+drbg_sym_fini (drbg_state_t drbg)
+{
+  gcry_cipher_hd_t hd = (gcry_cipher_hd_t)drbg->priv_data;
+
+  if (hd)
+    _gcry_cipher_close (hd);
+  if (drbg->ctr_handle)
+    _gcry_cipher_close (drbg->ctr_handle);
+  if (drbg->ctr_null)
+    free(drbg->ctr_null);
+}
+
+static gpg_err_code_t
+drbg_sym_init (drbg_state_t drbg)
+{
   gcry_cipher_hd_t hd;
+  gpg_error_t err;
+
+  drbg->ctr_null = calloc(1, DRBG_CTR_NULL_LEN);
+  if (!drbg->ctr_null)
+    return GPG_ERR_ENOMEM;
 
   err = _gcry_cipher_open (&hd, drbg->core->backend_cipher,
-                           GCRY_CIPHER_MODE_ECB, 0);
+			   GCRY_CIPHER_MODE_ECB, 0);
   if (err)
-    return err;
+    {
+      drbg_sym_fini (drbg);
+      return err;
+    }
+  drbg->priv_data = hd;
+
+  err = _gcry_cipher_open (&drbg->ctr_handle, drbg->core->backend_cipher,
+			   GCRY_CIPHER_MODE_CTR, 0);
+  if (err)
+    {
+      drbg_sym_fini (drbg);
+      return err;
+    }
+
+
   if (drbg_blocklen (drbg) !=
       _gcry_cipher_get_algo_blklen (drbg->core->backend_cipher))
-    return -GPG_ERR_NO_ERROR;
+    {
+      drbg_sym_fini (drbg);
+      return -GPG_ERR_NO_ERROR;
+    }
+
+  return 0;
+}
+
+static gpg_err_code_t
+drbg_sym_setkey (drbg_state_t drbg, const unsigned char *key)
+{
+  gcry_cipher_hd_t hd = (gcry_cipher_hd_t)drbg->priv_data;
+
+  return _gcry_cipher_setkey (hd, key, drbg_keylen (drbg));
+}
+
+static gpg_err_code_t
+drbg_sym (drbg_state_t drbg, unsigned char *outval, const drbg_string_t *buf)
+{
+  gcry_cipher_hd_t hd = (gcry_cipher_hd_t)drbg->priv_data;
+
+  _gcry_cipher_reset(hd);
   if (drbg_blocklen (drbg) < buf->len)
     return -GPG_ERR_NO_ERROR;
-  err = _gcry_cipher_setkey (hd, key, drbg_keylen (drbg));
+  /* in is only component */
+  return _gcry_cipher_encrypt (hd, outval, drbg_blocklen (drbg), buf->buf,
+			       buf->len);
+}
+
+static gpg_err_code_t
+drbg_sym_ctr (drbg_state_t drbg,
+	      const unsigned char *inbuf, unsigned int inbuflen,
+	      unsigned char *outbuf, unsigned int outbuflen)
+{
+  gpg_error_t err;
+
+  _gcry_cipher_reset(drbg->ctr_handle);
+  err = _gcry_cipher_setctr(drbg->ctr_handle, drbg->V, drbg_blocklen (drbg));
   if (err)
     return err;
-  /* in is only component */
-  _gcry_cipher_encrypt (hd, outval, drbg_blocklen (drbg), buf->buf,
-			buf->len);
-  _gcry_cipher_close (hd);
-  return 0;
+
+  while (outbuflen)
+    {
+       unsigned int cryptlen = (inbuflen > outbuflen) ? outbuflen : inbuflen;
+
+       err = _gcry_cipher_encrypt (drbg->ctr_handle, outbuf, cryptlen, inbuf,
+				   cryptlen);
+       if (err)
+         return err;
+
+       outbuflen -= cryptlen;
+       outbuf += cryptlen;
+    }
+  return _gcry_cipher_getctr(drbg->ctr_handle, drbg->V, drbg_blocklen (drbg));
 }

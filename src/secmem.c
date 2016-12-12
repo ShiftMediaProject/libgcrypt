@@ -1,7 +1,7 @@
 /* secmem.c  -	memory allocation from a secure heap
  * Copyright (C) 1998, 1999, 2000, 2001, 2002,
  *               2003, 2007 Free Software Foundation, Inc.
- * Copyright (C) 2013 g10 Code GmbH
+ * Copyright (C) 2013, 2016 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
  *
@@ -59,20 +59,39 @@ typedef struct memblock
 /* This flag specifies that the memory block is in use.  */
 #define MB_FLAG_ACTIVE (1 << 0)
 
-/* The pool of secure memory.  */
-static void *pool;
+/* An object describing a memory pool.  */
+typedef struct pooldesc_s
+{
+  /* A link to the next pool.  This is used to connect the overflow
+   * pools.  */
+  struct pooldesc_s *next;
 
-/* Size of POOL in bytes.  */
-static size_t pool_size;
+  /* A memory buffer used as allocation pool.  */
+  void *mem;
 
-/* True, if the memory pool is ready for use.  May be checked in an
-   atexit function.  */
-static volatile int pool_okay;
+  /* The allocated size of MEM. */
+  size_t size;
 
-/* True, if the memory pool is mmapped.  */
-static volatile int pool_is_mmapped;
+  /* Flag indicating that this memory pool is ready for use.  May be
+   * checked in an atexit function.  */
+  volatile int okay;
 
-/* FIXME?  */
+  /* Flag indicating whether MEM is mmapped.  */
+  volatile int is_mmapped;
+
+  /* The number of allocated bytes and the number of used blocks in
+   * this pool.  */
+  unsigned int cur_alloced, cur_blocks;
+} pooldesc_t;
+
+
+/* The pool of secure memory.  This is the head of a linked list with
+ * the first element being the standard mlock-ed pool and the
+ * following elements being the overflow pools. */
+static pooldesc_t mainpool;
+
+
+/* A couple of flags whith some beeing set early. */
 static int disable_secmem;
 static int show_warning;
 static int not_locked;
@@ -81,10 +100,7 @@ static int suspend_warning;
 static int no_mlock;
 static int no_priv_drop;
 
-/* Stats.  */
-static unsigned int cur_alloced, cur_blocks;
-
-/* Lock protecting accesses to the memory pool.  */
+/* Lock protecting accesses to the memory pools.  */
 GPGRT_LOCK_DEFINE (secmem_lock);
 
 /* Convenient macros.  */
@@ -100,45 +116,45 @@ GPGRT_LOCK_DEFINE (secmem_lock);
 #define ADDR_TO_BLOCK(addr) \
   (memblock_t *) (void *) ((char *) addr - BLOCK_HEAD_SIZE)
 
-/* Check whether P points into the pool.  */
-static int
-ptr_into_pool_p (const void *p)
+/* Check whether P points into POOL.  */
+static inline int
+ptr_into_pool_p (pooldesc_t *pool, const void *p)
 {
   /* We need to convert pointers to addresses.  This is required by
      C-99 6.5.8 to avoid undefined behaviour.  See also
      http://lists.gnupg.org/pipermail/gcrypt-devel/2007-February/001102.html
   */
   uintptr_t p_addr    = (uintptr_t)p;
-  uintptr_t pool_addr = (uintptr_t)pool;
+  uintptr_t pool_addr = (uintptr_t)pool->mem;
 
-  return p_addr >= pool_addr && p_addr <  pool_addr + pool_size;
+  return p_addr >= pool_addr && p_addr <  pool_addr + pool->size;
 }
 
 /* Update the stats.  */
 static void
-stats_update (size_t add, size_t sub)
+stats_update (pooldesc_t *pool, size_t add, size_t sub)
 {
   if (add)
     {
-      cur_alloced += add;
-      cur_blocks++;
+      pool->cur_alloced += add;
+      pool->cur_blocks++;
     }
   if (sub)
     {
-      cur_alloced -= sub;
-      cur_blocks--;
+      pool->cur_alloced -= sub;
+      pool->cur_blocks--;
     }
 }
 
 /* Return the block following MB or NULL, if MB is the last block.  */
 static memblock_t *
-mb_get_next (memblock_t *mb)
+mb_get_next (pooldesc_t *pool, memblock_t *mb)
 {
   memblock_t *mb_next;
 
   mb_next = (memblock_t *) (void *) ((char *) mb + BLOCK_HEAD_SIZE + mb->size);
 
-  if (! ptr_into_pool_p (mb_next))
+  if (! ptr_into_pool_p (pool, mb_next))
     mb_next = NULL;
 
   return mb_next;
@@ -147,18 +163,18 @@ mb_get_next (memblock_t *mb)
 /* Return the block preceding MB or NULL, if MB is the first
    block.  */
 static memblock_t *
-mb_get_prev (memblock_t *mb)
+mb_get_prev (pooldesc_t *pool, memblock_t *mb)
 {
   memblock_t *mb_prev, *mb_next;
 
-  if (mb == pool)
+  if (mb == pool->mem)
     mb_prev = NULL;
   else
     {
-      mb_prev = (memblock_t *) pool;
+      mb_prev = (memblock_t *) pool->mem;
       while (1)
 	{
-	  mb_next = mb_get_next (mb_prev);
+	  mb_next = mb_get_next (pool, mb_prev);
 	  if (mb_next == mb)
 	    break;
 	  else
@@ -172,12 +188,12 @@ mb_get_prev (memblock_t *mb)
 /* If the preceding block of MB and/or the following block of MB
    exist and are not active, merge them to form a bigger block.  */
 static void
-mb_merge (memblock_t *mb)
+mb_merge (pooldesc_t *pool, memblock_t *mb)
 {
   memblock_t *mb_prev, *mb_next;
 
-  mb_prev = mb_get_prev (mb);
-  mb_next = mb_get_next (mb);
+  mb_prev = mb_get_prev (pool, mb);
+  mb_next = mb_get_next (pool, mb);
 
   if (mb_prev && (! (mb_prev->flags & MB_FLAG_ACTIVE)))
     {
@@ -190,11 +206,11 @@ mb_merge (memblock_t *mb)
 
 /* Return a new block, which can hold SIZE bytes.  */
 static memblock_t *
-mb_get_new (memblock_t *block, size_t size)
+mb_get_new (pooldesc_t *pool, memblock_t *block, size_t size)
 {
   memblock_t *mb, *mb_split;
 
-  for (mb = block; ptr_into_pool_p (mb); mb = mb_get_next (mb))
+  for (mb = block; ptr_into_pool_p (pool, mb); mb = mb_get_next (pool, mb))
     if (! (mb->flags & MB_FLAG_ACTIVE) && mb->size >= size)
       {
 	/* Found a free block.  */
@@ -211,14 +227,14 @@ mb_get_new (memblock_t *block, size_t size)
 
 	    mb->size = size;
 
-	    mb_merge (mb_split);
+	    mb_merge (pool, mb_split);
 
 	  }
 
 	break;
       }
 
-  if (! ptr_into_pool_p (mb))
+  if (! ptr_into_pool_p (pool, mb))
     {
       gpg_err_set_errno (ENOMEM);
       mb = NULL;
@@ -235,9 +251,11 @@ print_warn (void)
     log_info (_("Warning: using insecure memory!\n"));
 }
 
-/* Lock the memory pages into core and drop privileges.  */
+
+/* Lock the memory pages of pool P of size N into core and drop
+ * privileges.  */
 static void
-lock_pool (void *p, size_t n)
+lock_pool_pages (void *p, size_t n)
 {
 #if defined(USE_CAPABILITIES) && defined(HAVE_MLOCK)
   int err;
@@ -264,15 +282,15 @@ lock_pool (void *p, size_t n)
 
   if (err)
     {
-      if (errno != EPERM
-#ifdef EAGAIN	/* OpenBSD returns this */
-	  && errno != EAGAIN
+      if (err != EPERM
+#ifdef EAGAIN	/* BSD and also Linux may return EAGAIN */
+	  && err != EAGAIN
 #endif
 #ifdef ENOSYS	/* Some SCOs return this (function not implemented) */
-	  && errno != ENOSYS
+	  && err != ENOSYS
 #endif
 #ifdef ENOMEM  /* Linux might return this. */
-            && errno != ENOMEM
+            && err != ENOMEM
 #endif
 	  )
 	log_error ("can't lock memory: %s\n", strerror (err));
@@ -323,15 +341,15 @@ lock_pool (void *p, size_t n)
 
   if (err)
     {
-      if (errno != EPERM
-#ifdef EAGAIN	/* OpenBSD returns this. */
-	  && errno != EAGAIN
+      if (err != EPERM
+#ifdef EAGAIN	/* BSD and also Linux may return this. */
+	  && err != EAGAIN
 #endif
 #ifdef ENOSYS	/* Some SCOs return this (function not implemented). */
-	  && errno != ENOSYS
+	  && err != ENOSYS
 #endif
 #ifdef ENOMEM  /* Linux might return this. */
-            && errno != ENOMEM
+            && err != ENOMEM
 #endif
 	  )
 	log_error ("can't lock memory: %s\n", strerror (err));
@@ -367,11 +385,11 @@ lock_pool (void *p, size_t n)
 
 /* Initialize POOL.  */
 static void
-init_pool (size_t n)
+init_pool (pooldesc_t *pool, size_t n)
 {
   memblock_t *mb;
 
-  pool_size = n;
+  pool->size = n;
 
   if (disable_secmem)
     log_bug ("secure memory is disabled");
@@ -391,10 +409,10 @@ init_pool (size_t n)
 # endif
     pgsize = (pgsize_val != -1 && pgsize_val > 0)? pgsize_val:DEFAULT_PAGE_SIZE;
 
-    pool_size = (pool_size + pgsize - 1) & ~(pgsize - 1);
+    pool->size = (pool->size + pgsize - 1) & ~(pgsize - 1);
 # ifdef MAP_ANONYMOUS
-    pool = mmap (0, pool_size, PROT_READ | PROT_WRITE,
-                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    pool->mem = mmap (0, pool->size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 # else /* map /dev/zero instead */
     {
       int fd;
@@ -403,40 +421,40 @@ init_pool (size_t n)
       if (fd == -1)
         {
           log_error ("can't open /dev/zero: %s\n", strerror (errno));
-          pool = (void *) -1;
+          pool->mem = (void *) -1;
         }
       else
         {
-          pool = mmap (0, pool_size,
-                       (PROT_READ | PROT_WRITE), MAP_PRIVATE, fd, 0);
+          pool->mem = mmap (0, pool->size,
+                           (PROT_READ | PROT_WRITE), MAP_PRIVATE, fd, 0);
           close (fd);
         }
     }
 # endif
-    if (pool == (void *) -1)
+    if (pool->mem == (void *) -1)
       log_info ("can't mmap pool of %u bytes: %s - using malloc\n",
-                (unsigned) pool_size, strerror (errno));
+                (unsigned) pool->size, strerror (errno));
     else
       {
-        pool_is_mmapped = 1;
-        pool_okay = 1;
+        pool->is_mmapped = 1;
+        pool->okay = 1;
       }
   }
 #endif /*HAVE_MMAP*/
 
-  if (!pool_okay)
+  if (!pool->okay)
     {
-      pool = malloc (pool_size);
-      if (!pool)
+      pool->mem = malloc (pool->size);
+      if (!pool->mem)
 	log_fatal ("can't allocate memory pool of %u bytes\n",
-		   (unsigned) pool_size);
+		   (unsigned) pool->size);
       else
-	pool_okay = 1;
+	pool->okay = 1;
     }
 
   /* Initialize first memory block.  */
-  mb = (memblock_t *) pool;
-  mb->size = pool_size;
+  mb = (memblock_t *) pool->mem;
+  mb->size = pool->size;
   mb->flags = 0;
 }
 
@@ -482,11 +500,14 @@ _gcry_secmem_get_flags (void)
 }
 
 
-/* See _gcry_secmem_init.  This function is expected to be called with
-   the secmem lock held. */
+/* This function initializes the main memory pool MAINPOOL.  Itis
+ * expected to be called with the secmem lock held.  */
 static void
-secmem_init (size_t n)
+_gcry_secmem_init_internal (size_t n)
 {
+  pooldesc_t *pool;
+
+  pool = &mainpool;
   if (!n)
     {
 #ifdef USE_CAPABILITIES
@@ -516,10 +537,10 @@ secmem_init (size_t n)
     {
       if (n < MINIMUM_POOL_SIZE)
 	n = MINIMUM_POOL_SIZE;
-      if (! pool_okay)
+      if (! pool->okay)
 	{
-	  init_pool (n);
-	  lock_pool (pool, n);
+	  init_pool (pool, n);
+	  lock_pool_pages (pool->mem, n);
 	}
       else
 	log_error ("Oops, secure memory pool already initialized\n");
@@ -537,7 +558,7 @@ _gcry_secmem_init (size_t n)
 {
   SECMEM_LOCK;
 
-  secmem_init (n);
+  _gcry_secmem_init_internal (n);
 
   SECMEM_UNLOCK;
 }
@@ -552,15 +573,18 @@ _gcry_secmem_module_init ()
 
 
 static void *
-_gcry_secmem_malloc_internal (size_t size)
+_gcry_secmem_malloc_internal (size_t size, int xhint)
 {
+  pooldesc_t *pool;
   memblock_t *mb;
 
-  if (!pool_okay)
+  pool = &mainpool;
+
+  if (!pool->okay)
     {
       /* Try to initialize the pool if the user forgot about it.  */
-      secmem_init (STANDARD_POOL_SIZE);
-      if (!pool_okay)
+      _gcry_secmem_init_internal (STANDARD_POOL_SIZE);
+      if (!pool->okay)
         {
           log_info (_("operation is not possible without "
                       "initialized secure memory\n"));
@@ -583,33 +607,94 @@ _gcry_secmem_malloc_internal (size_t size)
   /* Blocks are always a multiple of 32. */
   size = ((size + 31) / 32) * 32;
 
-  mb = mb_get_new ((memblock_t *) pool, size);
+  mb = mb_get_new (pool, (memblock_t *) pool->mem, size);
   if (mb)
-    stats_update (size, 0);
+    {
+      stats_update (pool, size, 0);
+      return &mb->aligned.c;
+    }
 
-  return mb ? &mb->aligned.c : NULL;
+  /* If we are called from xmalloc style function resort to the
+   * overflow pools to return memory.  We don't do this in FIPS mode,
+   * though. */
+  if (xhint && !fips_mode ())
+    {
+      for (pool = pool->next; pool; pool = pool->next)
+        {
+          mb = mb_get_new (pool, (memblock_t *) pool->mem, size);
+          if (mb)
+            {
+              stats_update (pool, size, 0);
+              return &mb->aligned.c;
+            }
+        }
+      /* Allocate a new overflow pool.  We put a new pool right after
+       * the mainpool so that the next allocation will happen in that
+       * pool and not in one of the older pools.  When this new pool
+       * gets full we will try to find space in the older pools.  */
+      pool = calloc (1, sizeof *pool);
+      if (!pool)
+        return NULL;  /* Not enough memory for a new pool descriptor.  */
+      pool->size = STANDARD_POOL_SIZE;
+      pool->mem = malloc (pool->size);
+      if (!pool->mem)
+        return NULL; /* Not enough memory available for a new pool.  */
+      /* Initialize first memory block.  */
+      mb = (memblock_t *) pool->mem;
+      mb->size = pool->size;
+      mb->flags = 0;
+
+      pool->okay = 1;
+
+      /* Take care: in _gcry_private_is_secure we do not lock and thus
+       * we assume that the second assignment below is atomic.  */
+      pool->next = mainpool.next;
+      mainpool.next = pool;
+
+      /* After the first time we allocated an overflow pool, print a
+       * warning.  */
+      if (!pool->next)
+        print_warn ();
+
+      /* Allocate.  */
+      mb = mb_get_new (pool, (memblock_t *) pool->mem, size);
+      if (mb)
+        {
+          stats_update (pool, size, 0);
+          return &mb->aligned.c;
+        }
+    }
+
+  return NULL;
 }
 
+
+/* Allocate a block from the secmem of SIZE.  With XHINT set assume
+ * that the caller is a xmalloc style function.  */
 void *
-_gcry_secmem_malloc (size_t size)
+_gcry_secmem_malloc (size_t size, int xhint)
 {
   void *p;
 
   SECMEM_LOCK;
-  p = _gcry_secmem_malloc_internal (size);
+  p = _gcry_secmem_malloc_internal (size, xhint);
   SECMEM_UNLOCK;
 
   return p;
 }
 
-static void
+static int
 _gcry_secmem_free_internal (void *a)
 {
+  pooldesc_t *pool;
   memblock_t *mb;
   int size;
 
-  if (!a)
-    return;
+  for (pool = &mainpool; pool; pool = pool->next)
+    if (pool->okay && ptr_into_pool_p (pool, a))
+      break;
+  if (!pool)
+    return 0; /* A does not belong to use.  */
 
   mb = ADDR_TO_BLOCK (a);
   size = mb->size;
@@ -624,33 +709,40 @@ _gcry_secmem_free_internal (void *a)
   MB_WIPE_OUT (0x55);
   MB_WIPE_OUT (0x00);
 
-  stats_update (0, size);
+  /* Update stats.  */
+  stats_update (pool, 0, size);
 
   mb->flags &= ~MB_FLAG_ACTIVE;
 
-  /* Update stats.  */
+  mb_merge (pool, mb);
 
-  mb_merge (mb);
+  return 1; /* Freed.  */
 }
 
-/* Wipe out and release memory.  */
-void
+
+/* Wipe out and release memory.  Returns true if this function
+ * actually released A.  */
+int
 _gcry_secmem_free (void *a)
 {
+  int mine;
+
+  if (!a)
+    return 1; /* Tell caller that we handled it.  */
+
   SECMEM_LOCK;
-  _gcry_secmem_free_internal (a);
+  mine = _gcry_secmem_free_internal (a);
   SECMEM_UNLOCK;
+  return mine;
 }
 
-/* Realloc memory.  */
-void *
-_gcry_secmem_realloc (void *p, size_t newsize)
+
+static void *
+_gcry_secmem_realloc_internal (void *p, size_t newsize, int xhint)
 {
   memblock_t *mb;
   size_t size;
   void *a;
-
-  SECMEM_LOCK;
 
   mb = (memblock_t *) (void *) ((char *) p
 				- ((size_t) &((memblock_t *) 0)->aligned.c));
@@ -662,7 +754,7 @@ _gcry_secmem_realloc (void *p, size_t newsize)
     }
   else
     {
-      a = _gcry_secmem_malloc_internal (newsize);
+      a = _gcry_secmem_malloc_internal (newsize, xhint);
       if (a)
 	{
 	  memcpy (a, p, size);
@@ -671,17 +763,39 @@ _gcry_secmem_realloc (void *p, size_t newsize)
 	}
     }
 
+  return a;
+}
+
+
+/* Realloc memory.  With XHINT set assume that the caller is a xmalloc
+ * style function.  */
+void *
+_gcry_secmem_realloc (void *p, size_t newsize, int xhint)
+{
+  void *a;
+
+  SECMEM_LOCK;
+  a = _gcry_secmem_realloc_internal (p, newsize, xhint);
   SECMEM_UNLOCK;
 
   return a;
 }
 
 
-/* Return true if P points into the secure memory area.  */
+/* Return true if P points into the secure memory areas.  */
 int
 _gcry_private_is_secure (const void *p)
 {
-  return pool_okay && ptr_into_pool_p (p);
+  pooldesc_t *pool;
+
+  /* We do no lock here because once a pool is allocatred it will not
+   * be removed anymore (except for gcry_secmem_term).  Further,
+   * adding a new pool to the list should be atomic.  */
+  for (pool = &mainpool; pool; pool = pool->next)
+    if (pool->okay && ptr_into_pool_p (pool, p))
+      return 1;
+
+  return 0;
 }
 
 
@@ -696,47 +810,68 @@ _gcry_private_is_secure (const void *p)
 void
 _gcry_secmem_term ()
 {
-  if (!pool_okay)
-    return;
+  pooldesc_t *pool, *next;
 
-  wipememory2 (pool, 0xff, pool_size);
-  wipememory2 (pool, 0xaa, pool_size);
-  wipememory2 (pool, 0x55, pool_size);
-  wipememory2 (pool, 0x00, pool_size);
+  for (pool = &mainpool; pool; pool = next)
+    {
+      next = pool->next;
+      if (!pool->okay)
+        continue;
+
+      wipememory2 (pool->mem, 0xff, pool->size);
+      wipememory2 (pool->mem, 0xaa, pool->size);
+      wipememory2 (pool->mem, 0x55, pool->size);
+      wipememory2 (pool->mem, 0x00, pool->size);
+      if (0)
+        ;
 #if HAVE_MMAP
-  if (pool_is_mmapped)
-    munmap (pool, pool_size);
+      else if (pool->is_mmapped)
+        munmap (pool->mem, pool->size);
 #endif
-  pool = NULL;
-  pool_okay = 0;
-  pool_size = 0;
+      else
+        free (pool->mem);
+      pool->mem = NULL;
+      pool->okay = 0;
+      pool->size = 0;
+      if (pool != &mainpool)
+        free (pool);
+    }
+  mainpool.next = NULL;
   not_locked = 0;
 }
 
 
 void
-_gcry_secmem_dump_stats ()
+_gcry_secmem_dump_stats (int extended)
 {
-#if 1
-  SECMEM_LOCK;
-
- if (pool_okay)
-    log_info ("secmem usage: %u/%lu bytes in %u blocks\n",
-	      cur_alloced, (unsigned long)pool_size, cur_blocks);
-  SECMEM_UNLOCK;
-#else
+  pooldesc_t *pool;
   memblock_t *mb;
-  int i;
+  int i, poolno;
 
   SECMEM_LOCK;
 
-  for (i = 0, mb = (memblock_t *) pool;
-       ptr_into_pool_p (mb);
-       mb = mb_get_next (mb), i++)
-    log_info ("SECMEM: [%s] block: %i; size: %i\n",
-	      (mb->flags & MB_FLAG_ACTIVE) ? "used" : "free",
-	      i,
-	      mb->size);
+  for (pool = &mainpool, poolno = 0; pool; pool = pool->next, poolno++)
+    {
+      if (!extended)
+        {
+          if (pool->okay)
+            log_info ("%-13s %u/%lu bytes in %u blocks\n",
+                      pool == &mainpool? "secmem usage:":"",
+                      pool->cur_alloced, (unsigned long)pool->size,
+                      pool->cur_blocks);
+        }
+      else
+        {
+          for (i = 0, mb = (memblock_t *) pool->mem;
+               ptr_into_pool_p (pool, mb);
+               mb = mb_get_next (pool, mb), i++)
+            log_info ("SECMEM: pool %d %s block %i size %i\n",
+                      poolno,
+                      (mb->flags & MB_FLAG_ACTIVE) ? "used" : "free",
+                      i,
+                      mb->size);
+        }
+    }
+
   SECMEM_UNLOCK;
-#endif
 }

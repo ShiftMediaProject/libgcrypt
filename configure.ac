@@ -30,7 +30,7 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [7])
-m4_define(mym4_version_micro, [3])
+m4_define(mym4_version_micro, [4])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=21
 LIBGCRYPT_LT_AGE=1
-LIBGCRYPT_LT_REVISION=3
+LIBGCRYPT_LT_REVISION=4
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -1073,6 +1073,32 @@ fi
 
 
 #
+# Check whether GCC assembler supports features needed for our ARMv8/Aarch64
+# implementations.  This needs to be done before setting up the
+# assembler stuff.
+#
+AC_CACHE_CHECK([whether GCC assembler is compatible for ARMv8/Aarch64 assembly implementations],
+       [gcry_cv_gcc_aarch64_platform_as_ok],
+       [gcry_cv_gcc_aarch64_platform_as_ok=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[__asm__(
+                "asmfunc:\n\t"
+                "eor x0, x0, x30, ror #12;\n\t"
+                "add x0, x0, x30, asr #12;\n\t"
+                "eor v0.16b, v0.16b, v31.16b;\n\t"
+
+                /* Test if '.type' and '.size' are supported.  */
+                ".size asmfunc,.-asmfunc;\n\t"
+                ".type asmfunc,@function;\n\t"
+            );]])],
+          [gcry_cv_gcc_aarch64_platform_as_ok=yes])])
+if test "$gcry_cv_gcc_aarch64_platform_as_ok" = "yes" ; then
+   AC_DEFINE(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS,1,
+     [Defined if underlying assembler is compatible with ARMv8/Aarch64 assembly implementations])
+fi
+
+
+#
 # Check whether underscores in symbols are required.  This needs to be
 # done before setting up the assembler stuff.
 #
@@ -2026,6 +2052,14 @@ if test "$found" = "1" ; then
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-ce.lo"
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-aarch32-ce.lo"
       ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-aarch64.lo"
+
+         # Build with the ARMv8/AArch64 CE implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-ce.lo"
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-aarch64-ce.lo"
+      ;;
    esac
 
    case "$mpi_cpu_arch" in
@@ -2052,6 +2086,10 @@ if test "$found" = "1" ; then
       arm*-*-*)
          # Build with the assembly implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-arm.lo"
+      ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-aarch64.lo"
       ;;
    esac
 fi
@@ -2100,6 +2138,10 @@ if test "$found" = "1" ; then
       arm*-*-*)
          # Build with the assembly implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-arm.lo"
+      ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-aarch64.lo"
       ;;
    esac
 
@@ -2274,7 +2316,11 @@ if test "$found" = "1" ; then
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-arm.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-armv8-aarch32-ce.lo"
+      ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-armv8-aarch64-ce.lo"
       ;;
    esac
 fi
@@ -2293,7 +2339,7 @@ if test "$found" = "1" ; then
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-armv8-aarch32-ce.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-arm.lo"
       ;;
    esac
 
@@ -2356,6 +2402,10 @@ case "${host}" in
     # Build with the assembly implementation
     GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv7-neon.lo"
     GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv8-aarch32-ce.lo"
+  ;;
+  aarch64-*-*)
+    # Build with the assembly implementation
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv8-aarch64-ce.lo"
   ;;
 esac
 

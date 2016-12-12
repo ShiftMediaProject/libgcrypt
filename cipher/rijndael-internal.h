@@ -58,6 +58,11 @@
 #  define USE_ARM_ASM 1
 # endif
 #endif
+#if defined(__AARCH64EL__)
+# ifdef HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS
+#  define USE_ARM_ASM 1
+# endif
+#endif
 
 /* USE_PADLOCK indicates whether to compile the padlock specific
    code.  */
@@ -89,6 +94,10 @@
 # if defined(HAVE_ARM_ARCH_V6) && defined(__ARMEL__) \
      && defined(HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS) \
      && defined(HAVE_GCC_INLINE_ASM_AARCH32_CRYPTO)
+#  define USE_ARM_CE 1
+# elif defined(__AARCH64EL__) \
+       && defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) \
+       && defined(HAVE_GCC_INLINE_ASM_AARCH64_CRYPTO)
 #  define USE_ARM_CE 1
 # endif
 #endif /* ENABLE_ARM_CRYPTO_SUPPORT */
