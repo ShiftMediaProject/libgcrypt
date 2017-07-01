@@ -18,8 +18,8 @@
 
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,7,7,55758
- PRODUCTVERSION 1,7,7,55758
+ FILEVERSION 1,7,8,45409
+ PRODUCTVERSION 1,7,8,45409
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x21L
@@ -37,15 +37,15 @@ BEGIN
             VALUE "Comments", "Provided under the terms of the GNU Lesser General Public License (LGPLv2.1+).\0"
             VALUE "CompanyName", "g10 Code GmbH\0"
             VALUE "FileDescription", "Libgcrypt - The GNU Crypto Library\0"
-            VALUE "FileVersion", "21.1.7.d9cebf5\0"
+            VALUE "FileVersion", "21.1.8.b161767\0"
             VALUE "InternalName", "libgcrypt\0"
             VALUE "LegalCopyright", "Copyright © 2016 Free Software Foundation, Inc.\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "libgcrypt.dll\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "libgcrypt\0"
-            VALUE "ProductVersion", "1.7.7\0"
-            VALUE "SpecialBuild", "2017-06-03T05:11+0000\0"
+            VALUE "ProductVersion", "1.7.8\0"
+            VALUE "SpecialBuild", "2017-07-01T11:39+0000\0"
         END
     END
 END
