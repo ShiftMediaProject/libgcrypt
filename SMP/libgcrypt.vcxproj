@@ -107,6 +107,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\cipher\arcfour.c" />
+    <ClCompile Include="..\cipher\blake2.c" />
     <ClCompile Include="..\cipher\blowfish.c" />
     <ClCompile Include="..\cipher\camellia-glue.c" />
     <ClCompile Include="..\cipher\camellia.c" />
@@ -124,6 +125,7 @@
     <ClCompile Include="..\cipher\cipher-ofb.c" />
     <ClCompile Include="..\cipher\cipher-poly1305.c" />
     <ClCompile Include="..\cipher\cipher-selftest.c" />
+    <ClCompile Include="..\cipher\cipher-xts.c" />
     <ClCompile Include="..\cipher\cipher.c" />
     <ClCompile Include="..\cipher\crc-intel-pclmul.c" />
     <ClCompile Include="..\cipher\crc.c" />
@@ -208,6 +210,7 @@
     <ClCompile Include="..\random\random-system.c" />
     <ClCompile Include="..\random\random.c" />
     <ClCompile Include="..\random\rndhw.c" />
+    <ClCompile Include="..\random\rndjent.c" />
     <ClCompile Include="..\random\rndw32.c" />
     <ClCompile Include="..\src\context.c" />
     <ClCompile Include="..\src\fips.c">

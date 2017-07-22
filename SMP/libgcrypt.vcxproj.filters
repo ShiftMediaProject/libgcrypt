@@ -518,6 +518,15 @@
     <ClCompile Include="..\random\random-drbg.c">
       <Filter>Source Files\random</Filter>
     </ClCompile>
+    <ClCompile Include="..\cipher\blake2.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\cipher-xts.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\random\rndjent.c">
+      <Filter>Source Files\random</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="versioninfo.rc">

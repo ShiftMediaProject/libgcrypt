@@ -1,4 +1,3 @@
-
 #ifndef _GCRYPT_CONFIG_H_INCLUDED
 #define _GCRYPT_CONFIG_H_INCLUDED
 
@@ -26,6 +25,9 @@
 
 /* Define to support an HMAC based integrity check */
 /* #undef ENABLE_HMAC_BINARY_CHECK */
+
+/* Enable support for the jitter entropy collector. */
+/* #undef ENABLE_JENT_SUPPORT */
 
 /* Enable support for ARM NEON instructions. */
 /* #undef ENABLE_NEON_SUPPORT */
@@ -72,19 +74,17 @@
 /* Define to 1 if you have the `clock_gettime' function. */
 /* #undef HAVE_CLOCK_GETTIME */
 
-#if defined( __INTEL_COMPILER )
 /* Defined if underlying assembler is compatible with amd64 assembly
-   implementations */
-#define HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS 1
+implementations */
+/* #undef HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS */
 
 /* Defined if underlying assembler is compatible with ARM assembly
-   implementations */
+implementations */
 /* #undef HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS */
 
 /* Defined if underlying assembler is compatible with WIN64 assembly
-   implementations */
-#define HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS 1
-#endif
+implementations */
+/* #undef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS */
 
 /* Defined for Alpha platforms */
 /* #undef HAVE_CPU_ARCH_ALPHA */
@@ -334,7 +334,7 @@
 #define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20"
 
 /* List of available digest algorithms */
-#define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog"
+#define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog:blake2"
 
 /* List of available KDF algorithms */
 #define LIBGCRYPT_KDFS "s2k:pkdf2:scrypt"
@@ -380,6 +380,9 @@
 
 /* Defined if this module should be included */
 #define USE_ARCFOUR 1
+
+/* Defined if this module should be included */
+#define USE_BLAKE2 1
 
 /* Defined if this module should be included */
 #define USE_BLOWFISH 1
@@ -514,4 +517,3 @@
 #define CAMELLIA_EXT_SYM_PREFIX _gcry_
 
 #endif /*_GCRYPT_CONFIG_H_INCLUDED*/
-
