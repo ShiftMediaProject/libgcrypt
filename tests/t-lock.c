@@ -31,7 +31,7 @@
 # include <pthread.h>
 #endif
 
-#define PGMNAME "t-lock"
+#define PGM "t-lock"
 
 #include "t-common.h"
 #include "../src/gcrypt-testapi.h"
@@ -213,7 +213,7 @@ check_nonce_lock (void)
 }
 
 
-/* Initialze all accounts.  */
+/* Initialize all accounts.  */
 static void
 init_accounts (void)
 {
@@ -429,15 +429,15 @@ main (int argc, char **argv)
   srand (time(NULL)*getpid());
 
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch");
   /* We are using non-public interfaces - check the exact version.  */
   if (strcmp (gcry_check_version (NULL), GCRYPT_VERSION))
     die ("exact version match failed");
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   check_nonce_lock ();
 
@@ -454,5 +454,5 @@ main (int argc, char **argv)
   if (verbose)
     print_accounts ();
 
-  return errorcount ? 1 : 0;
+  return error_count ? 1 : 0;
 }

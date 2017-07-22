@@ -32,19 +32,122 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "../src/gcrypt-int.h"
 
 #define PGM "version"
+#include "t-common.h"
+
+static void
+test_get_config (void)
+{
+  char *string;
+  const char *s;
+  int i;
+
+  string = gcry_get_config (0, NULL);
+  if (!string)
+    fail ("gcry_get_config does not return anything: %s\n",
+          gpg_strerror (gpg_error_from_syserror ()));
+  else if ( !strchr (string, '\n') )
+    fail ("gcry_get_config(0, NULL) did not return multiple lines\n");
+
+  xfree (string);
+  string = gcry_get_config (0, "version");
+  if (!string)
+    fail ("gcry_get_config(\"version\") returned NULL: %s\n",
+          gpg_strerror (gpg_error_from_syserror ()));
+  else if ( strchr (string, '\n') )
+    fail ("gcry_get_config(\"version\") returned more than one line\n");
+  else if ( strncmp (string, "version:", 8) )
+    fail ("gcry_get_config(\"version\") returned wrong line\n");
+
+  /* Test an item which is not the first.  */
+  xfree (string);
+  string = gcry_get_config (0, "cpu-arch");
+  if (!string)
+    fail ("gcry_get_config(\"cpu-arch\") returned NULL: %s\n",
+          gpg_strerror (gpg_error_from_syserror ()));
+  else if ( strchr (string, '\n') )
+    fail ("gcry_get_config(\"cpu-arch\") returned more than one line\n");
+  else if ( strncmp (string, "cpu-arch:", 9) )
+    fail ("gcry_get_config(\"cpu-arch\") returned wrong line\n");
+
+  /* Test that an unknown item return sthe correct error.  */
+  xfree (string);
+  string = gcry_get_config (0, "no-such-item");
+  if (string)
+    fail ("gcry_get_config(\"no-such-item\") returned something\n");
+  else if (errno)
+    fail ("gcry_get_config(\"no-such-item\") returned wrong error: %s\n",
+          gpg_strerror (gpg_error_from_syserror ()));
+
+  /* Check the rng-type.  */
+  xfree (string);
+  string = gcry_get_config (0, "rng-type");
+  if (!string)
+    fail ("gcry_get_config(\"rng-type\") not returned\n");
+  else
+    {
+      for (i=0, s = string; *s; s++)
+        if (*s == ':')
+          i++;
+      if (i < 5)
+        fail ("gcry_get_config(\"rng-type\") has not enough fields\n");
+    }
+
+
+  xfree (string);
+}
 
 
 int
 main (int argc, char **argv)
 {
-  (void)argc;
-  (void)argv;
+  int last_argc = -1;
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  if (argc)
+    { argc--; argv++; }
+
+  while (argc && last_argc != argc )
+    {
+      last_argc = argc;
+      if (!strcmp (*argv, "--"))
+        {
+          argc--; argv++;
+          break;
+        }
+      else if (!strcmp (*argv, "--verbose"))
+        {
+          verbose++;
+          argc--; argv++;
+        }
+      else if (!strcmp (*argv, "--debug"))
+        {
+          /* Dummy option */
+          argc--; argv++;
+        }
+      else if (!strcmp (*argv, "--disable-hwf"))
+        {
+          argc--;
+          argv++;
+          if (argc)
+            {
+              if (gcry_control (GCRYCTL_DISABLE_HWF, *argv, NULL))
+                fprintf (stderr,
+                        PGM
+                        ": unknown hardware feature '%s' - option ignored\n",
+                        *argv);
+              argc--;
+              argv++;
+            }
+        }
+    }
+
+  xgcry_control (GCRYCTL_SET_VERBOSITY, (int)verbose);
+
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (strcmp (GCRYPT_VERSION, gcry_check_version (NULL)))
     {
       int oops = !gcry_check_version (GCRYPT_VERSION);
@@ -54,7 +157,10 @@ main (int argc, char **argv)
         exit (1);
     }
 
-  gcry_control (GCRYCTL_PRINT_CONFIG, NULL);
+  xgcry_control (GCRYCTL_PRINT_CONFIG, NULL);
+
+  test_get_config ();
+
 
   return 0;
 }

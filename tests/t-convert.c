@@ -26,36 +26,9 @@
 #include <assert.h>
 #include <stdarg.h>
 
-#include "../src/gcrypt-int.h"
-
 #define PGM "t-convert"
+#include "t-common.h"
 
-#define DIM(v)		     (sizeof(v)/sizeof((v)[0]))
-#define DIMof(type,member)   DIM(((type *)0)->member)
-
-static const char *wherestr;
-static int verbose;
-static int debug;
-static int error_count;
-
-
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xfree(a)      gcry_free ((a))
-#define pass() do { ; } while (0)
-
-static void
-show (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  if (!verbose)
-    return;
-  fprintf (stderr, "%s: ", PGM);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-}
 
 static void
 showhex (const char *prefix, const void *buffer, size_t buflen)
@@ -112,37 +85,6 @@ showmpi (const char *prefix, gcry_mpi_t a)
 }
 
 
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  if (wherestr)
-    fprintf (stderr, "%s: ", wherestr);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  error_count++;
-}
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  if (wherestr)
-    fprintf (stderr, "%s: ", wherestr);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  exit (1);
-}
-
-
 /* Check that mpi_print does not return a negative zero.  */
 static void
 negative_zero (void)
@@ -163,7 +105,7 @@ negative_zero (void)
   int i;
 
   if (debug)
-    show ("negative zero printing\n");
+    info ("negative zero printing\n");
 
   a = gcry_mpi_new (0);
   for (i=0; fmts[i].name; i++)
@@ -351,7 +293,7 @@ check_formats (void)
   for (idx=0; idx < DIM(data); idx++)
     {
       if (debug)
-        show ("print test %d\n", data[idx].value);
+        info ("print test %d\n", data[idx].value);
 
       if (data[idx].value < 0)
         {
@@ -371,8 +313,8 @@ check_formats (void)
             {
               fail ("error printing value %d as %s: %s\n",
                     data[idx].value, "HEX", "wrong result");
-              show ("expected: '%s'\n", data[idx].a.hex);
-              show ("     got: '%s'\n", buf);
+              info ("expected: '%s'\n", data[idx].a.hex);
+              info ("     got: '%s'\n", buf);
             }
           gcry_free (buf);
         }
@@ -457,7 +399,7 @@ check_formats (void)
   for (idx=0; idx < DIM(data); idx++)
     {
       if (debug)
-        show ("scan test %d\n", data[idx].value);
+        info ("scan test %d\n", data[idx].value);
 
       if (data[idx].value < 0)
         {
@@ -492,7 +434,7 @@ check_formats (void)
         {
           if (gcry_mpi_cmp (a, b) || data[idx].a.stdlen != buflen)
             {
-              fail ("error scanning value %d from %s: %s (%u)\n",
+              fail ("error scanning value %d from %s: %s (%lu)\n",
                     data[idx].value, "STD", "wrong result", buflen);
               showmpi ("expected:", a);
               showmpi ("     got:", b);
@@ -509,7 +451,7 @@ check_formats (void)
         {
           if (gcry_mpi_cmp (a, b) || data[idx].a.sshlen != buflen)
             {
-              fail ("error scanning value %d from %s: %s (%u)\n",
+              fail ("error scanning value %d from %s: %s (%lu)\n",
                     data[idx].value, "SSH", "wrong result", buflen);
               showmpi ("expected:", a);
               showmpi ("     got:", b);
@@ -528,7 +470,7 @@ check_formats (void)
             gcry_mpi_neg (b, b);
           if (gcry_mpi_cmp (a, b) || data[idx].a.usglen != buflen)
             {
-              fail ("error scanning value %d from %s: %s (%u)\n",
+              fail ("error scanning value %d from %s: %s (%lu)\n",
                     data[idx].value, "USG", "wrong result", buflen);
               showmpi ("expected:", a);
               showmpi ("     got:", b);
@@ -549,7 +491,7 @@ check_formats (void)
             {
               if (gcry_mpi_cmp (a, b) || data[idx].a.pgplen != buflen)
                 {
-                  fail ("error scanning value %d from %s: %s (%u)\n",
+                  fail ("error scanning value %d from %s: %s (%lu)\n",
                         data[idx].value, "PGP", "wrong result", buflen);
                   showmpi ("expected:", a);
                   showmpi ("     got:", b);
@@ -574,15 +516,15 @@ main (int argc, char **argv)
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   negative_zero ();
   check_formats ();
 
-  show ("All tests completed. Errors: %d\n", error_count);
+  info ("All tests completed. Errors: %d\n", error_count);
   return error_count ? 1 : 0;
 }

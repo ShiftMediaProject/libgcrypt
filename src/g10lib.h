@@ -75,6 +75,14 @@
 #define GCC_ATTR_UNUSED
 #endif
 
+#if __GNUC__ >= 3
+#define LIKELY( expr )    __builtin_expect( !!(expr), 1 )
+#define UNLIKELY( expr )  __builtin_expect( !!(expr), 0 )
+#else
+#define LIKELY( expr )    (!!(expr))
+#define UNLIKELY( expr )  (!!(expr))
+#endif
+
 /* Gettext macros.  */
 
 #define _(a)  _gcry_gettext(a)
@@ -88,13 +96,20 @@
 #define DIM(v) (sizeof(v)/sizeof((v)[0]))
 #define DIMof(type,member)   DIM(((type *)0)->member)
 
+#define my_isascii(c) (!((c) & 0x80))
+
+
 
 
 /*-- src/global.c -*/
 int _gcry_global_is_operational (void);
 gcry_err_code_t _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr);
-void  _gcry_check_heap (const void *a);
+void _gcry_check_heap (const void *a);
+void _gcry_pre_syscall (void);
+void _gcry_post_syscall (void);
 int _gcry_get_debug_flag (unsigned int mask);
+
+char *_gcry_get_config (int mode, const char *what);
 
 /* Malloc functions and common wrapper macros.  */
 void *_gcry_malloc (size_t n) _GCRY_GCC_ATTR_MALLOC;
@@ -150,8 +165,6 @@ void _gcry_log_bug( const char *fmt, ... )   JNLIB_GCC_A_NR_PRINTF(1,2);
 void _gcry_log_fatal( const char *fmt, ... ) JNLIB_GCC_A_NR_PRINTF(1,2);
 void _gcry_log_error( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_info( const char *fmt, ... )  JNLIB_GCC_A_PRINTF(1,2);
-int  _gcry_log_info_with_dummy_fp (FILE *fp, const char *fmt, ... )
-                                             JNLIB_GCC_A_PRINTF(2,3);
 void _gcry_log_debug( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printf ( const char *fmt, ... ) JNLIB_GCC_A_PRINTF(1,2);
 void _gcry_log_printhex (const char *text, const void *buffer, size_t length);
@@ -161,17 +174,18 @@ void _gcry_log_printsxp (const char *text, gcry_sexp_t sexp);
 void _gcry_set_log_verbosity( int level );
 int _gcry_log_verbosity( int level );
 
+
 #ifdef JNLIB_GCC_M_FUNCTION
 #define BUG() _gcry_bug( __FILE__ , __LINE__, __FUNCTION__ )
-#define gcry_assert(expr) ((expr)? (void)0 \
+#define gcry_assert(expr) (LIKELY(expr)? (void)0 \
          : _gcry_assert_failed (STR(expr), __FILE__, __LINE__, __FUNCTION__))
 #elif __STDC_VERSION__ >= 199901L
 #define BUG() _gcry_bug( __FILE__ , __LINE__, __func__ )
-#define gcry_assert(expr) ((expr)? (void)0 \
+#define gcry_assert(expr) (LIKELY(expr)? (void)0 \
          : _gcry_assert_failed (STR(expr), __FILE__, __LINE__, __func__))
 #else
 #define BUG() _gcry_bug( __FILE__ , __LINE__ )
-#define gcry_assert(expr) ((expr)? (void)0 \
+#define gcry_assert(expr) (LIKELY(expr)? (void)0 \
          : _gcry_assert_failed (STR(expr), __FILE__, __LINE__))
 #endif
 
@@ -194,27 +208,31 @@ char **_gcry_strtokenize (const char *string, const char *delim);
 
 
 /*-- src/hwfeatures.c --*/
-#define HWF_PADLOCK_RNG     (1 << 0)
-#define HWF_PADLOCK_AES     (1 << 1)
-#define HWF_PADLOCK_SHA     (1 << 2)
-#define HWF_PADLOCK_MMUL    (1 << 3)
+#define HWF_PADLOCK_RNG         (1 << 0)
+#define HWF_PADLOCK_AES         (1 << 1)
+#define HWF_PADLOCK_SHA         (1 << 2)
+#define HWF_PADLOCK_MMUL        (1 << 3)
 
-#define HWF_INTEL_CPU       (1 << 4)
-#define HWF_INTEL_FAST_SHLD (1 << 5)
-#define HWF_INTEL_BMI2      (1 << 6)
-#define HWF_INTEL_SSSE3     (1 << 7)
-#define HWF_INTEL_SSE4_1    (1 << 8)
-#define HWF_INTEL_PCLMUL    (1 << 9)
-#define HWF_INTEL_AESNI     (1 << 10)
-#define HWF_INTEL_RDRAND    (1 << 11)
-#define HWF_INTEL_AVX       (1 << 12)
-#define HWF_INTEL_AVX2      (1 << 13)
+#define HWF_INTEL_CPU           (1 << 4)
+#define HWF_INTEL_FAST_SHLD     (1 << 5)
+#define HWF_INTEL_BMI2          (1 << 6)
+#define HWF_INTEL_SSSE3         (1 << 7)
+#define HWF_INTEL_SSE4_1        (1 << 8)
+#define HWF_INTEL_PCLMUL        (1 << 9)
+#define HWF_INTEL_AESNI         (1 << 10)
+#define HWF_INTEL_RDRAND        (1 << 11)
+#define HWF_INTEL_AVX           (1 << 12)
+#define HWF_INTEL_AVX2          (1 << 13)
+#define HWF_INTEL_FAST_VPGATHER (1 << 14)
 
-#define HWF_ARM_NEON        (1 << 14)
-#define HWF_ARM_AES         (1 << 15)
-#define HWF_ARM_SHA1        (1 << 16)
-#define HWF_ARM_SHA2        (1 << 17)
-#define HWF_ARM_PMULL       (1 << 18)
+#define HWF_ARM_NEON            (1 << 15)
+#define HWF_ARM_AES             (1 << 16)
+#define HWF_ARM_SHA1            (1 << 17)
+#define HWF_ARM_SHA2            (1 << 18)
+#define HWF_ARM_PMULL           (1 << 19)
+
+#define HWF_INTEL_RDTSC         (1 << 20)
+
 
 
 gpg_err_code_t _gcry_disable_hw_feature (const char *name);
@@ -331,6 +349,7 @@ void __gcry_burn_stack (unsigned int bytes);
 /* Following architectures can handle unaligned accesses fast.  */
 #if defined(HAVE_GCC_ATTRIBUTE_PACKED) && \
     defined(HAVE_GCC_ATTRIBUTE_ALIGNED) && \
+    defined(HAVE_GCC_ATTRIBUTE_MAY_ALIAS) && \
     (defined(__i386__) || defined(__x86_64__) || \
      defined(__powerpc__) || defined(__powerpc64__) || \
      (defined(__arm__) && defined(__ARM_FEATURE_UNALIGNED)) || \
@@ -339,10 +358,10 @@ void __gcry_burn_stack (unsigned int bytes);
 typedef struct fast_wipememory_s
 {
   FASTWIPE_T a;
-} __attribute__((packed, aligned(1))) fast_wipememory_t;
+} __attribute__((packed, aligned(1), may_alias)) fast_wipememory_t;
 #else
 #define fast_wipememory2_unaligned_head(_vptr,_vset,_vlen) do { \
-              while((size_t)(_vptr)&(sizeof(FASTWIPE_T)-1) && _vlen) \
+              while(UNLIKELY((size_t)(_vptr)&(sizeof(FASTWIPE_T)-1)) && _vlen) \
                 { *_vptr=(_vset); _vptr++; _vlen--; } \
                   } while(0)
 typedef struct fast_wipememory_s

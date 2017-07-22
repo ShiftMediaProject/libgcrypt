@@ -1,4 +1,4 @@
-/* hashtest.c - Check the hash fucntions
+/* hashtest.c - Check the hash functions
  * Copyright (C) 2013 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
@@ -32,24 +32,8 @@
 #include "stopwatch.h"
 
 #define PGM "hashtest"
+#include "t-common.h"
 
-#define my_isascii(c) (!((c) & 0x80))
-#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a) (digitp (a)                     \
-                      || (*(a) >= 'A' && *(a) <= 'F')  \
-                      || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)   (*(p) <= '9'? (*(p)- '0'): \
-                     *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)   ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xstrdup(a)    gcry_xstrdup ((a))
-#define xfree(a)      gcry_free ((a))
-#define pass()        do { ; } while (0)
-
-static int verbose;
-static int debug;
-static int error_count;
 static int missing_test_vectors;
 
 static struct {
@@ -122,55 +106,6 @@ static struct {
 };
 
 
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr ;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  va_start( arg_ptr, format ) ;
-  vfprintf (stderr, format, arg_ptr );
-  va_end(arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  exit (1);
-}
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  /* if (wherestr) */
-  /*   fprintf (stderr, "%s: ", wherestr); */
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  error_count++;
-  if (error_count >= 50)
-    die ("stopped after 50 errors.");
-}
-
-static void
-show (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fprintf (stderr, "%s: ", PGM);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  va_end (arg_ptr);
-}
-
-
 static void
 showhex (const void *buffer, size_t buflen, const char *format, ...)
 {
@@ -241,10 +176,10 @@ run_selftest (int algo)
     fail ("extended selftest for %s (%d) failed: %s",
           gcry_md_algo_name (algo), algo, gpg_strerror (err));
   else if (err && verbose)
-    show ("extended selftest for %s (%d) not implemented",
+    info ("extended selftest for %s (%d) not implemented",
           gcry_md_algo_name (algo), algo);
   else if (verbose)
-    show ("extended selftest for %s (%d) passed",
+    info ("extended selftest for %s (%d) passed",
           gcry_md_algo_name (algo), algo);
 }
 
@@ -268,7 +203,7 @@ cmp_digest (const unsigned char *digest, size_t digestlen,
     }
   if (!testvectors[idx].algo)
     {
-      show ("%d GiB %+3d %-10s warning: %s",
+      info ("%d GiB %+3d %-10s warning: %s",
             gigs, bytes, gcry_md_algo_name (algo), "no test vector");
       missing_test_vectors++;
       return 1;
@@ -448,13 +383,13 @@ main (int argc, char **argv)
   if (gigs < 0 || gigs > 1024*1024)
     die ("value for --gigs must be in the range 0 to %d", 1024*1024);
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   /* A quick check that all given algorithms are valid.  */
   for (idx=0; idx < argc; idx++)
@@ -499,7 +434,7 @@ main (int argc, char **argv)
     fail ("Some test vectors are missing");
 
   if (verbose)
-    show ("All tests completed in %s.  Errors: %d\n",
+    info ("All tests completed in %s.  Errors: %d\n",
           elapsed_time (1), error_count);
   return !!error_count;
 }

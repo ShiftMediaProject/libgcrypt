@@ -32,55 +32,9 @@
 #endif
 
 
-#define my_isascii(c) (!((c) & 0x80))
-#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a) (digitp (a)                     \
-                      || (*(a) >= 'A' && *(a) <= 'F')  \
-                      || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)   (*(p) <= '9'? (*(p)- '0'): \
-                     *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)   ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define DIM(v)		     (sizeof(v)/sizeof((v)[0]))
-#define DIMof(type,member)   DIM(((type *)0)->member)
+#define PGM "pkcs1v2"
+#include "t-common.h"
 
-static int verbose;
-static int die_on_error;
-static int error_count;
-
-
-static void
-info (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-}
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  error_count++;
-  if (die_on_error)
-    exit (1);
-}
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  exit (1);
-}
 
 static void
 show_sexp (const char *prefix, gcry_sexp_t a)
@@ -639,7 +593,6 @@ int
 main (int argc, char **argv)
 {
   int last_argc = -1;
-  int debug = 0;
   int run_oaep = 0;
   int run_pss = 0;
   int run_v15c = 0;
@@ -697,15 +650,15 @@ main (int argc, char **argv)
   if (!run_oaep && !run_pss && !run_v15c && !run_v15s)
     run_oaep = run_pss = run_v15c = run_v15s = 1;
 
-  gcry_control (GCRYCTL_SET_VERBOSITY, (int)verbose);
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_SET_VERBOSITY, (int)verbose);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version ("1.5.0"))
     die ("version mismatch\n");
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
   /* No valuable keys are create, so we can speed up our RNG. */
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
 
   if (run_oaep)
     check_oaep ();

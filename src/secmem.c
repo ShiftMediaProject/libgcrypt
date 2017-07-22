@@ -91,7 +91,7 @@ typedef struct pooldesc_s
 static pooldesc_t mainpool;
 
 
-/* A couple of flags whith some beeing set early. */
+/* A couple of flags whith some being set early. */
 static int disable_secmem;
 static int show_warning;
 static int not_locked;
@@ -841,6 +841,8 @@ _gcry_secmem_term ()
 }
 
 
+/* Print stats of the secmem allocator.  With EXTENDED passwed as true
+ * a detiled listing is returned (used for testing).  */
 void
 _gcry_secmem_dump_stats (int extended)
 {
@@ -872,6 +874,5 @@ _gcry_secmem_dump_stats (int extended)
                       mb->size);
         }
     }
-
   SECMEM_UNLOCK;
 }

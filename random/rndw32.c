@@ -184,7 +184,7 @@ typedef struct
   double ssHigh;                  /* Highest readout */
   long ssCount;                   /* Total number of readout */
   char sspadding2[4];             /* Padding of 4 bytes */
-  long double ssTotal;            /* Total amout of all readouts */
+  long double ssTotal;            /* Total amount of all readouts */
   char sspadding3[6];             /* Padding of 6 bytes */
   double ssAlarm1;                /* Temp & fan: high alarm; voltage: % off */
   double ssAlarm2;                /* Temp: low alarm */
@@ -221,7 +221,7 @@ typedef struct
 
 
 
-/* One time intialized handles and function pointers.  We use dynamic
+/* One time initialized handles and function pointers.  We use dynamic
    loading of the DLLs to do without them in case libgcrypt does not
    need any random.  */
 static HANDLE hNetAPI32;
@@ -245,13 +245,14 @@ static RTLGENRANDOM        pRtlGenRandom;
 static int system_rng_available; /* Whether a system RNG is available.  */
 static HCRYPTPROV hRNGProv;      /* Handle to Intel RNG CSP. */
 
-static int debug_me;  /* Debug flag.  */
+/* The debug flag.  Debugging is enabled if the value of the envvar
+ * GCRY_RNDW32_DBG is a positive number.*/
+static int debug_me;
 
 static int system_is_w2000;     /* True if running on W2000.  */
 
 
-
-
+
 /* Try and connect to the system RNG if there's one present. */
 static void
 init_system_rng (void)
@@ -583,8 +584,8 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
 
     if (hNetAPI32
         && !pNetStatisticsGet (NULL,
-                               is_workstation ? L"LanmanWorkstation" :
-                               L"LanmanServer", 0, 0, &lpBuffer))
+                               (LPWSTR)(is_workstation ? L"LanmanWorkstation" :
+                                        L"LanmanServer"), 0, 0, &lpBuffer))
       {
         if ( debug_me )
           log_debug ("rndw32#slow_gatherer: get netstats\n" );
@@ -775,6 +776,7 @@ _gcry_rndw32_gather_random (void (*add)(const void*, size_t,
                             size_t length, int level )
 {
   static int is_initialized;
+  size_t n;
 
   if (!level)
     return 0;
@@ -787,11 +789,16 @@ _gcry_rndw32_gather_random (void (*add)(const void*, size_t,
   if (!is_initialized)
     {
       OSVERSIONINFO osvi = { sizeof( osvi ) };
+      const char *s;
+
+      if ((s = getenv ("GCRYPT_RNDW32_DBG")) && atoi (s) > 0)
+        debug_me = 1;
 
       GetVersionEx( &osvi );
       if (osvi.dwPlatformId != VER_PLATFORM_WIN32_NT)
         log_fatal ("can only run on a Windows NT platform\n" );
       system_is_w2000 = (osvi.dwMajorVersion == 5 && osvi.dwMinorVersion == 0);
+
       init_system_rng ();
       is_initialized = 1;
     }
@@ -801,6 +808,13 @@ _gcry_rndw32_gather_random (void (*add)(const void*, size_t,
                origin, (unsigned int)length, level );
 
   slow_gatherer (add, origin);
+
+  /* Round requested LENGTH up to full 32 bytes.  */
+  n = _gcry_rndjent_poll (add, origin, ((length + 31) / 32) * 32);
+
+  if (debug_me)
+    log_debug ("rndw32#gather_random: jent contributed extra %u bytes\n",
+               (unsigned int)n);
 
   return 0;
 }

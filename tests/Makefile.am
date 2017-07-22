@@ -19,14 +19,14 @@
 ## Process this file with automake to produce Makefile.in
 
 tests_bin = \
-        version mpitests t-sexp t-convert \
+        version t-secmem mpitests t-sexp t-convert \
 	t-mpi-bit t-mpi-point curves t-lock \
 	prime basic keygen pubkey hmac hashtest t-kdf keygrip \
 	fips186-dsa aeswrap pkcs1v2 random dsa-rfc6979 t-ed25519 t-cv25519
 
 tests_bin_last = benchmark bench-slope
 
-tests_sh =
+tests_sh = basic-disable-all-hwf
 
 tests_sh_last = hashtest-256g
 
@@ -58,7 +58,9 @@ noinst_HEADERS = t-common.h
 EXTRA_DIST = README rsa-16k.key cavs_tests.sh cavs_driver.pl \
 	     pkcs1v2-oaep.h pkcs1v2-pss.h pkcs1v2-v15c.h pkcs1v2-v15s.h \
 	     t-ed25519.inp stopwatch.h hashtest-256g.in \
-	     sha3-224.h sha3-256.h sha3-384.h sha3-512.h
+	     sha3-224.h sha3-256.h sha3-384.h sha3-512.h \
+	     blake2b.h blake2s.h \
+	     basic-disable-all-hwf.in
 
 LDADD = $(standard_ldadd) $(GPG_ERROR_LIBS)
 t_lock_LDADD = $(standard_ldadd) $(GPG_ERROR_MT_LIBS)

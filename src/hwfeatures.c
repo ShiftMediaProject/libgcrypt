@@ -42,25 +42,27 @@ static struct
   const char *desc;
 } hwflist[] =
   {
-    { HWF_PADLOCK_RNG,     "padlock-rng" },
-    { HWF_PADLOCK_AES,     "padlock-aes" },
-    { HWF_PADLOCK_SHA,     "padlock-sha" },
-    { HWF_PADLOCK_MMUL,    "padlock-mmul"},
-    { HWF_INTEL_CPU,       "intel-cpu" },
-    { HWF_INTEL_FAST_SHLD, "intel-fast-shld" },
-    { HWF_INTEL_BMI2,      "intel-bmi2" },
-    { HWF_INTEL_SSSE3,     "intel-ssse3" },
-    { HWF_INTEL_SSE4_1,    "intel-sse4.1" },
-    { HWF_INTEL_PCLMUL,    "intel-pclmul" },
-    { HWF_INTEL_AESNI,     "intel-aesni" },
-    { HWF_INTEL_RDRAND,    "intel-rdrand" },
-    { HWF_INTEL_AVX,       "intel-avx" },
-    { HWF_INTEL_AVX2,      "intel-avx2" },
-    { HWF_ARM_NEON,        "arm-neon" },
-    { HWF_ARM_AES,         "arm-aes" },
-    { HWF_ARM_SHA1,        "arm-sha1" },
-    { HWF_ARM_SHA2,        "arm-sha2" },
-    { HWF_ARM_PMULL,       "arm-pmull" }
+    { HWF_PADLOCK_RNG,         "padlock-rng" },
+    { HWF_PADLOCK_AES,         "padlock-aes" },
+    { HWF_PADLOCK_SHA,         "padlock-sha" },
+    { HWF_PADLOCK_MMUL,        "padlock-mmul"},
+    { HWF_INTEL_CPU,           "intel-cpu" },
+    { HWF_INTEL_FAST_SHLD,     "intel-fast-shld" },
+    { HWF_INTEL_BMI2,          "intel-bmi2" },
+    { HWF_INTEL_SSSE3,         "intel-ssse3" },
+    { HWF_INTEL_SSE4_1,        "intel-sse4.1" },
+    { HWF_INTEL_PCLMUL,        "intel-pclmul" },
+    { HWF_INTEL_AESNI,         "intel-aesni" },
+    { HWF_INTEL_RDRAND,        "intel-rdrand" },
+    { HWF_INTEL_AVX,           "intel-avx" },
+    { HWF_INTEL_AVX2,          "intel-avx2" },
+    { HWF_INTEL_FAST_VPGATHER, "intel-fast-vpgather" },
+    { HWF_INTEL_RDTSC,         "intel-rdtsc" },
+    { HWF_ARM_NEON,            "arm-neon" },
+    { HWF_ARM_AES,             "arm-aes" },
+    { HWF_ARM_SHA1,            "arm-sha1" },
+    { HWF_ARM_SHA2,            "arm-sha2" },
+    { HWF_ARM_PMULL,           "arm-pmull" }
   };
 
 /* A bit vector with the hardware features which shall not be used.
@@ -71,9 +73,6 @@ static unsigned int disabled_hw_features;
    available. */
 static unsigned int hw_features;
 
-/* Convenience macros.  */
-#define my_isascii(c) (!((c) & 0x80))
-
 
 
 /* Disable a feature by name.  This function must be called *before*
@@ -82,14 +81,34 @@ gpg_err_code_t
 _gcry_disable_hw_feature (const char *name)
 {
   int i;
+  size_t n1, n2;
 
-  for (i=0; i < DIM (hwflist); i++)
-    if (!strcmp (hwflist[i].desc, name))
-      {
-        disabled_hw_features |= hwflist[i].flag;
-        return 0;
-      }
-  return GPG_ERR_INV_NAME;
+  while (name && *name)
+    {
+      n1 = strcspn (name, ":,");
+      if (!n1)
+        ;
+      else if (n1 == 3 && !strncmp (name, "all", 3))
+        disabled_hw_features = ~0;
+      else
+        {
+          for (i=0; i < DIM (hwflist); i++)
+            {
+              n2 = strlen (hwflist[i].desc);
+              if (n1 == n2 && !strncmp (hwflist[i].desc, name, n2))
+                {
+                  disabled_hw_features |= hwflist[i].flag;
+                  break;
+                }
+            }
+          if (!(i < DIM (hwflist)))
+            return GPG_ERR_INV_NAME;
+        }
+      name += n1;
+      if (*name)
+        name++; /* Skip delimiter ':' or ','.  */
+    }
+  return 0;
 }
 
 
@@ -125,7 +144,7 @@ parse_hwf_deny_file (void)
   FILE *fp;
   char buffer[256];
   char *p, *pend;
-  int i, lnr = 0;
+  int lnr = 0;
 
   fp = fopen (fname, "r");
   if (!fp)
@@ -159,15 +178,7 @@ parse_hwf_deny_file (void)
       if (!*p || *p == '#')
         continue;
 
-      for (i=0; i < DIM (hwflist); i++)
-        {
-          if (!strcmp (hwflist[i].desc, p))
-            {
-              disabled_hw_features |= hwflist[i].flag;
-              break;
-            }
-        }
-      if (i == DIM (hwflist))
+      if (_gcry_disable_hw_feature (p) == GPG_ERR_INV_NAME)
         {
 #ifdef HAVE_SYSLOG
           syslog (LOG_USER|LOG_WARNING,

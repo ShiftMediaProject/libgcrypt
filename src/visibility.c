@@ -484,6 +484,12 @@ gcry_mpi_point_release (gcry_mpi_point_t point)
   _gcry_mpi_point_release (point);
 }
 
+gcry_mpi_point_t
+gcry_mpi_point_copy (gcry_mpi_point_t point)
+{
+  return _gcry_mpi_point_copy (point);
+}
+
 void
 gcry_mpi_point_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
                     gcry_mpi_point_t point)
@@ -1174,10 +1180,10 @@ gcry_md_read (gcry_md_hd_t hd, int algo)
   return _gcry_md_read (hd, algo);
 }
 
-gcry_err_code_t
+gcry_error_t
 gcry_md_extract (gcry_md_hd_t hd, int algo, void *buffer, size_t length)
 {
-  return _gcry_md_extract(hd, algo, buffer, length);
+  return gpg_error (_gcry_md_extract(hd, algo, buffer, length));
 }
 
 void
@@ -1433,6 +1439,12 @@ void
 gcry_log_debugsxp (const char *text, gcry_sexp_t sexp)
 {
   _gcry_log_printsxp (text, sexp);
+}
+
+char *
+gcry_get_config (int mode, const char *what)
+{
+  return _gcry_get_config (mode, what);
 }
 
 void

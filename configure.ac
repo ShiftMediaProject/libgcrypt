@@ -1,7 +1,7 @@
 # Configure.ac script for Libgcrypt
 # Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006,
 #               2007, 2008, 2009, 2011 Free Software Foundation, Inc.
-# Copyright (C) 2012, 2013, 2014, 2015, 2016, 2017  g10 Code GmbH
+# Copyright (C) 2012-2017  g10 Code GmbH
 #
 # This file is part of Libgcrypt.
 #
@@ -29,8 +29,8 @@ min_automake_version="1.14"
 # commit and push so that the git magic is able to work.  See below
 # for the LT versions.
 m4_define(mym4_version_major, [1])
-m4_define(mym4_version_minor, [7])
-m4_define(mym4_version_micro, [8])
+m4_define(mym4_version_minor, [8])
+m4_define(mym4_version_micro, [0])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -54,9 +54,9 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (Interfaces removed:    CURRENT++, AGE=0, REVISION=0)
 #   (Interfaces added:      CURRENT++, AGE++, REVISION=0)
 #   (No interfaces changed:                   REVISION++)
-LIBGCRYPT_LT_CURRENT=21
-LIBGCRYPT_LT_AGE=1
-LIBGCRYPT_LT_REVISION=8
+LIBGCRYPT_LT_CURRENT=22
+LIBGCRYPT_LT_AGE=2
+LIBGCRYPT_LT_REVISION=0
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -67,7 +67,7 @@ LIBGCRYPT_CONFIG_API_VERSION=1
 
 # If you change the required gpg-error version, please remove
 # unnecessary error code defines in src/gcrypt-int.h.
-NEED_GPG_ERROR_VERSION=1.13
+NEED_GPG_ERROR_VERSION=1.25
 
 PACKAGE=$PACKAGE_NAME
 VERSION=$PACKAGE_VERSION
@@ -196,8 +196,8 @@ available_pubkey_ciphers="dsa elgamal rsa ecc"
 enabled_pubkey_ciphers=""
 
 # Definitions for message digests.
-available_digests="crc gostr3411-94 md2 md4 md5 rmd160 sha1 sha256"
-available_digests="$available_digests sha512 sha3 tiger whirlpool stribog"
+available_digests="crc gostr3411-94 md2 md4 md5 rmd160 sha1 sha256 sha512"
+available_digests="$available_digests sha3 tiger whirlpool stribog blake2"
 enabled_digests=""
 
 # Definitions for kdfs (optional ones)
@@ -212,7 +212,6 @@ auto_random_modules="$available_random_modules"
 LIBGCRYPT_THREAD_MODULES=""
 
 # Other definitions.
-print_egd_notice=no
 have_w32_system=no
 have_w32ce_system=no
 have_pthread=no
@@ -269,6 +268,10 @@ case "${host}" in
         fi
         ;;
     m68k-atari-mint)
+        ;;
+    *-apple-darwin*)
+        AC_DEFINE(_DARWIN_C_SOURCE, 900000L,
+                  Expose all libc features (__DARWIN_C_FULL).)
         ;;
     *)
       ;;
@@ -335,7 +338,7 @@ AC_ARG_ENABLE(endian-check,
 if test x"$endiancheck" = xyes ; then
   AC_C_BIGENDIAN
 else
-  AC_DEFINE(DISABLED_ENDIAN_CHECK,1,[configure did not test for endianess])
+  AC_DEFINE(DISABLED_ENDIAN_CHECK,1,[configure did not test for endianness])
 fi
 
 AC_CHECK_SIZEOF(unsigned short, 2)
@@ -572,6 +575,14 @@ if test "$use_hmac_binary_check" = yes ; then
               [Define to support an HMAC based integrity check])
 fi
 
+
+# Implementation of the --disable-jent-support switch.
+AC_MSG_CHECKING([whether jitter entropy support is requested])
+AC_ARG_ENABLE(jent-support,
+              AC_HELP_STRING([--disable-jent-support],
+                        [Disable support for the Jitter entropy collector]),
+	      jentsupport=$enableval,jentsupport=yes)
+AC_MSG_RESULT($jentsupport)
 
 # Implementation of the --disable-padlock-support switch.
 AC_MSG_CHECKING([whether padlock support is requested])
@@ -958,6 +969,12 @@ if test "$gcry_cv_visibility_attribute" = "yes" \
 fi
 
 
+# Following attribute tests depend on warnings to cause compile to fail,
+# so set -Werror temporarily.
+_gcc_cflags_save=$CFLAGS
+CFLAGS="$CFLAGS -Werror"
+
+
 #
 # Check whether the compiler supports the GCC style aligned attribute
 #
@@ -991,6 +1008,26 @@ if test "$gcry_cv_gcc_attribute_packed" = "yes" ; then
    AC_DEFINE(HAVE_GCC_ATTRIBUTE_PACKED,1,
      [Defined if a GCC style "__attribute__ ((packed))" is supported])
 fi
+
+
+#
+# Check whether the compiler supports the GCC style may_alias attribute
+#
+AC_CACHE_CHECK([whether the GCC style may_alias attribute is supported],
+       [gcry_cv_gcc_attribute_may_alias],
+       [gcry_cv_gcc_attribute_may_alias=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[typedef struct foo_s { int a; }
+            __attribute__ ((may_alias)) foo_t;]])],
+          [gcry_cv_gcc_attribute_may_alias=yes])])
+if test "$gcry_cv_gcc_attribute_may_alias" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_MAY_ALIAS,1,
+     [Defined if a GCC style "__attribute__ ((may_alias))" is supported])
+fi
+
+
+# Restore flags.
+CFLAGS=$_gcc_cflags_save;
 
 
 #
@@ -1155,6 +1192,7 @@ if test "$mpi_cpu_arch" != "x86" ; then
    avxsupport="n/a"
    avx2support="n/a"
    padlocksupport="n/a"
+   jentsupport="n/a"
    drngsupport="n/a"
 fi
 
@@ -1623,7 +1661,7 @@ AC_CACHE_CHECK([whether GCC inline assembler supports AArch64 NEON instructions]
           gcry_cv_gcc_inline_asm_aarch64_neon=no
           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
           [[__asm__(
-                ".arch armv8-a\n\t"
+                ".cpu generic+simd\n\t"
                 "mov w0, \#42;\n\t"
                 "dup v0.8b, w0;\n\t"
                 "ld4 {v0.8b,v1.8b,v2.8b,v3.8b},[x0],\#32;\n\t"
@@ -1648,7 +1686,11 @@ AC_CACHE_CHECK([whether GCC inline assembler supports AArch64 Crypto Extension i
           gcry_cv_gcc_inline_asm_aarch64_crypto=no
           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
           [[__asm__(
-                ".arch armv8-a+crypto\n\t"
+                ".cpu generic+simd+crypto\n\t"
+
+                "mov w0, \#42;\n\t"
+                "dup v0.8b, w0;\n\t"
+                "ld4 {v0.8b,v1.8b,v2.8b,v3.8b},[x0],\#32;\n\t"
 
                 "sha1h s0, s0;\n\t"
                 "sha1c q0, s0, v0.4s;\n\t"
@@ -1702,7 +1744,7 @@ AC_REPLACE_FUNCS([getpid clock])
 
 
 #
-# Check wether it is necessary to link against libdl.
+# Check whether it is necessary to link against libdl.
 #
 DL_LIBS=""
 if test "$use_hmac_binary_check" = yes ; then
@@ -1958,6 +2000,10 @@ if test x"$armcryptosupport" = xyes ; then
   AC_DEFINE(ENABLE_ARM_CRYPTO_SUPPORT,1,
             [Enable support for ARMv8 Crypto Extension instructions.])
 fi
+if test x"$jentsupport" = xyes ; then
+  AC_DEFINE(ENABLE_JENT_SUPPORT, 1,
+            [Enable support for the jitter entropy collector.])
+fi
 if test x"$padlocksupport" = xyes ; then
   AC_DEFINE(ENABLE_PADLOCK_SUPPORT, 1,
             [Enable support for the PadLock engine.])
@@ -2043,6 +2089,7 @@ if test "$found" = "1" ; then
 
          # Build with the SSSE3 implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64.lo"
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64-asm.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
@@ -2082,6 +2129,11 @@ if test "$found" = "1" ; then
       x86_64-*-*)
          # Build with the assembly implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-amd64.lo"
+
+         if test x"$avx2support" = xyes ; then
+            # Build with the AVX2 implementation
+            GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-avx2-amd64.lo"
+         fi
       ;;
       arm*-*-*)
          # Build with the assembly implementation
@@ -2386,6 +2438,12 @@ if test "$found" = "1" ; then
    esac
 fi
 
+LIST_MEMBER(blake2, $enabled_digests)
+if test "$found" = "1" ; then
+   GCRYPT_DIGESTS="$GCRYPT_DIGESTS blake2.lo"
+   AC_DEFINE(USE_BLAKE2, 1, [Defined if this module should be included])
+fi
+
 # SHA-1 needs to be included always for example because it is used by
 # random-csprng.c.
 GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1.lo"
@@ -2425,7 +2483,6 @@ LIST_MEMBER(unix, $random_modules)
 if test "$found" = "1" ; then
    GCRYPT_RANDOM="$GCRYPT_RANDOM rndunix.lo"
    AC_DEFINE(USE_RNDUNIX, 1, [Defined if the default Unix RNG should be used.])
-   print_egd_notice=yes
 fi
 
 LIST_MEMBER(egd, $random_modules)
@@ -2577,6 +2634,7 @@ src/versioninfo.rc
 tests/Makefile
 ])
 AC_CONFIG_FILES([tests/hashtest-256g], [chmod +x tests/hashtest-256g])
+AC_CONFIG_FILES([tests/basic-disable-all-hwf], [chmod +x tests/basic-disable-all-hwf])
 AC_OUTPUT
 
 
@@ -2594,6 +2652,7 @@ GCRY_MSG_WRAP([Enabled digest algorithms:],[$enabled_digests])
 GCRY_MSG_WRAP([Enabled kdf algorithms:   ],[$enabled_kdfs])
 GCRY_MSG_WRAP([Enabled pubkey algorithms:],[$enabled_pubkey_ciphers])
 GCRY_MSG_SHOW([Random number generator:  ],[$random])
+GCRY_MSG_SHOW([Try using jitter entropy: ],[$jentsupport])
 GCRY_MSG_SHOW([Using linux capabilities: ],[$use_capabilities])
 GCRY_MSG_SHOW([Try using Padlock crypto: ],[$padlocksupport])
 GCRY_MSG_SHOW([Try using AES-NI crypto:  ],[$aesnisupport])
@@ -2612,23 +2671,6 @@ cat <<G10EOF
         be used libraries have been been detected for:
          ${gpg_config_script_warn}
         Please check above for warning messages.
-
-G10EOF
-fi
-if test "$print_egd_notice" = "yes"; then
-cat <<G10EOF
-   The performance of the Unix random gatherer module (rndunix) is not
-   very good and it does not keep the entropy pool over multiple
-   invocations of Libgcrypt base applications.  The suggested way to
-   overcome this problem is to use the
-
-                 Entropy Gathering Daemon (EGD)
-
-   which provides a entropy source for the whole system.  It is written
-   in Perl and available at the GnuPG FTP servers.  For more information
-   consult the GnuPG site:
-
-          https://gnupg.org/related_software/swlist.html#egd
 
 G10EOF
 fi

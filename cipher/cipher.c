@@ -405,9 +405,17 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
 	  err = GPG_ERR_INV_CIPHER_MODE;
 	break;
 
+      case GCRY_CIPHER_MODE_XTS:
+	if (spec->blocksize != GCRY_XTS_BLOCK_LEN)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	if (!spec->encrypt || !spec->decrypt)
+	  err = GPG_ERR_INV_CIPHER_MODE;
+	break;
+
       case GCRY_CIPHER_MODE_ECB:
       case GCRY_CIPHER_MODE_CBC:
       case GCRY_CIPHER_MODE_CFB:
+      case GCRY_CIPHER_MODE_CFB8:
       case GCRY_CIPHER_MODE_OFB:
       case GCRY_CIPHER_MODE_CTR:
       case GCRY_CIPHER_MODE_AESWRAP:
@@ -468,6 +476,18 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
 #endif /*NEED_16BYTE_ALIGNED_CONTEXT*/
                      );
 
+      /* Space needed per mode.  */
+      switch (mode)
+	{
+	case GCRY_CIPHER_MODE_XTS:
+	  /* Additional cipher context for tweak. */
+	  size += 2 * spec->contextsize + 15;
+	  break;
+
+	default:
+	  break;
+	}
+
       if (secure)
 	h = xtrycalloc_secure (1, size);
       else
@@ -478,6 +498,7 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
       else
 	{
           size_t off = 0;
+	  char *tc;
 
 #ifdef NEED_16BYTE_ALIGNED_CONTEXT
           if ( ((uintptr_t)h & 0x0f) )
@@ -578,6 +599,13 @@ _gcry_cipher_open_internal (gcry_cipher_hd_t *handle,
               h->u_mode.ocb.taglen = 16; /* Bytes.  */
               break;
 
+	    case GCRY_CIPHER_MODE_XTS:
+	      tc = h->context.c + spec->contextsize * 2;
+	      tc += (16 - (uintptr_t)tc % 16) % 16;
+	      h->u_mode.xts.tweak_context = tc;
+
+	      break;
+
             default:
               break;
             }
@@ -630,6 +658,23 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
 {
   gcry_err_code_t rc;
 
+  if (c->mode == GCRY_CIPHER_MODE_XTS)
+    {
+      /* XTS uses two keys. */
+      if (keylen % 2)
+	return GPG_ERR_INV_KEYLEN;
+      keylen /= 2;
+
+      if (fips_mode ())
+	{
+	  /* Reject key if subkeys Key_1 and Key_2 are equal.
+	     See "Implementation Guidance for FIPS 140-2, A.9 XTS-AES
+	     Key Generation Requirements" for details.  */
+	  if (buf_eq_const (key, key + keylen, keylen))
+	    return GPG_ERR_WEAK_KEY;
+	}
+    }
+
   rc = c->spec->setkey (&c->context.c, key, keylen);
   if (!rc)
     {
@@ -652,6 +697,20 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
         case GCRY_CIPHER_MODE_POLY1305:
           _gcry_cipher_poly1305_setkey (c);
           break;
+
+	case GCRY_CIPHER_MODE_XTS:
+	  /* Setup tweak cipher with second part of XTS key. */
+	  rc = c->spec->setkey (c->u_mode.xts.tweak_context, key + keylen,
+				keylen);
+	  if (!rc)
+	    {
+	      /* Duplicate initial tweak context.  */
+	      memcpy (c->u_mode.xts.tweak_context + c->spec->contextsize,
+		      c->u_mode.xts.tweak_context, c->spec->contextsize);
+	    }
+	  else
+	    c->marks.key = 0;
+	  break;
 
         default:
           break;
@@ -751,6 +810,12 @@ cipher_reset (gcry_cipher_hd_t c)
       c->u_mode.ocb.taglen = 16;
       break;
 
+    case GCRY_CIPHER_MODE_XTS:
+      memcpy (c->u_mode.xts.tweak_context,
+	      c->u_mode.xts.tweak_context + c->spec->contextsize,
+	      c->spec->contextsize);
+      break;
+
     default:
       break; /* u_mode unused by other modes. */
     }
@@ -838,6 +903,10 @@ cipher_encrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
       rc = _gcry_cipher_cfb_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
+    case GCRY_CIPHER_MODE_CFB8:
+      rc = _gcry_cipher_cfb8_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
     case GCRY_CIPHER_MODE_OFB:
       rc = _gcry_cipher_ofb_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
@@ -870,6 +939,10 @@ cipher_encrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
 
     case GCRY_CIPHER_MODE_OCB:
       rc = _gcry_cipher_ocb_encrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_XTS:
+      rc = _gcry_cipher_xts_crypt (c, outbuf, outbuflen, inbuf, inbuflen, 1);
       break;
 
     case GCRY_CIPHER_MODE_STREAM:
@@ -933,7 +1006,7 @@ _gcry_cipher_encrypt (gcry_cipher_hd_t h, void *out, size_t outsize,
 /****************
  * Decrypt INBUF to OUTBUF with the mode selected at open.
  * inbuf and outbuf may overlap or be the same.
- * Depending on the mode some some contraints apply to INBUFLEN.
+ * Depending on the mode some some constraints apply to INBUFLEN.
  */
 static gcry_err_code_t
 cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
@@ -959,6 +1032,10 @@ cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
 
     case GCRY_CIPHER_MODE_CFB:
       rc = _gcry_cipher_cfb_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_CFB8:
+      rc = _gcry_cipher_cfb8_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
       break;
 
     case GCRY_CIPHER_MODE_OFB:
@@ -993,6 +1070,10 @@ cipher_decrypt (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
 
     case GCRY_CIPHER_MODE_OCB:
       rc = _gcry_cipher_ocb_decrypt (c, outbuf, outbuflen, inbuf, inbuflen);
+      break;
+
+    case GCRY_CIPHER_MODE_XTS:
+      rc = _gcry_cipher_xts_crypt (c, outbuf, outbuflen, inbuf, inbuflen, 0);
       break;
 
     case GCRY_CIPHER_MODE_STREAM:

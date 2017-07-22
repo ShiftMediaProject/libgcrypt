@@ -28,19 +28,8 @@
 #include "types.h"
 
 /* These error codes are used but not defined in the required
-   libgpg-error 1.11.  Define them here. */
-#if GPG_ERROR_VERSION_NUMBER < 0x010c00  /* 1.12 */
-# define GPG_ERR_NO_CRYPT_CTX	    191
-# define GPG_ERR_WRONG_CRYPT_CTX    192
-# define GPG_ERR_BAD_CRYPT_CTX	    193
-# define GPG_ERR_CRYPT_CTX_CONFLICT 194
-# define GPG_ERR_BROKEN_PUBKEY      195
-# define GPG_ERR_BROKEN_SECKEY      196
-#endif
+ * libgpg-error N.MM.  Define them here.  [None right now.] */
 
-#if GPG_ERROR_VERSION_NUMBER < 0x010d00  /* 1.13 */
-# define GPG_ERR_MAC_ALGO           197
-#endif
 
 
 /* Context used with elliptic curve functions.  */
@@ -411,6 +400,7 @@ int _gcry_mpi_gcd (gcry_mpi_t g, gcry_mpi_t a, gcry_mpi_t b);
 int _gcry_mpi_invm (gcry_mpi_t x, gcry_mpi_t a, gcry_mpi_t m);
 gcry_mpi_point_t _gcry_mpi_point_new (unsigned int nbits);
 void _gcry_mpi_point_release (gcry_mpi_point_t point);
+gcry_mpi_point_t _gcry_mpi_point_copy (gcry_mpi_point_t point);
 void _gcry_mpi_point_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
                          gcry_mpi_point_t point);
 void _gcry_mpi_point_snatch_get (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t z,
@@ -508,6 +498,8 @@ int _gcry_mpi_get_flag (gcry_mpi_t a, enum gcry_mpi_flag flag);
       (p) = NULL;                                \
     }                                            \
   while (0)
+
+#define mpi_point_copy(p)      _gcry_mpi_point_copy((p))
 
 #define mpi_point_get(x,y,z,p)        _gcry_mpi_point_get((x),(y),(z),(p))
 #define mpi_point_snatch_get(x,y,z,p) _gcry_mpi_point_snatch_get((x),(y), \

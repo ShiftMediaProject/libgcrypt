@@ -1,5 +1,5 @@
 /* bufhelp.h  -  Some buffer manipulation helpers
- * Copyright (C) 2012 Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
+ * Copyright (C) 2012-2017 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -20,12 +20,23 @@
 #define GCRYPT_BUFHELP_H
 
 
+#include "g10lib.h"
 #include "bithelp.h"
 
 
-#undef BUFHELP_FAST_UNALIGNED_ACCESS
+#undef BUFHELP_UNALIGNED_ACCESS
 #if defined(HAVE_GCC_ATTRIBUTE_PACKED) && \
     defined(HAVE_GCC_ATTRIBUTE_ALIGNED) && \
+    defined(HAVE_GCC_ATTRIBUTE_MAY_ALIAS)
+/* Compiler is supports attributes needed for automatically issuing unaligned
+   memory access instructions.
+ */
+# define BUFHELP_UNALIGNED_ACCESS 1
+#endif
+
+
+#undef BUFHELP_FAST_UNALIGNED_ACCESS
+#if defined(BUFHELP_UNALIGNED_ACCESS) && \
     (defined(__i386__) || defined(__x86_64__) || \
      (defined(__arm__) && defined(__ARM_FEATURE_UNALIGNED)) || \
      defined(__aarch64__))
@@ -43,15 +54,22 @@
 typedef struct bufhelp_int_s
 {
   uintptr_t a;
-} __attribute__((packed, aligned(1))) bufhelp_int_t;
+} __attribute__((packed, aligned(1), may_alias)) bufhelp_int_t;
 #else
 /* Define type with default alignment for other architectures (unaligned
    accessed handled in per byte loops).
  */
+#ifdef HAVE_GCC_ATTRIBUTE_MAY_ALIAS
+typedef struct bufhelp_int_s
+{
+  uintptr_t a;
+} __attribute__((may_alias)) bufhelp_int_t;
+#else
 typedef struct bufhelp_int_s
 {
   uintptr_t a;
 } bufhelp_int_t;
+#endif
 #endif
 
 
@@ -71,7 +89,7 @@ buf_cpy(void *_dst, const void *_src, size_t len)
   const unsigned int longmask = sizeof(bufhelp_int_t) - 1;
 
   /* Skip fast processing if buffers are unaligned.  */
-  if (((uintptr_t)dst | (uintptr_t)src) & longmask)
+  if (UNLIKELY(((uintptr_t)dst | (uintptr_t)src) & longmask))
     goto do_bytes;
 #endif
 
@@ -107,7 +125,7 @@ buf_xor(void *_dst, const void *_src1, const void *_src2, size_t len)
   const unsigned int longmask = sizeof(bufhelp_int_t) - 1;
 
   /* Skip fast processing if buffers are unaligned.  */
-  if (((uintptr_t)dst | (uintptr_t)src1 | (uintptr_t)src2) & longmask)
+  if (UNLIKELY(((uintptr_t)dst | (uintptr_t)src1 | (uintptr_t)src2) & longmask))
     goto do_bytes;
 #endif
 
@@ -143,7 +161,7 @@ buf_xor_1(void *_dst, const void *_src, size_t len)
   const unsigned int longmask = sizeof(bufhelp_int_t) - 1;
 
   /* Skip fast processing if buffers are unaligned.  */
-  if (((uintptr_t)dst | (uintptr_t)src) & longmask)
+  if (UNLIKELY(((uintptr_t)dst | (uintptr_t)src) & longmask))
     goto do_bytes;
 #endif
 
@@ -179,7 +197,7 @@ buf_xor_2dst(void *_dst1, void *_dst2, const void *_src, size_t len)
   const unsigned int longmask = sizeof(bufhelp_int_t) - 1;
 
   /* Skip fast processing if buffers are unaligned.  */
-  if (((uintptr_t)src | (uintptr_t)dst1 | (uintptr_t)dst2) & longmask)
+  if (UNLIKELY(((uintptr_t)src | (uintptr_t)dst1 | (uintptr_t)dst2) & longmask))
     goto do_bytes;
 #endif
 
@@ -221,8 +239,8 @@ buf_xor_n_copy_2(void *_dst_xor, const void *_src_xor, void *_srcdst_cpy,
   const unsigned int longmask = sizeof(bufhelp_int_t) - 1;
 
   /* Skip fast processing if buffers are unaligned.  */
-  if (((uintptr_t)src_cpy | (uintptr_t)src_xor | (uintptr_t)dst_xor |
-       (uintptr_t)srcdst_cpy) & longmask)
+  if (UNLIKELY(((uintptr_t)src_cpy | (uintptr_t)src_xor | (uintptr_t)dst_xor |
+       (uintptr_t)srcdst_cpy) & longmask))
     goto do_bytes;
 #endif
 
@@ -282,7 +300,7 @@ buf_eq_const(const void *_a, const void *_b, size_t len)
 }
 
 
-#ifndef BUFHELP_FAST_UNALIGNED_ACCESS
+#ifndef BUFHELP_UNALIGNED_ACCESS
 
 /* Functions for loading and storing unaligned u32 values of different
    endianness.  */
@@ -365,12 +383,12 @@ static inline void buf_put_le64(void *_buf, u64 val)
   out[0] = val;
 }
 
-#else /*BUFHELP_FAST_UNALIGNED_ACCESS*/
+#else /*BUFHELP_UNALIGNED_ACCESS*/
 
 typedef struct bufhelp_u32_s
 {
   u32 a;
-} __attribute__((packed, aligned(1))) bufhelp_u32_t;
+} __attribute__((packed, aligned(1), may_alias)) bufhelp_u32_t;
 
 /* Functions for loading and storing unaligned u32 values of different
    endianness.  */
@@ -400,7 +418,7 @@ static inline void buf_put_le32(void *_buf, u32 val)
 typedef struct bufhelp_u64_s
 {
   u64 a;
-} __attribute__((packed, aligned(1))) bufhelp_u64_t;
+} __attribute__((packed, aligned(1), may_alias)) bufhelp_u64_t;
 
 /* Functions for loading and storing unaligned u64 values of different
    endianness.  */
@@ -427,6 +445,6 @@ static inline void buf_put_le64(void *_buf, u64 val)
 }
 
 
-#endif /*BUFHELP_FAST_UNALIGNED_ACCESS*/
+#endif /*BUFHELP_UNALIGNED_ACCESS*/
 
 #endif /*GCRYPT_BUFHELP_H*/

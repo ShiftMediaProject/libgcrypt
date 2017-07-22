@@ -30,11 +30,8 @@
 
 #include "../src/gcrypt-int.h"
 
-#ifndef DIM
-# define DIM(v)		     (sizeof(v)/sizeof((v)[0]))
-#endif
-
 #define PGM "basic"
+#include "t-common.h"
 
 typedef struct test_spec_pubkey_key
 {
@@ -56,39 +53,9 @@ test_spec_pubkey_t;
 #define FLAG_SIGN  (1 << 1)
 #define FLAG_GRIP  (1 << 2)
 
-static int verbose;
-static int error_count;
 static int in_fips_mode;
-static int die_on_error;
 
 #define MAX_DATA_LEN 128
-
-#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a) (digitp (a)                     \
-                      || (*(a) >= 'A' && *(a) <= 'F')  \
-                      || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)   (*(p) <= '9'? (*(p)- '0'): \
-                     *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)   ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xstrdup(a)    gcry_xstrdup ((a))
-#define xfree(a)      gcry_free ((a))
-
-
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  error_count++;
-  if (die_on_error)
-    exit (1);
-}
 
 
 static void
@@ -104,18 +71,6 @@ mismatch (const void *expected, size_t expectedlen,
   for (p = computed; computedlen; p++, computedlen--)
     fprintf (stderr, " %02x", *p);
   fprintf (stderr, "\n");
-}
-
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  exit (1);
 }
 
 
@@ -938,7 +893,104 @@ check_cfb_cipher (void)
             16,
             "\x75\xa3\x85\x74\x1a\xb9\xce\xf8\x20\x31\x62\x3d\x55\xb1\xe4\x71" }
         }
-      }
+      },
+      { GCRY_CIPHER_AES, 1,
+	"\x2b\x7e\x15\x16\x28\xae\xd2\xa6\xab\xf7\x15\x88\x09\xcf\x4f\x3c",
+	"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+	{ { "\x6b",
+	    1,
+	    "\x3b"},
+	  { "\xc1",
+	    1,
+	    "\x79"},
+	  { "\xbe",
+	    1,
+	    "\x42"},
+	  { "\xe2",
+	    1,
+	    "\x4c"},
+	}
+      },
+      { GCRY_CIPHER_AES192, 1,
+	"\x8e\x73\xb0\xf7\xda\x0e\x64\x52\xc8\x10\xf3\x2b\x80\x90\x79\xe5"
+	"\x62\xf8\xea\xd2\x52\x2c\x6b\x7b",
+	"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+	{ { "\x6b",
+	    1,
+	    "\xcd"},
+	  { "\xc1",
+	    1,
+	    "\xa2"},
+	  { "\xbe",
+	    1,
+	    "\x52"},
+	  { "\xe2",
+	    1,
+	    "\x1e"},
+        }
+      },
+      { GCRY_CIPHER_AES256, 1,
+	"\x60\x3d\xeb\x10\x15\xca\x71\xbe\x2b\x73\xae\xf0\x85\x7d\x77\x81"
+	"\x1f\x35\x2c\x07\x3b\x61\x08\xd7\x2d\x98\x10\xa3\x09\x14\xdf\xf4",
+	"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+	{ { "\x6b",
+	    1,
+	    "\xdc"},
+	  { "\xc1",
+	    1,
+	    "\x1f"},
+	  { "\xbe",
+	    1,
+	    "\x1a"},
+	  { "\xe2",
+	    1,
+	    "\x85"},
+        }
+      },
+      { GCRY_CIPHER_AES, 1,
+	"\x3a\x6f\x91\x59\x26\x3f\xa6\xce\xf2\xa0\x75\xca\xfa\xce\x58\x17",
+	"\x0f\xc2\x36\x62\xb7\xdb\xf7\x38\x27\xf0\xc7\xde\x32\x1c\xa3\x6e",
+	{ { "\x87\xef\xeb\x8d\x55\x9e\xd3\x36\x77\x28",
+	    10,
+	    "\x8e\x9c\x50\x42\x56\x14\xd5\x40\xce\x11"},
+	}
+      },
+      { GCRY_CIPHER_AES192, 1,
+	"\x53\x7e\x7b\xf6\x61\xfd\x40\x24\xa0\x24\x61\x3f\x15\xb1\x36\x90"
+	"\xf7\xd0\xc8\x47\xc1\xe1\x89\x65",
+	"\x3a\x81\xf9\xd9\xd3\xc1\x55\xb0\xca\xad\x5d\x73\x34\x94\x76\xfc",
+	{ { "\xd3\xd8\xb9\xb9\x84\xad\xc2\x42\x37\xee",
+	    10,
+	    "\x38\x79\xfe\xa7\x2a\xc9\x99\x29\xe5\x3a"},
+	}
+      },
+      { GCRY_CIPHER_AES256, 1,
+	"\xeb\xbb\x45\x66\xb5\xe1\x82\xe0\xf0\x72\x46\x6b\x0b\x31\x1d\xf3"
+	"\x8f\x91\x75\xbc\x02\x13\xa5\x53\x0b\xce\x2e\xc4\xd7\x4f\x40\x0d",
+	"\x09\x56\xa4\x8e\x01\x00\x2c\x9e\x16\x37\x6d\x6e\x30\x8d\xba\xd1",
+	{ { "\xb0\xfe\x25\xac\x8d\x3d\x28\xa2\xf4\x71",
+	    10,
+	    "\x63\x8c\x68\x23\xe7\x25\x6f\xb5\x62\x6e"},
+	}
+      },
+      { GCRY_CIPHER_3DES, 1,
+	"\xe3\x34\x7a\x6b\x0b\xc1\x15\x2c\x64\x2a\x25\xcb\xd3\xbc\x31\xab"
+	"\xfb\xa1\x62\xa8\x1f\x19\x7c\x15",
+	"\xb7\x40\xcc\x21\xe9\x25\xe3\xc8",
+	{ { "\xdb\xe9\x15\xfc\xb3\x3b\xca\x18\xef\x14",
+	    10,
+	    "\xf4\x80\x1a\x8d\x03\x9d\xb4\xca\x8f\xf6"},
+	}
+      },
+      { GCRY_CIPHER_3DES, 1,
+	"\x7c\xa2\x89\x38\xba\x6b\xec\x1f\xfe\xc7\x8f\x7c\xd6\x97\x61\x94"
+	"\x7c\xa2\x89\x38\xba\x6b\xec\x1f",
+	"\x95\x38\x96\x58\x6e\x49\xd3\x8f",
+	{ { "\x2e\xa9\x56\xd4\xa2\x11\xdb\x68\x59\xb7",
+	    10,
+	    "\xf2\x0e\x53\x66\x74\xa6\x6f\xa7\x38\x05"},
+	}
+      },
     };
   gcry_cipher_hd_t hde, hdd;
   unsigned char out[MAX_DATA_LEN];
@@ -1593,8 +1645,8 @@ _check_gcm_cipher (unsigned int step)
           err = gcry_cipher_authenticate(hde, tv[i].aad + pos, poslen);
           if (err)
             {
-              fail ("aes-gcm, gcry_cipher_authenticate (%d) (%d:%d) failed: "
-                    "%s\n", i, pos, step, gpg_strerror (err));
+              fail ("aes-gcm, gcry_cipher_authenticate (%d) (%lu:%d) failed: "
+                    "%s\n", i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -1602,8 +1654,8 @@ _check_gcm_cipher (unsigned int step)
           err = gcry_cipher_authenticate(hdd, tv[i].aad + pos, poslen);
           if (err)
             {
-              fail ("aes-gcm, de gcry_cipher_authenticate (%d) (%d:%d) failed: "
-	            "%s\n", i, pos, step, gpg_strerror (err));
+              fail ("aes-gcm, de gcry_cipher_authenticate (%d) (%lu:%d) failed: "
+	            "%s\n", i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -1618,8 +1670,8 @@ _check_gcm_cipher (unsigned int step)
                                      tv[i].plaintext + pos, poslen);
           if (err)
             {
-              fail ("aes-gcm, gcry_cipher_encrypt (%d) (%d:%d) failed: %s\n",
-                    i, pos, step, gpg_strerror (err));
+              fail ("aes-gcm, gcry_cipher_encrypt (%d) (%lu:%d) failed: %s\n",
+                    i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -1636,8 +1688,8 @@ _check_gcm_cipher (unsigned int step)
           err = gcry_cipher_decrypt (hdd, out + pos, poslen, NULL, 0);
           if (err)
             {
-              fail ("aes-gcm, gcry_cipher_decrypt (%d) (%d:%d) failed: %s\n",
-                    i, pos, step, gpg_strerror (err));
+              fail ("aes-gcm, gcry_cipher_decrypt (%d) (%lu:%d) failed: %s\n",
+                    i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -1750,8 +1802,8 @@ _check_gcm_cipher (unsigned int step)
           if (tv[i].should_fail)
             goto next_tv;
 
-          fail ("aes-gcm, gcry_cipher_gettag(%d, %d) (byte-buf) failed: %s\n",
-                i, taglen2, gpg_strerror (err));
+          fail ("aes-gcm, gcry_cipher_gettag(%d, %lu) (byte-buf) failed: %s\n",
+                i, (unsigned long) taglen2, gpg_strerror (err));
           gcry_cipher_close (hde);
           gcry_cipher_close (hdd);
           return;
@@ -1998,8 +2050,8 @@ _check_poly1305_cipher (unsigned int step)
           err = gcry_cipher_authenticate(hde, tv[i].aad + pos, poslen);
           if (err)
             {
-              fail ("poly1305, gcry_cipher_authenticate (%d) (%d:%d) failed: "
-                    "%s\n", i, pos, step, gpg_strerror (err));
+              fail ("poly1305, gcry_cipher_authenticate (%d) (%lu:%d) failed: "
+                    "%s\n", i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2007,8 +2059,8 @@ _check_poly1305_cipher (unsigned int step)
           err = gcry_cipher_authenticate(hdd, tv[i].aad + pos, poslen);
           if (err)
             {
-              fail ("poly1305, de gcry_cipher_authenticate (%d) (%d:%d) failed: "
-	            "%s\n", i, pos, step, gpg_strerror (err));
+              fail ("poly1305, de gcry_cipher_authenticate (%d) (%lu:%d) failed: "
+	            "%s\n", i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2023,8 +2075,8 @@ _check_poly1305_cipher (unsigned int step)
                                      tv[i].plaintext + pos, poslen);
           if (err)
             {
-              fail ("poly1305, gcry_cipher_encrypt (%d) (%d:%d) failed: %s\n",
-                    i, pos, step, gpg_strerror (err));
+              fail ("poly1305, gcry_cipher_encrypt (%d) (%lu:%d) failed: %s\n",
+                    i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2041,8 +2093,8 @@ _check_poly1305_cipher (unsigned int step)
           err = gcry_cipher_decrypt (hdd, out + pos, poslen, NULL, 0);
           if (err)
             {
-              fail ("poly1305, gcry_cipher_decrypt (%d) (%d:%d) failed: %s\n",
-                    i, pos, step, gpg_strerror (err));
+              fail ("poly1305, gcry_cipher_decrypt (%d) (%lu:%d) failed: %s\n",
+                    i, (unsigned long) pos, step, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2709,8 +2761,8 @@ check_ccm_cipher (void)
           err = gcry_cipher_info (hde, GCRYCTL_GET_TAGLEN, NULL, &taglen2);
           if (err)
             {
-              fail ("cipher-ccm, gcryctl_get_taglen failed (tv %d): %s\n",
-                    i, gpg_strerror (err));
+              fail ("cipher-ccm, gcryctl_get_taglen failed (tv %lu): %s\n",
+                    (unsigned long) i, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2718,8 +2770,8 @@ check_ccm_cipher (void)
           if (taglen2 != authlen)
             {
               fail ("cipher-ccm, gcryctl_get_taglen returned bad length"
-                    " (tv %d): got=%zu want=%zu\n",
-                    i, taglen2, authlen);
+                    " (tv %lu): got=%zu want=%zu\n",
+                    (unsigned long) i, taglen2, authlen);
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2758,8 +2810,8 @@ check_ccm_cipher (void)
                                        split);
           if (err)
             {
-              fail ("cipher-ccm, gcry_cipher_encrypt (%d:%d) failed: %s\n",
-                    i, j, gpg_strerror (err));
+              fail ("cipher-ccm, gcry_cipher_encrypt (%lu:%lu) failed: %s\n",
+                    (unsigned long) i, (unsigned long) j, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -2768,15 +2820,16 @@ check_ccm_cipher (void)
           err = gcry_cipher_gettag (hde, &out[tv[i].plainlen], authlen);
           if (err)
             {
-              fail ("cipher-ccm, gcry_cipher_gettag (%d:%d) failed: %s\n",
-                    i, j, gpg_strerror (err));
+              fail ("cipher-ccm, gcry_cipher_gettag (%lu:%lu) failed: %s\n",
+                    (unsigned long) i, (unsigned long) j, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
             }
 
           if (memcmp (tv[i].ciphertext, out, tv[i].cipherlen))
-            fail ("cipher-ccm, encrypt mismatch entry %d:%d\n", i, j);
+            fail ("cipher-ccm, encrypt mismatch entry %lu:%lu\n",
+		  (unsigned long) i, (unsigned long) j);
 
           err = gcry_cipher_decrypt (hdd, out, tv[i].plainlen - split, NULL, 0);
           if (!err)
@@ -2784,21 +2837,22 @@ check_ccm_cipher (void)
                                        NULL, 0);
           if (err)
             {
-              fail ("cipher-ccm, gcry_cipher_decrypt (%d:%d) failed: %s\n",
-                    i, j, gpg_strerror (err));
+              fail ("cipher-ccm, gcry_cipher_decrypt (%lu:%lu) failed: %s\n",
+                    (unsigned long) i, (unsigned long) j, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
             }
 
           if (memcmp (tv[i].plaintext, out, tv[i].plainlen))
-            fail ("cipher-ccm, decrypt mismatch entry %d:%d\n", i, j);
+            fail ("cipher-ccm, decrypt mismatch entry %lu:%lu\n",
+		  (unsigned long) i, (unsigned long) j);
 
           err = gcry_cipher_checktag (hdd, &out[tv[i].plainlen], authlen);
           if (err)
             {
-              fail ("cipher-ccm, gcry_cipher_checktag (%d:%d) failed: %s\n",
-                    i, j, gpg_strerror (err));
+              fail ("cipher-ccm, gcry_cipher_checktag (%lu:%lu) failed: %s\n",
+                    (unsigned long) i, (unsigned long) j, gpg_strerror (err));
               gcry_cipher_close (hde);
               gcry_cipher_close (hdd);
               return;
@@ -3873,6 +3927,510 @@ check_ocb_cipher (void)
   /* Check that the AAD data is correctly buffered.  */
   check_ocb_cipher_splitaad ();
 }
+
+static void
+check_gost28147_cipher (void)
+{
+#if USE_GOST28147
+  static const struct {
+    char key[MAX_DATA_LEN];
+    const char *oid;
+    unsigned char plaintext[MAX_DATA_LEN];
+    int inlen;
+    char out[MAX_DATA_LEN];
+  } tv[] =
+  {
+    {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.7.1.2.5.1.1",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\xce\x5a\x5e\xd7\xe0\x57\x7a\x5f",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.31.0",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\x98\x56\xcf\x8b\xfc\xc2\x82\xf4",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.31.1",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\x66\x81\x84\xae\xdc\x48\xc9\x17",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.31.2",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\xdb\xee\x81\x14\x7b\x74\xb0\xf2",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.31.3",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\x31\xa3\x85\x9d\x0a\xee\xb8\x0e",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.31.4",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\xb1\x32\x3e\x0b\x21\x73\xcb\xd1",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.30.0",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\xce\xd5\x2a\x7f\xf7\xf2\x60\xd5",
+    }, {
+      "\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x80"
+      "\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xd0",
+      "1.2.643.2.2.30.1",
+      "\x01\x02\x03\x04\x05\x06\x07\x08",
+      8,
+      "\xe4\x21\x75\xe1\x69\x22\xd0\xa8",
+    }
+  };
+
+  gcry_cipher_hd_t hde, hdd;
+  unsigned char out[MAX_DATA_LEN];
+  int i, keylen;
+  gcry_error_t err = 0;
+
+  if (verbose)
+    fprintf (stderr, "  Starting GOST28147 cipher checks.\n");
+  keylen = gcry_cipher_get_algo_keylen(GCRY_CIPHER_GOST28147);
+  if (!keylen)
+    {
+      fail ("gost28147, gcry_cipher_get_algo_keylen failed\n");
+      return;
+    }
+
+  for (i = 0; i < sizeof (tv) / sizeof (tv[0]); i++)
+    {
+      err = gcry_cipher_open (&hde, GCRY_CIPHER_GOST28147,
+                              GCRY_CIPHER_MODE_ECB, 0);
+      if (!err)
+        err = gcry_cipher_open (&hdd, GCRY_CIPHER_GOST28147,
+                                GCRY_CIPHER_MODE_ECB, 0);
+      if (err)
+        {
+          fail ("gost28147, gcry_cipher_open failed: %s\n", gpg_strerror (err));
+          return;
+        }
+
+      err = gcry_cipher_setkey (hde, tv[i].key, keylen);
+      if (!err)
+        err = gcry_cipher_setkey (hdd, tv[i].key, keylen);
+      if (err)
+        {
+          fail ("gost28147, gcry_cipher_setkey failed: %s\n",
+                gpg_strerror (err));
+          gcry_cipher_close (hde);
+          gcry_cipher_close (hdd);
+          return;
+        }
+
+      err = gcry_cipher_set_sbox (hde, tv[i].oid);
+      if (!err)
+        err = gcry_cipher_set_sbox (hdd, tv[i].oid);
+      if (err)
+        {
+          fail ("gost28147, gcry_cipher_set_sbox failed: %s\n",
+                gpg_strerror (err));
+          gcry_cipher_close (hde);
+          gcry_cipher_close (hdd);
+          return;
+        }
+
+        err = gcry_cipher_encrypt (hde, out, MAX_DATA_LEN,
+                                   tv[i].plaintext,
+                                   tv[i].inlen == -1 ?
+                                   strlen ((char*)tv[i].plaintext) :
+                                   tv[i].inlen);
+        if (err)
+          {
+            fail ("gost28147, gcry_cipher_encrypt (%d) failed: %s\n",
+                  i, gpg_strerror (err));
+            gcry_cipher_close (hde);
+            gcry_cipher_close (hdd);
+            return;
+          }
+
+        if (memcmp (tv[i].out, out, tv[i].inlen))
+          {
+            fail ("gost28147, encrypt mismatch entry %d\n", i);
+            mismatch (tv[i].out, tv[i].inlen,
+                      out, tv[i].inlen);
+          }
+
+        err = gcry_cipher_decrypt (hdd, out, tv[i].inlen, NULL, 0);
+        if (err)
+          {
+            fail ("gost28147, gcry_cipher_decrypt (%d) failed: %s\n",
+                  i, gpg_strerror (err));
+            gcry_cipher_close (hde);
+            gcry_cipher_close (hdd);
+            return;
+          }
+
+        if (memcmp (tv[i].plaintext, out, tv[i].inlen))
+          {
+            fail ("gost28147, decrypt mismatch entry %d\n", i);
+            mismatch (tv[i].plaintext, tv[i].inlen,
+                      out, tv[i].inlen);
+          }
+
+        gcry_cipher_close (hde);
+        gcry_cipher_close (hdd);
+    }
+
+#endif
+}
+
+
+
+static void
+do_check_xts_cipher (int inplace)
+{
+  /* Note that we use hex strings and not binary strings in TV.  That
+     makes it easier to maintain the test vectors.  */
+  static const struct
+  {
+    int algo;
+    const char *key;    /* NULL means "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" */
+    const char *iv;
+    const char *plain;
+    const char *ciph;
+  } tv[] = {
+    /* CAVS; hex/XTSGenAES128.rsp; COUNT=100 */
+    { GCRY_CIPHER_AES,
+      "bcb6613c495de4bdad9c19f04e4b3915f9ecb379e1a575b633337e934fca1050",
+      "64981173159d58ac355a20120c8e81f1",
+      "189acacee06dfa7c94484c7dae59e166",
+      "7900191d0f19a97668fdba9def84eedc"
+    },
+    /* CAVS; hex/XTSGenAES128.rsp; COUNT=101 */
+    { GCRY_CIPHER_AES,
+      "b7b93f516aef295eff3a29d837cf1f135347e8a21dae616ff5062b2e8d78ce5e",
+      "873edea653b643bd8bcf51403197ed14",
+      "236f8a5b58dd55f6194ed70c4ac1a17f1fe60ec9a6c454d087ccb77d6b638c47",
+      "22e6a3c6379dcf7599b052b5a749c7f78ad8a11b9f1aa9430cf3aef445682e19"
+    },
+    /* CAVS; hex/XTSGenAES128.rsp; COUNT=301 */
+    { GCRY_CIPHER_AES,
+      "394c97881abd989d29c703e48a72b397a7acf51b59649eeea9b33274d8541df4",
+      "4b15c684a152d485fe9937d39b168c29",
+      "2f3b9dcfbae729583b1d1ffdd16bb6fe2757329435662a78f0",
+      "f3473802e38a3ffef4d4fb8e6aa266ebde553a64528a06463e"
+    },
+    /* CAVS; hex/XTSGenAES128.rsp; COUNT=500 */
+    { GCRY_CIPHER_AES,
+      "783a83ec52a27405dff9de4c57f9c979b360b6a5df88d67ec1a052e6f582a717",
+      "886e975b29bdf6f0c01bb47f61f6f0f5",
+      "b04d84da856b9a59ce2d626746f689a8051dacd6bce3b990aa901e4030648879",
+      "f941039ebab8cac39d59247cbbcb4d816c726daed11577692c55e4ac6d3e6820"
+    },
+    /* CAVS; hex/XTSGenAES256.rsp; COUNT=1 */
+    { GCRY_CIPHER_AES256,
+      "1ea661c58d943a0e4801e42f4b0947149e7f9f8e3e68d0c7505210bd311a0e7c"
+      "d6e13ffdf2418d8d1911c004cda58da3d619b7e2b9141e58318eea392cf41b08",
+      "adf8d92627464ad2f0428e84a9f87564",
+      "2eedea52cd8215e1acc647e810bbc3642e87287f8d2e57e36c0a24fbc12a202e",
+      "cbaad0e2f6cea3f50b37f934d46a9b130b9d54f07e34f36af793e86f73c6d7db"
+    },
+    /* CAVS; hex/XTSGenAES256.rsp; COUNT=101 */
+    { GCRY_CIPHER_AES256,
+      "266c336b3b01489f3267f52835fd92f674374b88b4e1ebd2d36a5f457581d9d0"
+      "42c3eef7b0b7e5137b086496b4d9e6ac658d7196a23f23f036172fdb8faee527",
+      "06b209a7a22f486ecbfadb0f3137ba42",
+      "ca7d65ef8d3dfad345b61ccddca1ad81de830b9e86c7b426d76cb7db766852d9"
+      "81c6b21409399d78f42cc0b33a7bbb06",
+      "c73256870cc2f4dd57acc74b5456dbd776912a128bc1f77d72cdebbf270044b7"
+      "a43ceed29025e1e8be211fa3c3ed002d"
+    },
+    /* CAVS; hex/XTSGenAES256.rsp; COUNT=401 */
+    { GCRY_CIPHER_AES256,
+      "33e89e817ff8d037d6ac5a2296657503f20885d94c483e26449066bd9284d130"
+      "2dbdbb4b66b6b9f4687f13dd028eb6aa528ca91deb9c5f40db93218806033801",
+      "a78c04335ab7498a52b81ed74b48e6cf",
+      "14c3ac31291b075f40788247c3019e88c7b40bac3832da45bbc6c4fe7461371b"
+      "4dfffb63f71c9f8edb98f28ff4f33121",
+      "dead7e587519bc78c70d99279fbe3d9b1ad13cdaae69824e0ab8135413230bfd"
+      "b13babe8f986fbb30d46ab5ec56b916e"
+    },
+    /* From https://github.com/heisencoder/XTS-AES/blob/master/testvals/ */
+    { GCRY_CIPHER_AES,
+      "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0",
+      "9a785634120000000000000000000000",
+      "000102030405060708090a0b0c0d0e0f10",
+      "7fb2e8beccbb5c118aa52ddca31220bb1b"
+    },
+    { GCRY_CIPHER_AES,
+      "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0bfbebdbcbbbab9b8b7b6b5b4b3b2b1b0",
+      "9a785634120000000000000000000000",
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e",
+      "d05bc090a8e04f1b3d3ecdd5baec0fd4edbf9dace45d6f6a7306e64be5dd82"
+    },
+    { GCRY_CIPHER_AES,
+      "2718281828459045235360287471352631415926535897932384626433832795",
+      "00000000000000000000000000000000",
+      "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+      "20212223",
+      "27A7479BEFA1D476489F308CD4CFA6E288F548E5C4239F91712A587E2B05AC3D"
+      "A96E4BBE"
+    },
+    { GCRY_CIPHER_AES256,
+      "2718281828459045235360287471352662497757247093699959574966967627"
+      "3141592653589793238462643383279502884197169399375105820974944592",
+      "11000000000000000000000000000000",
+      "3A060A8CAD115A6F44572E3759E43C8F8832FEDC28A8E35B357B5CF3EDBEF788"
+      "CAD8BFCB23",
+      "6D1C78A8BAD91DB2924C507CCEDE835F5BADD157DA0AF55C98BBC28CF676F9FA"
+      "61618FA696"
+    },
+    { GCRY_CIPHER_AES256,
+      "2718281828459045235360287471352662497757247093699959574966967627"
+      "3141592653589793238462643383279502884197169399375105820974944592",
+      "11000000000000000000000000000000",
+      "3A060A8CAD115A6F44572E3759E43C8F8832FEDC28A8E35B357B5CF3EDBEF788"
+      "CAD8BFCB23",
+      "6D1C78A8BAD91DB2924C507CCEDE835F5BADD157DA0AF55C98BBC28CF676F9FA"
+      "61618FA696"
+    },
+    { GCRY_CIPHER_AES,
+      "e0e1e2e3e4e5e6e7e8e9eaebecedeeefc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "21436587a90000000000000000000000",
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+      "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+      "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+      "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+      "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+      "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+      "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+      "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+      "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+      "0001020304050607",
+      "38b45812ef43a05bd957e545907e223b954ab4aaf088303ad910eadf14b42be6"
+      "8b2461149d8c8ba85f992be970bc621f1b06573f63e867bf5875acafa04e42cc"
+      "bd7bd3c2a0fb1fff791ec5ec36c66ae4ac1e806d81fbf709dbe29e471fad3854"
+      "9c8e66f5345d7c1eb94f405d1ec785cc6f6a68f6254dd8339f9d84057e01a177"
+      "41990482999516b5611a38f41bb6478e6f173f320805dd71b1932fc333cb9ee3"
+      "9936beea9ad96fa10fb4112b901734ddad40bc1878995f8e11aee7d141a2f5d4"
+      "8b7a4e1e7f0b2c04830e69a4fd1378411c2f287edf48c6c4e5c247a19680f7fe"
+      "41cefbd49b582106e3616cbbe4dfb2344b2ae9519391f3e0fb4922254b1d6d2d"
+      "19c6d4d537b3a26f3bcc51588b32f3eca0829b6a5ac72578fb814fb43cf80d64"
+      "a233e3f997a3f02683342f2b33d25b492536b93becb2f5e1a8b82f5b88334272"
+      "9e8ae09d16938841a21a97fb543eea3bbff59f13c1a18449e398701c1ad51648"
+      "346cbc04c27bb2da3b93a1372ccae548fb53bee476f9e9c91773b1bb19828394"
+      "d55d3e1a20ed69113a860b6829ffa847224604435070221b257e8dff783615d2"
+      "cae4803a93aa4334ab482a0afac9c0aeda70b45a481df5dec5df8cc0f423c77a"
+      "5fd46cd312021d4b438862419a791be03bb4d97c0e59578542531ba466a83baf"
+      "92cefc151b5cc1611a167893819b63fb37ec662bc0fc907db74a94468a55a7bc"
+      "8a6b18e86de60290"
+    },
+    { GCRY_CIPHER_AES256,
+      "2718281828459045235360287471352662497757247093699959574966967627"
+      "3141592653589793238462643383279502884197169399375105820974944592",
+      "ffffffff000000000000000000000000",
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+      "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+      "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+      "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+      "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+      "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+      "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f"
+      "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+      "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "bf53d2dade78e822a4d949a9bc6766b01b06a8ef70d26748c6a7fc36d80ae4c5"
+      "520f7c4ab0ac8544424fa405162fef5a6b7f229498063618d39f0003cb5fb8d1"
+      "c86b643497da1ff945c8d3bedeca4f479702a7a735f043ddb1d6aaade3c4a0ac"
+      "7ca7f3fa5279bef56f82cd7a2f38672e824814e10700300a055e1630b8f1cb0e"
+      "919f5e942010a416e2bf48cb46993d3cb6a51c19bacf864785a00bc2ecff15d3"
+      "50875b246ed53e68be6f55bd7e05cfc2b2ed6432198a6444b6d8c247fab941f5"
+      "69768b5c429366f1d3f00f0345b96123d56204c01c63b22ce78baf116e525ed9"
+      "0fdea39fa469494d3866c31e05f295ff21fea8d4e6e13d67e47ce722e9698a1c"
+      "1048d68ebcde76b86fcf976eab8aa9790268b7068e017a8b9b749409514f1053"
+      "027fd16c3786ea1bac5f15cb79711ee2abe82f5cf8b13ae73030ef5b9e4457e7"
+      "5d1304f988d62dd6fc4b94ed38ba831da4b7634971b6cd8ec325d9c61c00f1df"
+      "73627ed3745a5e8489f3a95c69639c32cd6e1d537a85f75cc844726e8a72fc00"
+      "77ad22000f1d5078f6b866318c668f1ad03d5a5fced5219f2eabbd0aa5c0f460"
+      "d183f04404a0d6f469558e81fab24a167905ab4c7878502ad3e38fdbe62a4155"
+      "6cec37325759533ce8f25f367c87bb5578d667ae93f9e2fd99bcbc5f2fbba88c"
+      "f6516139420fcff3b7361d86322c4bd84c82f335abb152c4a93411373aaa8220"
+    }
+  };
+  gpg_error_t err = 0;
+  gcry_cipher_hd_t hde, hdd;
+  int tidx;
+  int got_err = 0;
+
+  if (verbose)
+    fprintf (stderr, "  Starting XTS checks.\n");
+
+  for (tidx = 0; !got_err && tidx < DIM (tv); tidx++)
+    {
+      const char *hexkey = tv[tidx].key;
+      char *key, *iv, *ciph, *plain, *out;
+      size_t keylen, ivlen, ciphlen, plainlen, outlen;
+
+      if (verbose)
+        fprintf (stderr, "    checking XTS mode for %s [%i] (tv %d)\n",
+                 gcry_cipher_algo_name (tv[tidx].algo), tv[tidx].algo, tidx);
+
+      if (!hexkey)
+	hexkey = "000102030405060708090A0B0C0D0E0F"
+	         "101112131415161718191A1B1C1D1E1F";
+
+      /* Convert to hex strings to binary.  */
+      key   = hex2buffer (hexkey, &keylen);
+      iv    = hex2buffer (tv[tidx].iv, &ivlen);
+      plain = hex2buffer (tv[tidx].plain, &plainlen);
+      ciph  = hex2buffer (tv[tidx].ciph, &ciphlen);
+      outlen = plainlen + 5;
+      out   = xmalloc (outlen);
+
+      assert (plainlen == ciphlen);
+      assert (plainlen <= outlen);
+      assert (out);
+
+      err = gcry_cipher_open (&hde, tv[tidx].algo, GCRY_CIPHER_MODE_XTS, 0);
+      if (!err)
+        err = gcry_cipher_open (&hdd, tv[tidx].algo, GCRY_CIPHER_MODE_XTS, 0);
+      if (err)
+        {
+          fail ("cipher-xts, gcry_cipher_open failed (tv %d): %s\n",
+                tidx, gpg_strerror (err));
+          return;
+        }
+
+      err = gcry_cipher_setkey (hde, key, keylen);
+      if (err && in_fips_mode && memcmp(key, key + keylen/2, keylen/2) == 0)
+	{
+	  /* Since both halves of key are the same, fail to set key in FIPS
+	     mode is expected. */
+	  goto next_tv;
+	}
+      if (!err)
+        err = gcry_cipher_setkey (hdd, key, keylen);
+      if (err)
+        {
+          fail ("cipher-xts, gcry_cipher_setkey failed (tv %d): %s\n",
+                tidx, gpg_strerror (err));
+          goto err_out;
+        }
+
+      err = gcry_cipher_setiv (hde, iv, ivlen);
+      if (!err)
+        err = gcry_cipher_setiv (hdd, iv, ivlen);
+      if (err)
+        {
+          fail ("cipher-xts, gcry_cipher_setiv failed (tv %d): %s\n",
+                tidx, gpg_strerror (err));
+          goto err_out;
+        }
+
+      if (inplace)
+	{
+	  memcpy(out, plain, plainlen);
+	  err = gcry_cipher_encrypt (hde, out, plainlen, NULL, 0);
+	}
+      else
+	{
+	  err = gcry_cipher_encrypt (hde, out, outlen, plain, plainlen);
+	}
+      if (err)
+        {
+          fail ("cipher-xts, gcry_cipher_encrypt failed (tv %d): %s\n",
+                tidx, gpg_strerror (err));
+          goto err_out;
+        }
+
+      /* Check that the encrypt output matches the expected cipher text.  */
+      if (memcmp (ciph, out, plainlen))
+        {
+          mismatch (ciph, plainlen, out, plainlen);
+          fail ("cipher-xts, encrypt data mismatch (tv %d)\n", tidx);
+        }
+
+      /* Now for the decryption.  */
+      if (inplace)
+	{
+	  err = gcry_cipher_decrypt (hdd, out, plainlen, NULL, 0);
+	}
+      else
+	{
+	  memcpy(ciph, out, ciphlen);
+	  err = gcry_cipher_decrypt (hdd, out, plainlen, ciph, ciphlen);
+	}
+      if (err)
+        {
+          fail ("cipher-xts, gcry_cipher_decrypt (tv %d) failed: %s\n",
+                tidx, gpg_strerror (err));
+          goto err_out;
+        }
+
+      /* Check that the decrypt output matches the expected plain text.  */
+      if (memcmp (plain, out, plainlen))
+        {
+          mismatch (plain, plainlen, out, plainlen);
+          fail ("cipher-xts, decrypt data mismatch (tv %d)\n", tidx);
+        }
+
+      if (0)
+	{
+err_out:
+	  got_err = 1;
+	}
+
+next_tv:
+      gcry_cipher_close (hde);
+      gcry_cipher_close (hdd);
+
+      xfree (iv);
+      xfree (ciph);
+      xfree (plain);
+      xfree (key);
+      xfree (out);
+    }
+
+  if (verbose)
+    fprintf (stderr, "  Completed XTS checks.\n");
+}
+
+
+static void
+check_xts_cipher (void)
+{
+  /* Check XTS cipher with separate destination and source buffers for
+   * encryption/decryption. */
+  do_check_xts_cipher(0);
+
+  /* Check XTS cipher with inplace encrypt/decrypt. */
+  do_check_xts_cipher(1);
+}
+
 
 static void
 check_gost28147_cipher (void)
@@ -5158,7 +5716,7 @@ check_stream_cipher_large_block (void)
 
 
 
-/* Check that our bulk encryption fucntions work properly.  */
+/* Check that our bulk encryption functions work properly.  */
 static void
 check_bulk_cipher_modes (void)
 {
@@ -5276,6 +5834,20 @@ check_bulk_cipher_modes (void)
 /*[14]*/
       { 0x2d, 0x71, 0x54, 0xb9, 0xc5, 0x28, 0x76, 0xff, 0x76, 0xb5,
         0x99, 0x37, 0x99, 0x9d, 0xf7, 0x10, 0x6d, 0x86, 0x4f, 0x3f }
+    },
+    { GCRY_CIPHER_AES128, GCRY_CIPHER_MODE_XTS,
+      "abcdefghijklmnopABCDEFGHIJKLMNOP", 32,
+      "1234567890123456", 16,
+/*[15]*/
+      { 0x71, 0x46, 0x40, 0xb0, 0xed, 0x6f, 0xc4, 0x82, 0x2b, 0x3f,
+        0xb6, 0xf7, 0x81, 0x08, 0x4c, 0x8b, 0xc1, 0x66, 0x4c, 0x1b }
+    },
+    { GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_XTS,
+      "abcdefghijklmnopABCDEFGHIJKLMNOP_abcdefghijklmnopABCDEFGHIJKLMNO", 64,
+      "1234567890123456", 16,
+/*[16]*/
+      { 0x8e, 0xbc, 0xa5, 0x21, 0x0a, 0x4b, 0x53, 0x14, 0x79, 0x81,
+        0x25, 0xad, 0x24, 0x45, 0x98, 0xbd, 0x9f, 0x27, 0x5f, 0x01 }
     }
   };
   gcry_cipher_hd_t hde = NULL;
@@ -5480,15 +6052,16 @@ check_one_cipher_core (int algo, int mode, int flags,
 
   blklen = get_algo_mode_blklen(algo, mode);
 
-  assert (nkey == 32);
+  assert (nkey == 64);
   assert (nplain == 1040);
   assert (sizeof(in_buffer) == nplain + 1);
   assert (sizeof(out_buffer) == sizeof(in_buffer));
   assert (blklen > 0);
 
-  if (mode == GCRY_CIPHER_MODE_CBC && (flags & GCRY_CIPHER_CBC_CTS))
+  if ((mode == GCRY_CIPHER_MODE_CBC && (flags & GCRY_CIPHER_CBC_CTS)) ||
+      mode == GCRY_CIPHER_MODE_XTS)
     {
-      /* TODO: examine why CBC with CTS fails. */
+      /* Input cannot be split in to multiple operations with CTS . */
       blklen = nplain;
     }
 
@@ -5525,6 +6098,11 @@ check_one_cipher_core (int algo, int mode, int flags,
     {
       fail ("pass %d, algo %d, mode %d, keylength problem (%d)\n", pass, algo, mode, keylen);
       return -1;
+    }
+
+  if (mode == GCRY_CIPHER_MODE_XTS)
+    {
+      keylen *= 2;
     }
 
   err = gcry_cipher_open (&hd, algo, mode, flags);
@@ -5738,14 +6316,15 @@ check_one_cipher_core (int algo, int mode, int flags,
 static void
 check_one_cipher (int algo, int mode, int flags)
 {
-  char key[32+1];
+  char key[64+1];
   unsigned char plain[1040+1];
   int bufshift, i;
 
   for (bufshift=0; bufshift < 4; bufshift++)
     {
       /* Pass 0: Standard test.  */
-      memcpy (key, "0123456789abcdef.,;/[]{}-=ABCDEF", 32);
+      memcpy (key, "0123456789abcdef.,;/[]{}-=ABCDEF_"
+		   "0123456789abcdef.,;/[]{}-=ABCDEF", 64);
       memcpy (plain, "foobar42FOOBAR17", 16);
       for (i = 16; i < 1040; i += 16)
         {
@@ -5756,25 +6335,25 @@ check_one_cipher (int algo, int mode, int flags)
             plain[i+14]++;
         }
 
-      if (check_one_cipher_core (algo, mode, flags, key, 32, plain, 1040,
+      if (check_one_cipher_core (algo, mode, flags, key, 64, plain, 1040,
                                  bufshift, 0+10*bufshift))
         return;
 
       /* Pass 1: Key not aligned.  */
-      memmove (key+1, key, 32);
-      if (check_one_cipher_core (algo, mode, flags, key+1, 32, plain, 1040,
+      memmove (key+1, key, 64);
+      if (check_one_cipher_core (algo, mode, flags, key+1, 64, plain, 1040,
                                  bufshift, 1+10*bufshift))
         return;
 
       /* Pass 2: Key not aligned and data not aligned.  */
       memmove (plain+1, plain, 1040);
-      if (check_one_cipher_core (algo, mode, flags, key+1, 32, plain+1, 1040,
+      if (check_one_cipher_core (algo, mode, flags, key+1, 64, plain+1, 1040,
                                  bufshift, 2+10*bufshift))
         return;
 
       /* Pass 3: Key aligned and data not aligned.  */
-      memmove (key, key+1, 32);
-      if (check_one_cipher_core (algo, mode, flags, key, 32, plain+1, 1040,
+      memmove (key, key+1, 64);
+      if (check_one_cipher_core (algo, mode, flags, key, 64, plain+1, 1040,
                                  bufshift, 3+10*bufshift))
         return;
     }
@@ -5864,6 +6443,7 @@ check_ciphers (void)
 
       check_one_cipher (algos[i], GCRY_CIPHER_MODE_ECB, 0);
       check_one_cipher (algos[i], GCRY_CIPHER_MODE_CFB, 0);
+      check_one_cipher (algos[i], GCRY_CIPHER_MODE_CFB8, 0);
       check_one_cipher (algos[i], GCRY_CIPHER_MODE_OFB, 0);
       check_one_cipher (algos[i], GCRY_CIPHER_MODE_CBC, 0);
       check_one_cipher (algos[i], GCRY_CIPHER_MODE_CBC, GCRY_CIPHER_CBC_CTS);
@@ -5874,6 +6454,8 @@ check_ciphers (void)
         check_one_cipher (algos[i], GCRY_CIPHER_MODE_GCM, 0);
       if (gcry_cipher_get_algo_blklen (algos[i]) == GCRY_OCB_BLOCK_LEN)
         check_one_cipher (algos[i], GCRY_CIPHER_MODE_OCB, 0);
+      if (gcry_cipher_get_algo_blklen (algos[i]) == GCRY_XTS_BLOCK_LEN)
+        check_one_cipher (algos[i], GCRY_CIPHER_MODE_XTS, 0);
     }
 
   for (i = 0; algos2[i]; i++)
@@ -5917,6 +6499,7 @@ check_cipher_modes(void)
   check_gcm_cipher ();
   check_poly1305_cipher ();
   check_ocb_cipher ();
+  check_xts_cipher ();
   check_gost28147_cipher ();
   check_stream_cipher ();
   check_stream_cipher_large_block ();
@@ -5935,7 +6518,8 @@ fillbuf_count (char *buf, size_t buflen, unsigned char pos)
 
 
 static void
-check_one_md (int algo, const char *data, int len, const char *expect, int elen)
+check_one_md (int algo, const char *data, int len, const char *expect, int elen,
+	      const char *key, int klen)
 {
   gcry_md_hd_t hd, hd2;
   unsigned char *p;
@@ -5960,9 +6544,21 @@ check_one_md (int algo, const char *data, int len, const char *expect, int elen)
         }
       else
         {
+	  gcry_md_close (hd);
           fail ("algo %d, gcry_md_get_algo_dlen failed: %d\n", algo, mdlen);
           return;
         }
+    }
+
+  if (key && klen)
+    {
+      err = gcry_md_setkey (hd, key, klen);
+      if (err)
+	{
+	  gcry_md_close (hd);
+	  fail ("algo %d, gcry_md_setkey failed: %s\n", algo, gpg_strerror (err));
+	  return;
+	}
     }
 
   if ((*data == '!' && !data[1]) || /* hash one million times a "a" */
@@ -6041,7 +6637,6 @@ check_one_md (int algo, const char *data, int len, const char *expect, int elen)
 
           fail ("algo %d, digest mismatch\n", algo);
         }
-
     }
   else
     {
@@ -6267,6 +6862,23 @@ check_one_md_multi (int algo, const char *data, int len, const char *expect)
 static void
 check_digests (void)
 {
+  static const char blake2_data_vector[] =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+      "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+      "\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f"
+      "\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f"
+      "\x40\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f"
+      "\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f"
+      "\x60\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f"
+      "\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f"
+      "\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f"
+      "\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f"
+      "\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf"
+      "\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\xbf"
+      "\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf"
+      "\xd0\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf"
+      "\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef"
+      "\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff";
   static const struct algos
   {
     int md;
@@ -6274,6 +6886,8 @@ check_digests (void)
     const char *expect;
     int datalen;
     int expectlen;
+    const char *key;
+    int keylen;
   } algos[] =
     {
       { GCRY_MD_MD2, "",
@@ -7044,6 +7658,285 @@ check_digests (void)
 	"\x1b\xeb\x65\x53\xf2\x81\xfa\x75\x69\x48\xc4\x38\x49\x4b\x19\xb4"
 	"\xee\x69\xa5\x43\x6b\x22\x2b\xc9\x88\xed\xa4\xac\x60\x00\x24\xc9",
 	0, 512, },
+      { GCRY_MD_BLAKE2B_512, "abc",
+	"\xBA\x80\xA5\x3F\x98\x1C\x4D\x0D\x6A\x27\x97\xB6\x9F\x12\xF6\xE9"
+	"\x4C\x21\x2F\x14\x68\x5A\xC4\xB7\x4B\x12\xBB\x6F\xDB\xFF\xA2\xD1"
+	"\x7D\x87\xC5\x39\x2A\xAB\x79\x2D\xC2\x52\xD5\xDE\x45\x33\xCC\x95"
+	"\x18\xD3\x8A\xA8\xDB\xF1\x92\x5A\xB9\x23\x86\xED\xD4\x00\x99\x23" },
+      { GCRY_MD_BLAKE2B_512, "\x00",
+	"\x96\x1f\x6d\xd1\xe4\xdd\x30\xf6\x39\x01\x69\x0c\x51\x2e\x78\xe4"
+	"\xb4\x5e\x47\x42\xed\x19\x7c\x3c\x5e\x45\xc5\x49\xfd\x25\xf2\xe4"
+	"\x18\x7b\x0b\xc9\xfe\x30\x49\x2b\x16\xb0\xd0\xbc\x4e\xf9\xb0\xf3"
+	"\x4c\x70\x03\xfa\xc0\x9a\x5e\xf1\x53\x2e\x69\x43\x02\x34\xce\xbd",
+	1, 64,
+	"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+	"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+	"\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f"
+	"\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f",
+	64 },
+#include "./blake2b.h"
+      { GCRY_MD_BLAKE2B_160,
+	"",
+	"\xad\x75\xea\xd7\x9f\x71\x21\xd1\xf0\x8a\xfe\x59\x99\x27\xa5\xa3"
+	"\x8b\xe1\xb1\x79",
+	0, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2B_160,
+	"\x9c\x9c\x38",
+	"\x82\x79\x9d\x7b\xe8\xf4\xd1\x69\xfb\x85\xe6\x63\x6a\x7b\x6c\x50"
+	"\xa0\x1f\x70\xa2",
+	3, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2B_256,
+	"",
+	"\x89\x36\x29\x47\x52\x79\xdf\xd8\x2a\x84\x1a\x8f\x21\xa3\x72\xed"
+	"\x30\xcc\xb8\xae\x34\x62\xe1\x90\x7f\x50\x66\x3f\x3c\x03\x66\x83",
+	0, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2B_256,
+	"\x9c\x9c\x38",
+	"\x01\x6a\x18\xbb\x10\xe0\xc3\xa5\xe5\x9f\xce\xfd\x1a\x40\x7a\xb7"
+	"\xf1\xc0\x36\x1b\x3f\x98\x34\x77\x42\x54\xd3\xf0\x4c\xda\x38\x98",
+	3, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2B_384,
+	"",
+	"\xd7\x2c\x9b\x4a\x73\x4e\xb2\x07\xe9\xdd\xbf\xf0\x0b\x10\xc3\x70"
+	"\xc8\x9d\x67\xd7\x96\xc3\xa7\xb9\x68\x15\xa9\x53\x92\x1b\xb2\x97"
+	"\x59\xd2\x9d\x25\x63\xf3\xda\x4d\x7f\x3e\xa4\xa6\xe3\x4c\x32\x6b",
+	0, 48,
+	"\xc0\xc0\x80\x41\xc2\x03\xc6\xca\x90\x5b\xeb\x46\x32\x79\xac\x26"
+	"\xd3\xf9\xcc\xc6\x93\x5a\xed\x48\x35\x7d\xb3\x31\xe5\x16\xfb\x12"
+	"\x0e\x21\x2f\x51\x80\xd1\x52\x24\x77\x9c\x13\xaf\xc3\x73\x37\xaa",
+	48 },
+      { GCRY_MD_BLAKE2B_384,
+	"\x9c\x9c\x38",
+	"\xef\x46\xfa\x54\xa2\xc2\x20\xda\x06\xa8\x4c\x77\x6e\x87\xdd\x0a"
+	"\x21\xee\xb5\xe9\x40\x1a\x0a\x78\x11\x19\x74\x18\xfe\x92\x70\x15"
+	"\x77\xd0\xa8\x53\x24\x48\xe8\xb8\x53\x6a\xa6\xc7\x42\xcd\x2c\x62",
+	3, 48,
+	"\xc0\xc0\x80\x41\xc2\x03\xc6\xca\x90\x5b\xeb\x46\x32\x79\xac\x26"
+	"\xd3\xf9\xcc\xc6\x93\x5a\xed\x48\x35\x7d\xb3\x31\xe5\x16\xfb\x12"
+	"\x0e\x21\x2f\x51\x80\xd1\x52\x24\x77\x9c\x13\xaf\xc3\x73\x37\xaa",
+	48 },
+      { GCRY_MD_BLAKE2B_512,
+	"",
+	"\xd7\x4b\xf3\x1e\x5c\xe5\xd8\xa2\x5d\x09\x21\x52\x53\xca\xd2\xf8"
+	"\xd2\xfd\xa9\x10\x09\x30\x16\x05\xa6\x8c\xc3\x86\x5b\xb7\x93\x5b"
+	"\xca\xff\x6f\x2a\xf6\x43\xa7\x76\x99\xe8\x02\x61\xa1\xfd\x2c\x80"
+	"\xe8\x37\xb5\x62\x32\xf7\xb1\x46\x43\x4a\xa7\x4d\x71\x18\xbb\x16",
+	0, 64,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	64 },
+      { GCRY_MD_BLAKE2B_512,
+	"\x9c\x9c\x38",
+	"\x70\xfc\x57\xe1\x49\x5f\xe4\x39\x0d\x38\xa1\xd3\x97\x05\xee\xf6"
+	"\xaa\xbb\xd2\x64\xc7\xce\x66\x11\x8d\x0a\x87\xd4\x25\x94\xb3\x87"
+	"\xdc\x50\x18\x8b\xba\x61\xf0\x91\xd6\xb3\x4f\xf5\x4e\x09\x1e\x70"
+	"\x24\x01\x83\xcd\xb9\x21\x1f\x14\x39\x77\x5c\xc6\xe6\xe9\x35\x73",
+	3, 64,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	64 },
+      { GCRY_MD_BLAKE2B_512, "!",
+	"\x98\xfb\x3e\xfb\x72\x06\xfd\x19\xeb\xf6\x9b\x6f\x31\x2c\xf7\xb6"
+	"\x4e\x3b\x94\xdb\xe1\xa1\x71\x07\x91\x39\x75\xa7\x93\xf1\x77\xe1"
+	"\xd0\x77\x60\x9d\x7f\xba\x36\x3c\xbb\xa0\x0d\x05\xf7\xaa\x4e\x4f"
+	"\xa8\x71\x5d\x64\x28\x10\x4c\x0a\x75\x64\x3b\x0f\xf3\xfd\x3e\xaf" },
+      { GCRY_MD_BLAKE2B_512, "?",
+	"\xae\x9c\xf5\x7a\xc2\xff\x7b\x37\x7a\x5b\xb5\xcc\x2e\x62\x92\x20"
+	"\xa9\xba\x0a\x09\xc2\x2a\x0f\xdb\xd9\xa3\xae\xd6\x32\xc1\x72\x0e"
+	"\x6d\x82\x9f\x74\x7f\xba\x12\xe8\x31\xa2\x45\x8d\xf0\x73\x4e\xe0"
+	"\x12\x27\x52\xd3\xe2\x2c\x36\xc4\x42\x89\x3b\xcd\xd1\xbd\xd9\x08" },
+      { GCRY_MD_BLAKE2B_384, "?",
+	"\x22\x66\x8e\x05\x81\x44\x52\xa5\x23\x84\xce\x67\xd4\xad\x0e\x03"
+	"\xdf\xe7\x1a\xc1\x56\x9d\x95\x4a\xd2\x22\x7a\x70\x2a\xfe\x6c\x68"
+	"\x5c\x7d\x65\x30\x2b\xc0\xde\xc6\xea\x72\x1e\xdd\x46\xdf\xb2\x08" },
+      { GCRY_MD_BLAKE2B_256, "?",
+	"\xfa\x11\x30\xd8\xba\x8a\x4c\x5a\x0e\x6f\x4f\x4c\xd2\xd1\x38\x0c"
+	"\xb9\x22\x2a\xbd\xf6\x20\x70\xf8\x02\x1b\x34\xdd\xd7\x24\x92\x1b" },
+      { GCRY_MD_BLAKE2B_160, "?",
+	"\xe7\x86\x08\x31\xf8\x96\x8d\x64\x9b\xe0\x15\x68\x33\xf3\xbd\x2a"
+	"\x5f\x0b\xdb\x40" },
+      { GCRY_MD_BLAKE2S_256, "abc",
+	"\x50\x8C\x5E\x8C\x32\x7C\x14\xE2\xE1\xA7\x2B\xA3\x4E\xEB\x45\x2F"
+	"\x37\x45\x8B\x20\x9E\xD6\x3A\x29\x4D\x99\x9B\x4C\x86\x67\x59\x82" },
+#include "./blake2s.h"
+      { GCRY_MD_BLAKE2S_128,
+	"",
+	"\x84\x89\x68\xb3\x59\x01\xe9\x57\x9a\x4d\xbf\x28\xdf\x99\xec\x23",
+	0, 16,
+	"\xea\xea\xd5\xc0\x96\x56\xec\x43\x30\x73\xa3\x17\xbb\xd3\x8e\x62",
+	16 },
+      { GCRY_MD_BLAKE2S_128,
+	"\x9c\x9c\x38",
+	"\x2e\xbb\x18\x78\xda\x34\x05\xad\x98\x1a\x33\x06\x50\x35\xd3\x75",
+	3, 16,
+	"\xea\xea\xd5\xc0\x96\x56\xec\x43\x30\x73\xa3\x17\xbb\xd3\x8e\x62",
+	16 },
+      { GCRY_MD_BLAKE2S_128,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	"\x3c\xd4\xea\xd7\x88\x0b\x8e\x82\xde\x07\x9c\x1f\xad\x34\x17\xd4",
+	64, 16,
+	"\xea\xea\xd5\xc0\x96\x56\xec\x43\x30\x73\xa3\x17\xbb\xd3\x8e\x62",
+	16 },
+      { GCRY_MD_BLAKE2S_128,
+	"\x8a\x8a\x14\x9e\xb2\x50\x02\x52\x54\xa6\xfa\xa0\x9a\x3a\xd4\x0e"
+	"\xe3\xf2\xd5\xc7\x9d\x64\x02\x66\x68\xcf\x38\x08\x41\x49\x8a\xd3"
+	"\x5e\x32\x90\xc2\x53\x15\x68\x7e\xe6\x65\x4b\xb0\xfc\xad\xaa\x58"
+	"\x02\x5b\x5e\xb9\x18\xd1\xe9\xbb\xa5\x61\x07\x68\x70\xd9\x49\x22"
+	"\x6b",
+	"\xee\x92\xc5\x25\x4c\x29\x7a\x88\xe6\x9a\x23\x69\x56\xb6\x7c\xee",
+	65, 16,
+	"\xea\xea\xd5\xc0\x96\x56\xec\x43\x30\x73\xa3\x17\xbb\xd3\x8e\x62",
+	16 },
+      { GCRY_MD_BLAKE2S_160,
+	"",
+	"\x68\x64\x48\x80\x0c\x80\xc6\xd0\x4f\xb7\x3f\xc1\x7f\xa0\x8c\xa2"
+	"\x39\x03\xe1\xe9",
+	0, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2S_160,
+	"\x9c\x9c\x38",
+	"\xba\xb3\x5b\x8c\x87\x04\x1a\x00\x24\x44\xa5\xca\x45\x13\x2d\x75"
+	"\xef\xd3\x4c\xb9",
+	3, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2S_160,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	"\xe8\xc3\xf1\xdb\x1c\xf8\xe9\xd1\xb5\x4a\x54\x0a\xdc\xe7\x18\x13"
+	"\x0f\xf4\x12\x98",
+	64, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2S_160,
+	"\x8a\x8a\x14\x9e\xb2\x50\x02\x52\x54\xa6\xfa\xa0\x9a\x3a\xd4\x0e"
+	"\xe3\xf2\xd5\xc7\x9d\x64\x02\x66\x68\xcf\x38\x08\x41\x49\x8a\xd3"
+	"\x5e\x32\x90\xc2\x53\x15\x68\x7e\xe6\x65\x4b\xb0\xfc\xad\xaa\x58"
+	"\x02\x5b\x5e\xb9\x18\xd1\xe9\xbb\xa5\x61\x07\x68\x70\xd9\x49\x22"
+	"\x6b",
+	"\x59\x02\xf8\x38\x18\x77\x9c\xd8\x13\x40\x0f\xd6\xbb\x23\x04\x1b"
+	"\x64\x9a\x57\xa7",
+	65, 20,
+	"\x65\x65\xcb\x30\xfb\x2c\x28\x54\x7c\xd0\x4c\x1d\x6a\x88\xf2\x7a"
+	"\x6d\xe8\x55\x3d",
+	20 },
+      { GCRY_MD_BLAKE2S_224,
+	"",
+	"\xa8\x66\x86\x63\x35\x3a\xe0\x8f\x4e\x4b\x6b\x1e\xcb\x43\x19\xc8"
+	"\x2b\x41\x3f\x5e\xe5\x43\x95\x9c\xa5\x9a\x73\x1b",
+	0, 28,
+	"\x5a\x5a\xb5\x10\xc6\xd7\x9e\x76\x14\x8a\x9e\x29\xc8\xf1\xba\xab"
+	"\x65\x11\x77\x89\x00\x89\x8a\x14\x9f\xb4\x53\x07",
+	28 },
+      { GCRY_MD_BLAKE2S_224,
+	"\x9c\x9c\x38",
+	"\x1a\x34\x9d\xc1\x51\xbd\x8b\xa2\xa7\xa6\x6b\xe4\x93\x98\x51\x88"
+	"\x33\x49\x71\x02\x09\xb1\x20\x85\x8c\x4c\x67\xb8",
+	3, 28,
+	"\x5a\x5a\xb5\x10\xc6\xd7\x9e\x76\x14\x8a\x9e\x29\xc8\xf1\xba\xab"
+	"\x65\x11\x77\x89\x00\x89\x8a\x14\x9f\xb4\x53\x07",
+	28 },
+      { GCRY_MD_BLAKE2S_224,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	"\x3a\x0e\xd5\x46\x95\x8c\xd6\xf9\x7c\x38\xd0\xe7\x1c\xfd\xd4\xc5"
+	"\x67\x6d\x5c\xcc\x35\x06\xec\x87\x87\x09\x26\x39",
+	64, 28,
+	"\x5a\x5a\xb5\x10\xc6\xd7\x9e\x76\x14\x8a\x9e\x29\xc8\xf1\xba\xab"
+	"\x65\x11\x77\x89\x00\x89\x8a\x14\x9f\xb4\x53\x07",
+	28 },
+      { GCRY_MD_BLAKE2S_224,
+	"\x8a\x8a\x14\x9e\xb2\x50\x02\x52\x54\xa6\xfa\xa0\x9a\x3a\xd4\x0e"
+	"\xe3\xf2\xd5\xc7\x9d\x64\x02\x66\x68\xcf\x38\x08\x41\x49\x8a\xd3"
+	"\x5e\x32\x90\xc2\x53\x15\x68\x7e\xe6\x65\x4b\xb0\xfc\xad\xaa\x58"
+	"\x02\x5b\x5e\xb9\x18\xd1\xe9\xbb\xa5\x61\x07\x68\x70\xd9\x49\x22"
+	"\x6b",
+	"\x63\xd7\x98\xcc\x8e\xe3\x00\x45\x2f\xd8\x19\x83\x02\x94\x7f\xf1"
+	"\xb3\x82\x73\xaa\x19\xae\x72\x8b\x1f\x64\xbe\x88",
+	65, 28,
+	"\x5a\x5a\xb5\x10\xc6\xd7\x9e\x76\x14\x8a\x9e\x29\xc8\xf1\xba\xab"
+	"\x65\x11\x77\x89\x00\x89\x8a\x14\x9f\xb4\x53\x07",
+	28 },
+      { GCRY_MD_BLAKE2S_256,
+	"",
+	"\x98\xf3\x21\xe5\x43\xb8\x07\x35\x27\x9c\x86\x1c\x36\x33\x9b\x43"
+	"\x45\x50\xc6\x9d\x23\xc6\xc8\xff\x96\xbf\x4e\x03\x86\x10\x24\xfd",
+	0, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2S_256,
+	"\x9c\x9c\x38",
+	"\x7b\x10\xa3\x67\xb8\x5d\x29\x9a\x91\x27\x37\x05\x9d\x05\x9d\x3d"
+	"\xe6\x42\xa3\x19\x04\x57\x01\xb6\x25\x0b\xfd\x3c\x6c\xb9\x4f\x87",
+	3, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2S_256,
+	"\xab\xab\x56\x01\x58\x5a\xb3\x0d\xc1\xce\x8f\x5e\xee\x4d\x3b\x88"
+	"\xc4\x4c\x11\x5e\x6f\xcd\x3d\x0a\x47\x52\x9a\xec\x86\x73\xfa\x6e"
+	"\x68\xd6\x3f\x16\x55\x6b\xc1\x2d\xef\x1d\x0c\x29\x35\x5f\x94\xf3"
+	"\x88\x7c\x04\x81\x86\x07\x8e\x95\x23\xb9\xdd\x97\x74\x0c\x80\x8c",
+	"\xd7\x8b\x98\x28\x54\x4c\xc1\x62\x9e\xab\x7d\xfe\xb1\xfa\xdd\x2b"
+	"\xed\x98\x1c\xe6\x5f\xef\xd8\x08\x42\x9a\x11\x1e\x97\x44\x92\xa3",
+	64, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2S_256,
+	"\x8a\x8a\x14\x9e\xb2\x50\x02\x52\x54\xa6\xfa\xa0\x9a\x3a\xd4\x0e"
+	"\xe3\xf2\xd5\xc7\x9d\x64\x02\x66\x68\xcf\x38\x08\x41\x49\x8a\xd3"
+	"\x5e\x32\x90\xc2\x53\x15\x68\x7e\xe6\x65\x4b\xb0\xfc\xad\xaa\x58"
+	"\x02\x5b\x5e\xb9\x18\xd1\xe9\xbb\xa5\x61\x07\x68\x70\xd9\x49\x22"
+	"\x6b",
+	"\x1b\x9e\x26\x9a\x90\xf8\x73\x51\x73\xbc\x4f\x65\xce\x29\x2c\x61"
+	"\x16\x65\xc7\xb0\x72\x07\xa8\x0b\xfb\x2e\xea\x12\x7d\x97\xcd\x06",
+	65, 32,
+	"\xd5\xd5\xab\x80\x2c\xad\xd9\x86\x60\xe7\x47\x2f\x77\xa6\x1d\xc4"
+	"\xe2\xa6\x88\x2f\xb7\xe6\x9e\x85\x23\xa9\xcd\x76\x43\xb9\xfd\xb7",
+	32 },
+      { GCRY_MD_BLAKE2S_256, "!",
+	"\xbe\xc0\xc0\xe6\xcd\xe5\xb6\x7a\xcb\x73\xb8\x1f\x79\xa6\x7a\x40"
+	"\x79\xae\x1c\x60\xda\xc9\xd2\x66\x1a\xf1\x8e\x9f\x8b\x50\xdf\xa5" },
+      { GCRY_MD_BLAKE2S_256, "?",
+	"\xdc\x5a\xe7\x1b\xd4\x63\xa1\xf8\x4d\x73\x33\x44\x63\x6b\xa6\x87"
+	"\xe6\xbd\xf4\xba\xed\xc3\xef\xc8\xb3\x86\x55\xbb\x08\x56\x3e\xdb" },
+      { GCRY_MD_BLAKE2S_224, "?",
+	"\x2e\x34\x7d\x6b\xcc\x80\xbe\xc3\xf8\x61\x35\x6a\x88\x27\xcd\x84"
+	"\x32\xd4\xd4\x05\xe0\x43\x20\x58\xc7\xb6\xda\xa3" },
+      { GCRY_MD_BLAKE2S_160, "?",
+	"\xaa\x83\xe1\xcd\x8d\x4e\x9c\xb7\xf4\x6b\x43\xe1\xbc\x6f\x73\x3b"
+	"\x0e\xfc\x29\xde" },
+      { GCRY_MD_BLAKE2S_128, "?",
+	"\x70\x0b\x8a\x71\x1d\x34\x0a\xf0\x13\x93\x19\x93\x5e\xd7\x54\x9c" },
       { 0 }
     };
   gcry_error_t err;
@@ -7076,11 +7969,16 @@ check_digests (void)
       check_one_md (algos[i].md, algos[i].data,
 		    algos[i].datalen > 0 ? algos[i].datalen
 					 : strlen (algos[i].data),
-		    algos[i].expect, algos[i].expectlen);
+		    algos[i].expect, algos[i].expectlen,
+		    algos[i].key, algos[i].keylen);
+
+      if (algos[i].key && algos[i].keylen)
+	continue;
+
       check_one_md_multi (algos[i].md, algos[i].data,
 			  algos[i].datalen > 0 ? algos[i].datalen
 					       : strlen (algos[i].data),
-                          algos[i].expect);
+			  algos[i].expect);
     }
 
   /* Check the Whirlpool bug emulation.  */
@@ -9544,7 +10442,6 @@ main (int argc, char **argv)
 {
   gpg_error_t err;
   int last_argc = -1;
-  int debug = 0;
   int use_fips = 0;
   int selftest_only = 0;
   int pubkey_only = 0;
@@ -9625,10 +10522,10 @@ main (int argc, char **argv)
         }
     }
 
-  gcry_control (GCRYCTL_SET_VERBOSITY, (int)verbose);
+  xgcry_control (GCRYCTL_SET_VERBOSITY, (int)verbose);
 
   if (use_fips)
-    gcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
+    xgcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
 
   /* Check that we test exactly our version - including the patchlevel.  */
   if (strcmp (GCRYPT_VERSION, gcry_check_version (NULL)))
@@ -9639,16 +10536,16 @@ main (int argc, char **argv)
     in_fips_mode = 1;
 
   if (!in_fips_mode)
-    gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+    xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
 
   if (verbose)
     gcry_set_progress_handler (progress_handler, NULL);
 
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
   /* No valuable keys are create, so we can speed up our RNG. */
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
 
   do
     {
@@ -9685,7 +10582,7 @@ main (int argc, char **argv)
       gcry_md_hd_t md;
 
       /* First trigger a self-test.  */
-      gcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
+      xgcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
       if (!gcry_control (GCRYCTL_OPERATIONAL_P, 0))
         fail ("not in operational state after self-test\n");
 
@@ -9714,7 +10611,7 @@ main (int argc, char **argv)
                 {
                   /* Now run a self-test and to get back into
                      operational state.  */
-                  gcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
+                  xgcry_control (GCRYCTL_FORCE_FIPS_MODE, 0);
                   if (!gcry_control (GCRYCTL_OPERATIONAL_P, 0))
                     fail ("did not reach operational after error "
                           "and self-test\n");

@@ -26,33 +26,8 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "../src/gcrypt-int.h"
-
-static int verbose;
-static int error_count;
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  error_count++;
-}
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  exit (1);
-}
-
+#define PGM "aeswrap"
+#include "t-common.h"
 
 
 static void
@@ -239,8 +214,6 @@ check_all (void)
 int
 main (int argc, char **argv)
 {
-  int debug = 0;
-
   if (argc > 1 && !strcmp (argv[1], "--verbose"))
     verbose = 1;
   else if (argc > 1 && !strcmp (argv[1], "--debug"))
@@ -249,10 +222,10 @@ main (int argc, char **argv)
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
   check_all ();
 
   return error_count ? 1 : 0;

@@ -124,7 +124,7 @@ struct gcry_cipher_handle
   /* A structure with function pointers for bulk operations.  Due to
      limitations of the module system (we don't want to change the
      API) we need to keep these function pointers here.  The cipher
-     open function intializes them and the actual encryption routines
+     open function initializes them and the actual encryption routines
      use them if they are not NULL.  */
   struct {
     void (*cfb_enc)(void *context, unsigned char *iv,
@@ -146,6 +146,9 @@ struct gcry_cipher_handle
 			const void *inbuf_arg, size_t nblocks, int encrypt);
     size_t (*ocb_auth)(gcry_cipher_hd_t c, const void *abuf_arg,
 		       size_t nblocks);
+    void (*xts_crypt)(gcry_cipher_hd_t c, unsigned char *tweak,
+		      void *outbuf_arg, const void *inbuf_arg,
+		      size_t nblocks, int encrypt);
   } bulk;
 
 
@@ -309,6 +312,12 @@ struct gcry_cipher_handle
 
     } ocb;
 
+    /* Mode specific storage for XTS mode. */
+    struct {
+      /* Pointer to tweak cipher context, allocated after actual
+       * cipher context. */
+      char *tweak_context;
+    } xts;
   } u_mode;
 
   /* What follows are two contexts of the cipher in use.  The first
@@ -336,6 +345,14 @@ gcry_err_code_t _gcry_cipher_cfb_encrypt
                  unsigned char *outbuf, size_t outbuflen,
                  const unsigned char *inbuf, size_t inbuflen);
 gcry_err_code_t _gcry_cipher_cfb_decrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_cfb8_encrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_cfb8_decrypt
 /*           */ (gcry_cipher_hd_t c,
                  unsigned char *outbuf, size_t outbuflen,
                  const unsigned char *inbuf, size_t inbuflen);
@@ -459,28 +476,34 @@ gcry_err_code_t _gcry_cipher_ocb_get_tag
 gcry_err_code_t _gcry_cipher_ocb_check_tag
 /*           */ (gcry_cipher_hd_t c,
                  const unsigned char *intag, size_t taglen);
-const unsigned char *_gcry_cipher_ocb_get_l
-/*           */ (gcry_cipher_hd_t c, unsigned char *l_tmp, u64 n);
 
 
-/* Inline version of _gcry_cipher_ocb_get_l, with hard-coded fast paths for
-   most common cases.  */
+/*-- cipher-xts.c --*/
+gcry_err_code_t _gcry_cipher_xts_crypt
+/*           */ (gcry_cipher_hd_t c, unsigned char *outbuf, size_t outbuflen,
+		 const unsigned char *inbuf, size_t inbuflen, int encrypt);
+
+
+/* Return the L-value for block N.  Note: 'cipher_ocb.c' ensures that N
+ * will never be multiple of 65536 (1 << OCB_L_TABLE_SIZE), thus N can
+ * be directly passed to _gcry_ctz() function and resulting index will
+ * never overflow the table.  */
 static inline const unsigned char *
-ocb_get_l (gcry_cipher_hd_t c, unsigned char *l_tmp, u64 n)
+ocb_get_l (gcry_cipher_hd_t c, u64 n)
 {
-  if (n & 1)
-    return c->u_mode.ocb.L[0];
-  else if (n & 2)
-    return c->u_mode.ocb.L[1];
-  else
-    {
-      unsigned int ntz = _gcry_ctz64 (n);
+  unsigned long ntz;
 
-      if (ntz < OCB_L_TABLE_SIZE)
-	return c->u_mode.ocb.L[ntz];
-      else
-	return _gcry_cipher_ocb_get_l (c, l_tmp, n);
-    }
+#if ((defined(__i386__) || defined(__x86_64__)) && __GNUC__ >= 4)
+  /* Assumes that N != 0. */
+  asm ("rep;bsfl %k[low], %k[ntz]\n\t"
+        : [ntz] "=r" (ntz)
+        : [low] "r" ((unsigned long)n)
+        : "cc");
+#else
+  ntz = _gcry_ctz (n);
+#endif
+
+  return c->u_mode.ocb.L[ntz];
 }
 
 #endif /*G10_CIPHER_INTERNAL_H*/

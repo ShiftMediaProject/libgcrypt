@@ -1,61 +1,57 @@
-Noteworthy changes in version 1.7.8 (2017-06-29)  [C21/A1/R8]
+Noteworthy changes in version 1.8.0 (2017-07-18)  [C22/A2/R0]
 ------------------------------------------------
 
- * Bug fixes:
+ * New interfaces:
 
-   - Mitigate a flush+reload side-channel attack on RSA secret keys
-     dubbed "Sliding right into disaster".  For details see
-     <https://eprint.iacr.org/2017/627>.  [CVE-2017-7526]
+   - New cipher mode XTS
 
+   - New hash function Blake-2
 
-Noteworthy changes in version 1.7.7 (2017-06-02)  [C21/A1/R7]
-------------------------------------------------
+   - New function gcry_mpi_point_copy.
 
- * Bug fixes:
+   - New function gcry_get_config.
 
-   - Fix possible timing attack on EdDSA session key.
+   - GCRYCTL_REINIT_SYSCALL_CLAMP allows to init nPth after Libgcrypt.
 
-   - Fix long standing bug in secure memory implementation which could
-     lead to a segv on free. [bug#3027]
+   - New gobal configuration file /etc/gcrypt/random.conf.
 
+ * Extended interfaces:
 
-Noteworthy changes in version 1.7.6 (2017-01-18)  [C21/A1/R6]
-------------------------------------------------
+   - GCRYCTL_PRINT_CONFIG does now also print build information for
+     libgpg-error and the used compiler version.
 
- * Bug fixes:
+   - GCRY_CIPHER_MODE_CFB8 is now supported.
 
-   - Fix AES CTR self-check detected failure in the SSSE3 based
-     implementation.
-
-   - Remove gratuitous select before the getrandom syscall.
-
-
-Noteworthy changes in version 1.7.5 (2016-12-15)  [C21/A1/R5]
-------------------------------------------------
-
- * Bug fixes:
-
-   - Fix regression in mlock detection [bug#2870].
-
-
-Noteworthy changes in version 1.7.4 (2016-12-09)  [C21/A1/R4]
-------------------------------------------------
+   - Add Stribog OIDs.  [also in 1.7.4]
 
  * Performance:
 
+   - A jitter based entropy collector is now used in addition to the
+     other entropy collectors.
+
+   - Optimized gcry_md_hash_buffers for SHA-256 and SHA-512.
+
    - More ARMv8/AArch32 improvements for AES, GCM, SHA-256, and SHA-1.
+     [also in 1.7.4]
 
    - Add ARMv8/AArch32 assembly implementation for Twofish and
-     Camellia.
+     Camellia.  [also in 1.7.4]
 
    - Add bulk processing implementation for ARMv8/AArch32.
-
-   - Add Stribog OIDs.
+     [also in 1.7.4]
 
    - Improve the DRBG performance and sync the code with the Linux
-     version.
+     version.  [also in 1.7.4]
 
  * Internal changes:
+
+   - Libgpg-error 1.25 is now required.  This avoids stalling of nPth
+     threads due to contention on internal Libgcrypt locks (e.g. the
+     random pool lock).
+
+   - The system call clamp of libgpg-error is now used to wrap the
+     blocking read of /dev/random.  This allows other nPth threads to
+     run while Libgcrypt is gathering entropy.
 
    - When secure memory is requested by the MPI functions or by
      gcry_xmalloc_secure, they do not anymore lead to a fatal error if
@@ -63,13 +59,54 @@ Noteworthy changes in version 1.7.4 (2016-12-09)  [C21/A1/R4]
      allocated as needed.  These new pools are not protected against
      being swapped out (mlock can't be used).  However, these days
      this is considered a minor issue and can easily be mitigated by
-     using encrypted swap space.
+     using encrypted swap space.  [also in 1.7.4]
 
  * Bug fixes:
 
-   - Fix GOST 28147 CryptoPro-B S-box.
+   - Fix AES CTR self-check detected failure in the SSSE3 based
+     implementation.  [also in 1.7.6]
 
-   - Fix error code handling of mlock calls.
+   - Remove gratuitous select before the getrandom syscall.
+     [also in 1.7.6]
+
+   - Fix regression in mlock detection.  [bug#2870] [also in 1.7.5]
+
+   - Fix GOST 28147 CryptoPro-B S-box.   [also in 1.7.4]
+
+   - Fix error code handling of mlock calls.  [also in 1.7.4]
+
+   - Fix possible timing attack on EdDSA session key. [also in 1.7.7]
+
+   - Fix long standing bug in secure memory implementation which could
+     lead to a segv on free. [bug#3027] [also in 1.7.7]
+
+   - Mitigate a flush+reload side-channel attack on RSA secret keys
+     dubbed "Sliding right into disaster".  For details see
+     <https://eprint.iacr.org/2017/627>.  [CVE-2017-7526] [also in 1.7.8]
+
+ * Interface changes relative to the 1.7.0 release:
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   gcry_get_config                 NEW function.
+   gcry_mpi_point_copy             NEW function.
+   GCRYCTL_REINIT_SYSCALL_CLAMP    NEW macro.
+   GCRY_MD_BLAKE2B_512             NEW constant.
+   GCRY_MD_BLAKE2B_384             NEW constant.
+   GCRY_MD_BLAKE2B_256             NEW constant.
+   GCRY_MD_BLAKE2B_160             NEW constant.
+   GCRY_MD_BLAKE2S_256             NEW constant.
+   GCRY_MD_BLAKE2S_224             NEW constant.
+   GCRY_MD_BLAKE2S_160             NEW constant.
+   GCRY_MD_BLAKE2S_128             NEW constant.
+   GCRY_CIPHER_MODE_XTS            NEW constant.
+   gcry_md_info                    DEPRECATED.
+
+ * Release dates of 1.7.x versions:
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   Version 1.7.8 (2017-06-29)  [C21/A1/R8]
+   Version 1.7.7 (2017-06-02)  [C21/A1/R7]
+   Version 1.7.6 (2017-01-18)  [C21/A1/R6]
+   Version 1.7.5 (2016-12-15)  [C21/A1/R5]
+   Version 1.7.4 (2016-12-09)  [C21/A1/R4]
 
 
 Noteworthy changes in version 1.7.3 (2016-08-17)  [C21/A1/R3]

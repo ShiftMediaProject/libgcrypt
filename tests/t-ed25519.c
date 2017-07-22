@@ -27,82 +27,15 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../src/gcrypt-int.h"
-
 #include "stopwatch.h"
 
 #define PGM "t-ed25519"
+#include "t-common.h"
 #define N_TESTS 1026
 
-#define my_isascii(c) (!((c) & 0x80))
-#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a) (digitp (a)                     \
-                      || (*(a) >= 'A' && *(a) <= 'F')  \
-                      || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)   (*(p) <= '9'? (*(p)- '0'): \
-                     *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)   ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xstrdup(a)    gcry_xstrdup ((a))
-#define xfree(a)      gcry_free ((a))
-#define pass()        do { ; } while (0)
-
-static int verbose;
-static int debug;
-static int error_count;
 static int sign_with_pk;
 static int no_verify;
 static int custom_data_file;
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr ;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  va_start( arg_ptr, format ) ;
-  vfprintf (stderr, format, arg_ptr );
-  va_end(arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  exit (1);
-}
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  /* if (wherestr) */
-  /*   fprintf (stderr, "%s: ", wherestr); */
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  error_count++;
-  if (error_count >= 50)
-    die ("stopped after 50 errors.");
-}
-
-static void
-show (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  if (!verbose)
-    return;
-  fprintf (stderr, "%s: ", PGM);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  va_end (arg_ptr);
-}
 
 
 static void
@@ -185,7 +118,7 @@ read_textline (FILE *fp, int *lineno)
     }
   while (!*line || *line == '#');
   /* if (debug) */
-  /*   show ("read line: '%s'\n", line); */
+  /*   info ("read line: '%s'\n", line); */
   return xstrdup (line);
 }
 
@@ -269,7 +202,7 @@ one_test (int testno, const char *sk, const char *pk,
   size_t sig_r_len, sig_s_len;
 
   if (verbose > 1)
-    show ("Running test %d\n", testno);
+    info ("Running test %d\n", testno);
 
   if (!(buffer = hex2buffer (sk, &buflen)))
     {
@@ -384,8 +317,8 @@ one_test (int testno, const char *sk, const char *pk,
         {
           fail ("gcry_pk_sign failed for test %d: %s",
                 testno, "wrong value returned");
-          show ("  expected: '%s'", sig);
-          show ("       got: '%s'", sig_rs_string);
+          info ("  expected: '%s'", sig);
+          info ("       got: '%s'", sig_rs_string);
         }
     }
 
@@ -417,7 +350,7 @@ check_ed25519 (const char *fname)
   int testno;
   char *sk, *pk, *msg, *sig;
 
-  show ("Checking Ed25519.\n");
+  info ("Checking Ed25519.\n");
 
   fp = fopen (fname, "r");
   if (!fp)
@@ -540,13 +473,13 @@ main (int argc, char **argv)
   else
     custom_data_file = 1;
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   /* Ed25519 isn't supported in fips mode */
   if (gcry_fips_mode_active())
@@ -558,7 +491,7 @@ main (int argc, char **argv)
 
   xfree (fname);
 
-  show ("All tests completed in %s.  Errors: %d\n",
+  info ("All tests completed in %s.  Errors: %d\n",
         elapsed_time (1), error_count);
   return !!error_count;
 }

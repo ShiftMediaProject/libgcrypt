@@ -27,30 +27,12 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../src/gcrypt-int.h"
-
 #include "stopwatch.h"
 
 #define PGM "t-cv25519"
+#include "t-common.h"
 #define N_TESTS 18
 
-#define my_isascii(c) (!((c) & 0x80))
-#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
-#define hexdigitp(a) (digitp (a)                     \
-                      || (*(a) >= 'A' && *(a) <= 'F')  \
-                      || (*(a) >= 'a' && *(a) <= 'f'))
-#define xtoi_1(p)   (*(p) <= '9'? (*(p)- '0'): \
-                     *(p) <= 'F'? (*(p)-'A'+10):(*(p)-'a'+10))
-#define xtoi_2(p)   ((xtoi_1(p) * 16) + xtoi_1((p)+1))
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xstrdup(a)    gcry_xstrdup ((a))
-#define xfree(a)      gcry_free ((a))
-#define pass()        do { ; } while (0)
-
-static int verbose;
-static int debug;
-static int error_count;
 
 static void
 print_mpi (const char *text, gcry_mpi_t a)
@@ -68,55 +50,6 @@ print_mpi (const char *text, gcry_mpi_t a)
       fprintf (stderr, "%s: %s\n", text, buf);
       gcry_free (buf);
     }
-}
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr ;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  va_start( arg_ptr, format ) ;
-  vfprintf (stderr, format, arg_ptr );
-  va_end(arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  exit (1);
-}
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  /* if (wherestr) */
-  /*   fprintf (stderr, "%s: ", wherestr); */
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  error_count++;
-  if (error_count >= 50)
-    die ("stopped after 50 errors.");
-}
-
-static void
-show (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  if (!verbose)
-    return;
-  fprintf (stderr, "%s: ", PGM);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  if (*format && format[strlen(format)-1] != '\n')
-    putc ('\n', stderr);
-  va_end (arg_ptr);
 }
 
 
@@ -201,7 +134,7 @@ test_cv (int testno, const char *k_str, const char *u_str,
   size_t res_len;
 
   if (verbose > 1)
-    show ("Running test %d\n", testno);
+    info ("Running test %d\n", testno);
 
   if (!(buffer = hex2buffer (k_str, &buflen)) || buflen != 32)
     {
@@ -271,7 +204,7 @@ test_cv (int testno, const char *k_str, const char *u_str,
       r0 = r = xmalloc (2*(res_len)+1);
       if (!r0)
         {
-          fail ("memory allocation", testno);
+          fail ("memory allocation for test %d", testno);
           goto leave;
         }
 
@@ -281,8 +214,8 @@ test_cv (int testno, const char *k_str, const char *u_str,
         {
           fail ("gcry_pk_encrypt failed for test %d: %s",
                 testno, "wrong value returned");
-          show ("  expected: '%s'", result_str);
-          show ("       got: '%s'", r0);
+          info ("  expected: '%s'", result_str);
+          info ("       got: '%s'", r0);
         }
       xfree (r0);
     }
@@ -320,7 +253,7 @@ test_it (int testno, const char *k_str, int iter, const char *result_str)
   gcry_mpi_t mpi_kk = NULL;
 
   if (verbose > 1)
-    show ("Running test %d: iteration=%d\n", testno, iter);
+    info ("Running test %d: iteration=%d\n", testno, iter);
 
   gcry_mpi_ec_new (&ctx, NULL, "Curve25519");
   Q = gcry_mpi_point_new (0);
@@ -379,7 +312,7 @@ test_it (int testno, const char *k_str, int iter, const char *result_str)
     r0 = r = xmalloc (65);
     if (!r0)
       {
-        fail ("memory allocation", testno);
+        fail ("memory allocation for test %d", testno);
         goto leave;
       }
 
@@ -390,8 +323,8 @@ test_it (int testno, const char *k_str, int iter, const char *result_str)
       {
         fail ("curv25519 failed for test %d: %s",
               testno, "wrong value returned");
-        show ("  expected: '%s'", result_str);
-        show ("       got: '%s'", r0);
+        info ("  expected: '%s'", result_str);
+        info ("       got: '%s'", r0);
       }
     xfree (r0);
   }
@@ -438,7 +371,7 @@ check_cv25519 (void)
 {
   int ntests;
 
-  show ("Checking Curve25519.\n");
+  info ("Checking Curve25519.\n");
 
   ntests = 0;
 
@@ -620,19 +553,19 @@ main (int argc, char **argv)
         die ("unknown option '%s'", *argv);
     }
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u , 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   start_timer ();
   check_cv25519 ();
   stop_timer ();
 
-  show ("All tests completed in %s.  Errors: %d\n",
+  info ("All tests completed in %s.  Errors: %d\n",
         elapsed_time (1), error_count);
   return !!error_count;
 }

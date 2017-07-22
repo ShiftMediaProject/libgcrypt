@@ -752,7 +752,7 @@ do_encrypt (const RIJNDAEL_context *ctx,
                   "+d" (ax),
                   "+c" (rounds)
                 : "0" (_gcry_aes_amd64_encrypt_block),
-                  [encT] "g" (encT)
+                  [encT] "r" (encT)
                 : "cc", "memory", "r8", "r9", "r10", "r11");
   return ret;
 # endif /* HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS */
@@ -1135,7 +1135,7 @@ do_decrypt (const RIJNDAEL_context *ctx, unsigned char *bx,
                   "+d" (ax),
                   "+c" (rounds)
                 : "0" (_gcry_aes_amd64_decrypt_block),
-                  [dectabs] "g" (&dec_tables)
+                  [dectabs] "r" (&dec_tables)
                 : "cc", "memory", "r8", "r9", "r10", "r11");
   return ret;
 # endif /* HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS */
@@ -1353,7 +1353,7 @@ _gcry_aes_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
       for ( ;nblocks; nblocks-- )
         {
           u64 i = ++c->u_mode.ocb.data_nblocks;
-          const unsigned char *l = ocb_get_l(c, l_tmp.x1, i);
+          const unsigned char *l = ocb_get_l(c, i);
 
           /* Offset_i = Offset_{i-1} xor L_{ntz(i)} */
           buf_xor_1 (c->u_iv.iv, l, BLOCKSIZE);
@@ -1378,7 +1378,7 @@ _gcry_aes_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
       for ( ;nblocks; nblocks-- )
         {
           u64 i = ++c->u_mode.ocb.data_nblocks;
-          const unsigned char *l = ocb_get_l(c, l_tmp.x1, i);
+          const unsigned char *l = ocb_get_l(c, i);
 
           /* Offset_i = Offset_{i-1} xor L_{ntz(i)} */
           buf_xor_1 (c->u_iv.iv, l, BLOCKSIZE);
@@ -1445,7 +1445,7 @@ _gcry_aes_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg, size_t nblocks)
       for ( ;nblocks; nblocks-- )
         {
           u64 i = ++c->u_mode.ocb.aad_nblocks;
-          const unsigned char *l = ocb_get_l(c, l_tmp.x1, i);
+          const unsigned char *l = ocb_get_l(c, i);
 
           /* Offset_i = Offset_{i-1} xor L_{ntz(i)} */
           buf_xor_1 (c->u_mode.ocb.aad_offset, l, BLOCKSIZE);

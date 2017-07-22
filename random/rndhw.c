@@ -61,7 +61,7 @@ poll_padlock (void (*add)(const void*, size_t, enum random_origins),
 
   /* Peter Gutmann's cryptlib tests again whether the RNG is enabled
      but we don't do so.  We would have to do this also for our AES
-     implementaion and that is definitely too time consuming.  There
+     implementation and that is definitely too time consuming.  There
      would be a race condition anyway.  Thus we assume that the OS
      does not change the Padlock initialization while a user process
      is running.  */
@@ -76,7 +76,7 @@ poll_padlock (void (*add)(const void*, size_t, enum random_origins),
          ".byte 0x0f, 0xa7, 0xc0\n\t" /* XSTORE RNG. */
          : "=a" (status)
          : "g" (p)
-         : "%rdx", "%rdi", "cc"
+         : "%rdx", "%rdi", "cc", "memory"
          );
 #else
       asm volatile
@@ -85,7 +85,7 @@ poll_padlock (void (*add)(const void*, size_t, enum random_origins),
          ".byte 0x0f, 0xa7, 0xc0\n\t" /* XSTORE RNG. */
          : "=a" (status)
          : "g" (p)
-         : "%edx", "%edi", "cc"
+         : "%edx", "%edi", "cc", "memory"
          );
 #endif
       if ((status & (1<<6))         /* RNG still enabled.  */
@@ -129,7 +129,7 @@ poll_padlock (void (*add)(const void*, size_t, enum random_origins),
 #  define RDRAND_LONG	RDRAND_INT
 # endif
 static inline int
-rdrand_long (unsigned long *v)
+rdrand_long (volatile unsigned long *v)
 {
   int ok;
   asm volatile ("1: " RDRAND_LONG "\n\t"
@@ -139,13 +139,13 @@ rdrand_long (unsigned long *v)
                 "2:"
                 : "=r" (ok), "=a" (*v)
                 : "0" (RDRAND_RETRY_LOOPS)
-                : "cc");
+                : "cc", "memory");
   return ok;
 }
 
 
 static inline int
-rdrand_nlong (unsigned long *v, int count)
+rdrand_nlong (volatile unsigned long *v, int count)
 {
   while (count--)
     if (!rdrand_long(v++))
@@ -157,12 +157,12 @@ rdrand_nlong (unsigned long *v, int count)
 static size_t
 poll_drng (add_fn_t add, enum random_origins origin, int fast)
 {
-  volatile char buffer[64] __attribute__ ((aligned (8)));
+  volatile unsigned long buffer[8] __attribute__ ((aligned (8)));
   unsigned int nbytes = sizeof (buffer);
 
   (void)fast;
 
-  if (!rdrand_nlong ((unsigned long *)buffer, sizeof(buffer)/sizeof(long)))
+  if (!rdrand_nlong (buffer, DIM(buffer)))
     return 0;
   (*add)((void *)buffer, nbytes, origin);
   return nbytes;

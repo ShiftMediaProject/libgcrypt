@@ -115,6 +115,7 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
 {
   static int fd_urandom = -1;
   static int fd_random = -1;
+  static int only_urandom = -1;
   static unsigned char ever_opened;
   int fd;
   int n;
@@ -124,6 +125,17 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
   size_t last_so_far = 0;
   int any_need_entropy = 0;
   int delay;
+
+  /* On the first call read the conf file to check whether we want to
+   * use only urandom.  */
+  if (only_urandom == -1)
+    {
+      if ((_gcry_random_read_conf () & RANDOM_CONF_ONLY_URANDOM))
+        only_urandom = 1;
+      else
+        only_urandom = 0;
+    }
+
 
   if (!add)
     {
@@ -158,6 +170,19 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
   if (length > 1)
     length -= n_hw;
 
+  /* When using a blocking random generator try to get some entropy
+   * from the jitter based RNG.  In this case we take up to 50% of the
+   * remaining requested bytes.  */
+  if (level >= GCRY_VERY_STRONG_RANDOM)
+    {
+      n_hw = _gcry_rndjent_poll (add, origin, length/2);
+      if (n_hw > length/2)
+        n_hw = length/2;
+      if (length > 1)
+        length -= n_hw;
+    }
+
+
   /* Open the requested device.  The first time a device is to be
      opened we fail with a fatal error if the device does not exists.
      In case the device has ever been closed, further open requests
@@ -165,7 +190,7 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
      that we always require the device to be existent but want a more
      graceful behaviour if the rarely needed close operation has been
      used and the device needs to be re-opened later. */
-  if (level >= 2)
+  if (level >= GCRY_VERY_STRONG_RANDOM && !only_urandom)
     {
       if (fd_random == -1)
         {
@@ -215,8 +240,10 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
               nbytes = length < sizeof(buffer)? length : sizeof(buffer);
               if (nbytes > 256)
                 nbytes = 256;
+              _gcry_pre_syscall ();
               ret = syscall (__NR_getrandom,
                              (void*)buffer, (size_t)nbytes, (unsigned int)0);
+              _gcry_post_syscall ();
             }
           while (ret == -1 && errno == EINTR);
           if (ret == -1 && errno == ENOSYS)
@@ -262,7 +289,10 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
           FD_SET(fd, &rfds);
           tv.tv_sec = delay;
           tv.tv_usec = delay? 0 : 100000;
-          if ( !(rc=select(fd+1, &rfds, NULL, NULL, &tv)) )
+          _gcry_pre_syscall ();
+          rc = select (fd+1, &rfds, NULL, NULL, &tv);
+          _gcry_post_syscall ();
+          if (!rc)
             {
               any_need_entropy = 1;
               delay = 3; /* Use 3 seconds henceforth.  */
@@ -278,7 +308,6 @@ _gcry_rndlinux_gather_random (void (*add)(const void*, size_t,
             }
         }
 
-      /* Read from the device.  */
       do
         {
           size_t nbytes;

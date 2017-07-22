@@ -28,61 +28,9 @@
 #include <assert.h>
 #include <stdarg.h>
 
-#include "../src/gcrypt-int.h"
-
 #define PGM "t-mpi-bit"
+#include "t-common.h"
 
-static const char *wherestr;
-static int verbose;
-static int error_count;
-
-#define xmalloc(a)    gcry_xmalloc ((a))
-#define xcalloc(a,b)  gcry_xcalloc ((a),(b))
-#define xfree(a)      gcry_free ((a))
-#define pass() do { ; } while (0)
-
-static void
-show (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  if (!verbose)
-    return;
-  fprintf (stderr, "%s: ", PGM);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-}
-
-static void
-fail (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  if (wherestr)
-    fprintf (stderr, "%s: ", wherestr);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  error_count++;
-}
-
-static void
-die (const char *format, ...)
-{
-  va_list arg_ptr;
-
-  fflush (stdout);
-  fprintf (stderr, "%s: ", PGM);
-  if (wherestr)
-    fprintf (stderr, "%s: ", wherestr);
-  va_start (arg_ptr, format);
-  vfprintf (stderr, format, arg_ptr);
-  va_end (arg_ptr);
-  exit (1);
-}
 
 /* Allocate a bit string consisting of '0' and '1' from the MPI
    A. Return the LENGTH least significant bits. Caller needs to xfree
@@ -171,7 +119,7 @@ one_bit_only (int highbit)
   int i;
 
   wherestr = "one_bit_only";
-  show ("checking that set_%sbit does only set one bit\n", highbit?"high":"");
+  info ("checking that set_%sbit does only set one bit\n", highbit?"high":"");
 
   a = gcry_mpi_new (0);
   gcry_mpi_randomize (a, 70, GCRY_WEAK_RANDOM);
@@ -207,7 +155,7 @@ test_rshift (int pass)
   int i;
 
   wherestr = "test_rshift";
-  show ("checking that rshift works as expected (pass %d)\n", pass);
+  info ("checking that rshift works as expected (pass %d)\n", pass);
 
   a = gcry_mpi_new (0);
   b = gcry_mpi_new (0);
@@ -222,8 +170,8 @@ test_rshift (int pass)
       rshiftbitstring (result2, i);
       if (strcmp (result, result2))
         {
-          show ("got =%s\n", result);
-          show ("want=%s\n", result2);
+          info ("got =%s\n", result);
+          info ("want=%s\n", result2);
           fail ("rshift by %d failed\n", i);
         }
       xfree (result);
@@ -244,8 +192,8 @@ test_rshift (int pass)
       rshiftbitstring (result2, i);
       if (strcmp (result, result2))
         {
-          show ("got =%s\n", result);
-          show ("want=%s\n", result2);
+          info ("got =%s\n", result);
+          info ("want=%s\n", result2);
           fail ("in-place rshift by %d failed\n", i);
         }
       xfree (result2);
@@ -267,7 +215,7 @@ test_lshift (int pass)
   int i;
 
   wherestr = "test_lshift";
-  show ("checking that lshift works as expected (pass %d)\n", pass);
+  info ("checking that lshift works as expected (pass %d)\n", pass);
 
   for (size_idx=0; size_list[size_idx]; size_idx++)
     {
@@ -289,8 +237,8 @@ test_lshift (int pass)
           xfree (tmpstr);
           if (strcmp (result, result2))
             {
-              show ("got =%s\n", result);
-              show ("want=%s\n", result2);
+              info ("got =%s\n", result);
+              info ("want=%s\n", result2);
               fail ("lshift by %d failed\n", i);
             }
           xfree (result);
@@ -313,8 +261,8 @@ test_lshift (int pass)
           xfree (tmpstr);
           if (strcmp (result, result2))
             {
-              show ("got =%s\n", result);
-              show ("want=%s\n", result2);
+              info ("got =%s\n", result);
+              info ("want=%s\n", result2);
               fail ("in-place lshift by %d failed\n", i);
             }
           xfree (result2);
@@ -338,7 +286,7 @@ set_bit_with_resize (void)
   int i;
 
   wherestr = "set_bit_with_resize";
-  show ("checking that set_bit initializes all limbs\n");
+  info ("checking that set_bit initializes all limbs\n");
 
   a = gcry_mpi_new (1536);
   gcry_mpi_set_bit (a, 1536);
@@ -358,7 +306,7 @@ set_bit_with_resize (void)
   gcry_mpi_release (a);
 
   wherestr = "set_highbit_with_resize";
-  show ("checking that set_highbit initializes all limbs\n");
+  info ("checking that set_highbit initializes all limbs\n");
 
   a = gcry_mpi_new (1536);
   gcry_mpi_set_highbit (a, 1536);
@@ -382,7 +330,6 @@ set_bit_with_resize (void)
 int
 main (int argc, char **argv)
 {
-  int debug = 0;
   int i;
 
   if (argc > 1 && !strcmp (argv[1], "--verbose"))
@@ -393,12 +340,12 @@ main (int argc, char **argv)
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch\n");
 
-  gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
 
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   one_bit_only (0);
   one_bit_only (1);
@@ -410,6 +357,6 @@ main (int argc, char **argv)
 
   set_bit_with_resize ();
 
-  show ("All tests completed. Errors: %d\n", error_count);
+  info ("All tests completed. Errors: %d\n", error_count);
   return error_count ? 1 : 0;
 }

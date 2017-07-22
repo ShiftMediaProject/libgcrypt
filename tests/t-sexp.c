@@ -28,7 +28,7 @@
 #include <assert.h>
 #include "../src/gcrypt-int.h"
 
-#define PGMNAME "t-sexp"
+#define PGM "t-sexp"
 #include "t-common.h"
 
 
@@ -1146,7 +1146,7 @@ main (int argc, char **argv)
       else if (!strcmp (*argv, "--help"))
         {
           puts (
-"usage: " PGMNAME " [options]\n"
+"usage: " PGM " [options]\n"
 "\n"
 "Options:\n"
 "  --verbose      Show what is going on\n"
@@ -1169,17 +1169,17 @@ main (int argc, char **argv)
     }
 
   if (debug)
-    gcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
-  gcry_control (GCRYCTL_DISABLE_SECMEM_WARN);
-  gcry_control (GCRYCTL_INIT_SECMEM, 16384, 0);
+    xgcry_control (GCRYCTL_SET_DEBUG_FLAGS, 1u, 0);
+  xgcry_control (GCRYCTL_DISABLE_SECMEM_WARN);
+  xgcry_control (GCRYCTL_INIT_SECMEM, 16384, 0);
   if (!gcry_check_version (GCRYPT_VERSION))
     die ("version mismatch");
   /* #include "../src/gcrypt-int.h" indicates that internal interfaces
      may be used; thus better do an exact version check. */
   if (strcmp (gcry_check_version (NULL), GCRYPT_VERSION))
     die ("exact version match failed");
-  gcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
-  gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+  xgcry_control (GCRYCTL_ENABLE_QUICK_RANDOM, 0);
+  xgcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 
   basic ();
   canon_len ();
@@ -1188,5 +1188,5 @@ main (int argc, char **argv)
   check_extract_param ();
   bug_1594 ();
 
-  return errorcount? 1:0;
+  return error_count? 1:0;
 }

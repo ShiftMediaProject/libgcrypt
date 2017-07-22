@@ -44,7 +44,7 @@ cipher.c cipher-internal.h \
 cipher-cbc.c cipher-cfb.c cipher-ofb.c cipher-ctr.c cipher-aeswrap.c \
 cipher-ccm.c cipher-cmac.c cipher-gcm.c cipher-gcm-intel-pclmul.c \
   cipher-gcm-armv8-aarch32-ce.S cipher-gcm-armv8-aarch64-ce.S \
-cipher-poly1305.c cipher-ocb.c \
+cipher-poly1305.c cipher-ocb.c cipher-xts.c \
 cipher-selftest.c cipher-selftest.h \
 pubkey.c pubkey-internal.h pubkey-util.c \
 md.c \
@@ -80,7 +80,8 @@ md4.c \
 md5.c \
 poly1305-sse2-amd64.S poly1305-avx2-amd64.S poly1305-armv7-neon.S \
 rijndael.c rijndael-internal.h rijndael-tables.h rijndael-aesni.c \
-  rijndael-padlock.c rijndael-amd64.S rijndael-arm.S rijndael-ssse3-amd64.c \
+  rijndael-padlock.c rijndael-amd64.S rijndael-arm.S \
+  rijndael-ssse3-amd64.c rijndael-ssse3-amd64-asm.S \
   rijndael-armv8-ce.c rijndael-armv8-aarch32-ce.S rijndael-armv8-aarch64-ce.S \
   rijndael-aarch64.S \
 rmd160.c \
@@ -100,9 +101,11 @@ stribog.c \
 tiger.c \
 whirlpool.c whirlpool-sse2-amd64.S \
 twofish.c twofish-amd64.S twofish-arm.S twofish-aarch64.S \
+  twofish-avx2-amd64.S \
 rfc2268.c \
 camellia.c camellia.h camellia-glue.c camellia-aesni-avx-amd64.S \
-  camellia-aesni-avx2-amd64.S camellia-arm.S camellia-aarch64.S
+  camellia-aesni-avx2-amd64.S camellia-arm.S camellia-aarch64.S \
+blake2.c
 
 gost28147.lo: gost-sb.h
 gost-sb.h: gost-s-box
