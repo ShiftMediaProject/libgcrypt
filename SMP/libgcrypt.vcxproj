@@ -510,12 +510,12 @@
       <AdditionalLibraryDirectories>$(OutDir)\lib\x86\;$(ProjectDir)\..\..\prebuilt\lib\x86\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -537,8 +537,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -546,8 +546,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -577,12 +577,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <AdditionalLibraryDirectories>$(OutDir)\lib\x64\;$(ProjectDir)\..\..\prebuilt\lib\x64\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -604,8 +604,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -613,8 +613,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -648,12 +648,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>5.1</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -675,8 +675,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -684,8 +684,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -719,12 +719,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>5.1</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -746,8 +746,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -755,8 +755,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -788,12 +788,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>6.0</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -815,8 +815,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -824,8 +824,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -857,12 +857,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>6.0</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -884,8 +884,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -893,8 +893,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -933,12 +933,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <AdditionalLibraryDirectories>$(OutDir)\lib\x86\;$(ProjectDir)\..\..\prebuilt\lib\x86\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -960,8 +960,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -969,8 +969,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1009,12 +1009,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <AdditionalLibraryDirectories>$(OutDir)\lib\x86\;$(ProjectDir)\..\..\prebuilt\lib\x86\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1036,8 +1036,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1045,8 +1045,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1085,12 +1085,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <AdditionalLibraryDirectories>$(OutDir)\lib\x64\;$(ProjectDir)\..\..\prebuilt\lib\x64\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1112,8 +1112,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1121,8 +1121,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1161,12 +1161,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <AdditionalLibraryDirectories>$(OutDir)\lib\x64\;$(ProjectDir)\..\..\prebuilt\lib\x64\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1188,8 +1188,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1197,8 +1197,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1239,12 +1239,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>5.1</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1266,8 +1266,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1275,8 +1275,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1317,12 +1317,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>5.1</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1344,8 +1344,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1353,8 +1353,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1394,12 +1394,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>6.0</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1421,8 +1421,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1430,8 +1430,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
@@ -1471,12 +1471,12 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <MinimumRequiredVersion>6.0</MinimumRequiredVersion>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutDir)\include
-copy .\gcrypt.h $(OutDir)\include\
+      <Command>mkdir "$(OutDir)"\include
+copy .\gcrypt.h "$(OutDir)"\include\
 mkdir $(OutDir)\licenses
 copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
-if exist $(ProjectDir)\..\..\prebuilt\include\gpg-error.h (
-copy $(ProjectDir)\..\..\prebuilt\include\gpg-error.h $(OutDir)\include\
+if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
+copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -1498,8 +1498,8 @@ del ..\mpi\mpi-asm-defs.h
 if exist ..\mpi\sysdep.h (
 del ..\mpi\sysdep.h
 )
-if exist $(OutDir)\include\gcrypt.h (
-del $(OutDir)\include\gcrypt.h
+if exist "$(OutDir)"\include\gcrypt.h (
+del "$(OutDir)"\include\gcrypt.h
 )</Command>
     </PreBuildEvent>
     <CustomBuildStep>
@@ -1507,8 +1507,8 @@ del $(OutDir)\include\gcrypt.h
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>force_clean</Outputs>
-      <Command>if exist $(OutDir)\include\gcrypt.h (
-del /f /q $(OutDir)\include\gcrypt.h
+      <Command>if exist "$(OutDir)"\include\gcrypt.h (
+del /f /q "$(OutDir)"\include\gcrypt.h
 )
 if exist $(OutDir)\licenses\libgcrypt.txt (
 del /f /q $(OutDir)\licenses\libgcrypt.txt
