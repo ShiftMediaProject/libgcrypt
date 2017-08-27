@@ -1,3 +1,20 @@
+Noteworthy changes in version 1.8.1 (2017-08-27)  [C22/A2/R1]
+------------------------------------------------
+
+ * Bug fixes:
+
+   - Mitigate a local side-channel attack on Curve25519 dubbed "May
+     the Fourth be With You".  [CVE-2017-0379] [also in 1.7.9]
+
+   - Add more extra bytes to the pool after reading a seed file.
+
+   - Add the OID SHA384WithECDSA from RFC-7427 to SHA-384.
+
+   - Fix build problems with the Jitter RNG
+
+   - Fix assembler code build problems on Rasbian (ARMv8/AArch32-CE).
+
+
 Noteworthy changes in version 1.8.0 (2017-07-18)  [C22/A2/R0]
 ------------------------------------------------
 
@@ -13,7 +30,7 @@ Noteworthy changes in version 1.8.0 (2017-07-18)  [C22/A2/R0]
 
    - GCRYCTL_REINIT_SYSCALL_CLAMP allows to init nPth after Libgcrypt.
 
-   - New gobal configuration file /etc/gcrypt/random.conf.
+   - New global configuration file /etc/gcrypt/random.conf.
 
  * Extended interfaces:
 

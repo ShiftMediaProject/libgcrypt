@@ -30,7 +30,7 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [8])
-m4_define(mym4_version_micro, [0])
+m4_define(mym4_version_micro, [1])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=22
 LIBGCRYPT_LT_AGE=2
-LIBGCRYPT_LT_REVISION=0
+LIBGCRYPT_LT_REVISION=1
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -1619,6 +1619,7 @@ AC_CACHE_CHECK([whether GCC inline assembler supports AArch32 Crypto Extension i
           AC_COMPILE_IFELSE([AC_LANG_SOURCE(
           [[__asm__(
                 ".syntax unified\n\t"
+                ".arch armv8-a\n\t"
                 ".arm\n\t"
                 ".fpu crypto-neon-fp-armv8\n\t"
 
