@@ -30,7 +30,7 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define(mym4_version_major, [1])
 m4_define(mym4_version_minor, [8])
-m4_define(mym4_version_micro, [1])
+m4_define(mym4_version_micro, [2])
 
 # Below is m4 magic to extract and compute the revision number, the
 # decimalized short revision number, a beta version string, and a flag
@@ -56,7 +56,7 @@ AC_INIT([libgcrypt],[mym4_full_version],[http://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=22
 LIBGCRYPT_LT_AGE=2
-LIBGCRYPT_LT_REVISION=1
+LIBGCRYPT_LT_REVISION=2
 
 
 # If the API is changed in an incompatible way: increment the next counter.
@@ -315,21 +315,8 @@ case "${host}" in
         ;;
 esac
 
-#
-# Figure out the name of the random device
-#
-case "${host}" in
-    *-openbsd*)
-        NAME_OF_DEV_RANDOM="/dev/srandom"
-        NAME_OF_DEV_URANDOM="/dev/urandom"
-        ;;
-
-    *)
-        NAME_OF_DEV_RANDOM="/dev/random"
-        NAME_OF_DEV_URANDOM="/dev/urandom"
-        ;;
-esac
-
+NAME_OF_DEV_RANDOM="/dev/random"
+NAME_OF_DEV_URANDOM="/dev/urandom"
 
 AC_ARG_ENABLE(endian-check,
               AC_HELP_STRING([--disable-endian-check],
