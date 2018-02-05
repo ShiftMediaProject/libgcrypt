@@ -141,8 +141,8 @@ typedef DWORD (WINAPI *NTPOWERINFORMATION)
 
 /* Type definitions for function pointers to call CryptoAPI functions. */
 typedef BOOL (WINAPI *CRYPTACQUIRECONTEXT)(HCRYPTPROV *phProv,
-                                           LPCTSTR pszContainer,
-                                           LPCTSTR pszProvider,
+                                           LPCSTR pszContainer,
+                                           LPCSTR pszProvider,
                                            DWORD dwProvType,
                                            DWORD dwFlags);
 typedef BOOL (WINAPI *CRYPTGENRANDOM)(HCRYPTPROV hProv, DWORD dwLen,
