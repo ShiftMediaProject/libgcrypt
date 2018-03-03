@@ -260,7 +260,7 @@ init_system_rng (void)
   system_rng_available = 0;
   hRNGProv = NULL;
 
-  hAdvAPI32 = GetModuleHandle ("AdvAPI32.dll");
+  hAdvAPI32 = GetModuleHandleW (L"AdvAPI32.dll");
   if (!hAdvAPI32)
     return;
 
@@ -338,7 +338,7 @@ read_mbm_data (void (*add)(const void*, size_t, enum random_origins),
   HANDLE hMBMData;
   SharedData *mbmDataPtr;
 
-  hMBMData = OpenFileMapping (FILE_MAP_READ, FALSE, "$M$B$M$5$S$D$" );
+  hMBMData = OpenFileMappingW (FILE_MAP_READ, FALSE, L"$M$B$M$5$S$D$" );
   if (hMBMData)
     {
       mbmDataPtr = (SharedData*)MapViewOfFile (hMBMData, FILE_MAP_READ,0,0,0);
@@ -439,7 +439,7 @@ registry_poll (void (*add)(const void*, size_t, enum random_origins),
           if ( debug_me )
             log_debug ("rndw32#slow_gatherer_nt: get perf data\n" );
 
-          status = RegQueryValueEx (HKEY_PERFORMANCE_DATA, "Global", NULL,
+          status = RegQueryValueExW (HKEY_PERFORMANCE_DATA, L"Global", NULL,
                                     NULL, (LPBYTE) pPerfData, &dwSize);
           if (status == ERROR_SUCCESS)
             {
@@ -502,8 +502,8 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
       if ( debug_me )
         log_debug ("rndw32#slow_gatherer: init toolkit\n" );
       /* Find out whether this is an NT server or workstation if necessary */
-      if (RegOpenKeyEx (HKEY_LOCAL_MACHINE,
-                        "SYSTEM\\CurrentControlSet\\Control\\ProductOptions",
+      if (RegOpenKeyExW (HKEY_LOCAL_MACHINE,
+                        L"SYSTEM\\CurrentControlSet\\Control\\ProductOptions",
                         0, KEY_READ, &hKey) == ERROR_SUCCESS)
         {
           BYTE szValue[32 + 8];
@@ -512,7 +512,7 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
           if ( debug_me )
             log_debug ("rndw32#slow_gatherer: check product options\n" );
 
-          status = RegQueryValueEx (hKey, "ProductType", 0, NULL,
+          status = RegQueryValueExW (hKey, L"ProductType", 0, NULL,
                                     szValue, &dwSize);
           if (status == ERROR_SUCCESS && stricmp ((char*)szValue, "WinNT"))
             {
@@ -531,7 +531,7 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
       /* readPnPData ();  - we have not implemented that.  */
 
       /* Initialize the NetAPI32 function pointers if necessary */
-      hNetAPI32 = LoadLibrary ("NETAPI32.DLL");
+      hNetAPI32 = LoadLibraryW (L"NETAPI32.DLL");
       if (hNetAPI32)
         {
           if (debug_me)
@@ -552,7 +552,7 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
         }
 
       /* Initialize the NT kernel native API function pointers if necessary */
-      hNTAPI = GetModuleHandle ("NTDll.dll");
+      hNTAPI = GetModuleHandleW (L"NTDll.dll");
       if (hNTAPI)
         {
           /* Get a pointer to the NT native information query functions */
@@ -600,12 +600,12 @@ slow_gatherer ( void (*add)(const void*, size_t, enum random_origins),
   for (drive_no = 0; drive_no < 100 ; drive_no++)
     {
       char diskPerformance[SIZEOF_DISK_PERFORMANCE_STRUCT + 8];
-      char szDevice[50];
+      wchar_t szDevice[50];
 
       /* Check whether we can access this device.  */
-      snprintf (szDevice, sizeof szDevice, "\\\\.\\PhysicalDrive%d",
-                drive_no);
-      hDevice = CreateFile (szDevice, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+      _snwprintf (szDevice, sizeof(szDevice) / sizeof(wchar_t), L"\\\\.\\PhysicalDrive%d",
+                  drive_no);
+      hDevice = CreateFileW (szDevice, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
                             NULL, OPEN_EXISTING, 0, NULL);
       if (hDevice == INVALID_HANDLE_VALUE)
         break; /* No more drives.  */
