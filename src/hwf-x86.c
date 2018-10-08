@@ -23,7 +23,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <unistd.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #include "g10lib.h"
 #include "hwf-common.h"

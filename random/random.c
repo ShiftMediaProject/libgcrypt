@@ -28,7 +28,9 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/types.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #ifdef HAVE_SYSLOG
 # include <syslog.h>
 #endif /*HAVE_SYSLOG*/
@@ -42,6 +44,12 @@
 /* The name of a file used to globally configure the RNG. */
 #define RANDOM_CONF_FILE "/etc/gcrypt/random.conf"
 
+#ifdef HAVE_W32_SYSTEM
+# include <process.h>
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#  define getpid() GetCurrentProcessId()
+# endif
+#endif
 
 /* If not NULL a progress function called from certain places and the
    opaque value passed along.  Registered by

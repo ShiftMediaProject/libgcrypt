@@ -125,6 +125,15 @@ int _gcry_rndw32ce_gather_random (void (*add) (const void *, size_t,
 void _gcry_rndw32ce_gather_random_fast (void (*add)(const void*, size_t,
                                                     enum random_origins),
                                         enum random_origins origin );
+/*-- rndw32uwp.cpp --*/
+int _gcry_rnduwp_gather_random (void (*add) (const void *, size_t,
+                                             enum random_origins),
+                                enum random_origins origin,
+                                size_t length, int level );
+
+void _gcry_rnduwp_gather_random_fast (void (*add) (const void *, size_t,
+                                                   enum random_origins),
+                                      enum random_origins origin );
 
 /*-- rndjent.c --*/
 size_t _gcry_rndjent_poll (void (*add)(const void*,

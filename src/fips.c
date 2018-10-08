@@ -21,7 +21,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <unistd.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 #include <string.h>
 #ifdef ENABLE_HMAC_BINARY_CHECK
 # include <dlfcn.h>
@@ -29,6 +31,12 @@
 #ifdef HAVE_SYSLOG
 # include <syslog.h>
 #endif /*HAVE_SYSLOG*/
+#ifdef HAVE_W32_SYSTEM
+# include <io.h>
+# ifndef F_OK
+#  define F_OK 0
+# endif
+#endif
 
 #include "g10lib.h"
 #include "cipher-proto.h"

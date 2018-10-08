@@ -24,7 +24,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <unistd.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
+#ifdef HAVE_W32_SYSTEM
+# include <io.h>
+#endif
 
 #include "g10lib.h"
 #include "secmem.h"

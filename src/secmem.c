@@ -25,7 +25,9 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
-#include <unistd.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 #include <stddef.h>
 
 #if defined(HAVE_MLOCK) || defined(HAVE_MMAP)

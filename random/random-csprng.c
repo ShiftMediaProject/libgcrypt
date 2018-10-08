@@ -40,7 +40,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <time.h>
 #ifdef	HAVE_GETHRTIME
@@ -52,8 +54,21 @@
 #ifdef HAVE_GETRUSAGE
 #include <sys/resource.h>
 #endif
-#ifdef __MINGW32__
+#ifdef HAVE_W32_SYSTEM
 #include <process.h>
+#include <io.h>
+# ifndef S_IRUSR
+#  define S_IRUSR _S_IREAD
+# endif
+# ifndef S_IS_IWUSRRUSR
+#  define S_IWUSR _S_IWRITE
+# endif
+# ifndef S_ISREG
+#  define S_ISREG(m) (((m)& S_IFMT) == S_IFREG)
+# endif
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#  define getpid() GetCurrentProcessId()
+# endif
 #endif
 #include "g10lib.h"
 #include "random.h"
@@ -1138,7 +1153,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
 #endif
 
 #if USE_RNDW32
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+  fnc = _gcry_rnduwp_gather_random;
+# else
   fnc = _gcry_rndw32_gather_random;
+# endif
   return fnc;
 #endif
 
@@ -1160,7 +1179,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
                                  enum random_origins)
 {
 #if USE_RNDW32
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+  return _gcry_rnduwp_gather_random_fast;
+# else
   return _gcry_rndw32_gather_random_fast;
+# endif
 #endif
 #if USE_RNDW32CE
   return _gcry_rndw32ce_gather_random_fast;

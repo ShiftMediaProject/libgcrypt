@@ -30,6 +30,12 @@
 #include "ec-context.h"
 #include "ec-internal.h"
 
+#ifdef HAVE_W32_SYSTEM
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#  define getenv(x) NULL
+# endif
+#endif
+
 
 #define point_init(a)  _gcry_mpi_point_init ((a))
 #define point_free(a)  _gcry_mpi_point_free_parts ((a))

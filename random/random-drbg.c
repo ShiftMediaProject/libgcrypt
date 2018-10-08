@@ -147,7 +147,9 @@
  */
 
 #include <string.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <stdint.h>
 
 #include <config.h>
@@ -156,6 +158,13 @@
 #include "random.h"
 #include "rand-internal.h"
 #include "../cipher/bufhelp.h"
+
+#ifdef HAVE_W32_SYSTEM
+# include <process.h>
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#  define getpid() GetCurrentProcessId()
+# endif
+#endif
 
 
 
@@ -625,12 +634,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
   rc = _gcry_rndunix_gather_random (drbg_read_cb, 0, len,
 				    GCRY_VERY_STRONG_RANDOM);
 #elif USE_RNDW32
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+  rc = _gcry_rnduwp_gather_random(drbg_read_cb, 0, len, GCRY_VERY_STRONG_RANDOM);
+# else
   do
     {
       rc = _gcry_rndw32_gather_random (drbg_read_cb, 0, len,
 				       GCRY_VERY_STRONG_RANDOM);
     }
   while (rc >= 0 && read_cb_len < read_cb_size);
+# endif
 #else
   rc = -1;
 #endif

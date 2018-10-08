@@ -27,7 +27,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #ifdef HAVE_GETTIMEOFDAY
 #include <sys/time.h>
 #endif
@@ -152,11 +154,15 @@ get_random (void *buffer, size_t length, int level)
 #elif USE_RNDUNIX
   rc = _gcry_rndunix_gather_random (read_cb, 0, length, level);
 #elif USE_RNDW32
+# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+  rc = _gcry_rnduwp_gather_random(read_cb, 0, length, level);
+# else
   do
     {
       rc = _gcry_rndw32_gather_random (read_cb, 0, length, level);
     }
   while (rc >= 0 && read_cb_len < read_cb_size);
+# endif
 #else
   rc = -1;
 #endif
