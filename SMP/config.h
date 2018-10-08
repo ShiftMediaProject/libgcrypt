@@ -57,10 +57,10 @@
 /* #undef HAVE_BROKEN_MLOCK */
 
 /* Defined if compiler has '__builtin_bswap32' intrinsic */
-/* #undef HAVE_BUILTIN_BSWAP32 */
+#define HAVE_BUILTIN_BSWAP32 1
 
 /* Defined if compiler has '__builtin_bswap64' intrinsic */
-/* #undef HAVE_BUILTIN_BSWAP64 */
+#define HAVE_BUILTIN_BSWAP64 1
 
 /* Defined if compiler has '__builtin_ctz' intrinsic */
 /* #undef HAVE_BUILTIN_CTZ */
@@ -298,7 +298,7 @@ implementations */
 /* #undef HAVE_ULONG_TYPEDEF */
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#define HAVE_UNISTD_H 1
+/* #undef HAVE_UNISTD_H */
 
 /* Defined if a `ushort' is typedef'd */
 /* #undef HAVE_USHORT_TYPEDEF */

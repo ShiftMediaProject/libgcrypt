@@ -527,6 +527,9 @@
     <ClCompile Include="..\random\rndjent.c">
       <Filter>Source Files\random</Filter>
     </ClCompile>
+    <ClCompile Include="..\random\rndw32uwp.cpp">
+      <Filter>Source Files\random</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="versioninfo.rc">

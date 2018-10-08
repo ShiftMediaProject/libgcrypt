@@ -1,6 +1,5 @@
 /*
- * MSVC sys/time.h compatability header.
- * Copyright (c) 2015 Matthew Oliver
+ * MSVC sys/time.h compatibility header.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef _SMP_SYS_TIME_H_
-#define _SMP_SYS_TIME_H_
+#ifndef SMP_SYS_TIME_H
+#define SMP_SYS_TIME_H
 
 #ifndef _MSC_VER
 #   include_next <sys/time.h>
@@ -30,6 +29,7 @@
 
 #include <time.h>
 #include <winsock2.h>
+#include <winapifamily.h>
 
 struct timezone
 {
@@ -51,7 +51,8 @@ static __inline int gettimeofday(struct timeval * tp, struct timezone * tzp)
 
     tp->tv_sec = (long) ((ularge.QuadPart - 116444736000000000Ui64) / 10000000L);
     tp->tv_usec = (long) (system_time.wMilliseconds * 1000);
-    
+
+#if !(defined(WINAPI_FAMILY_PARTITION) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP) && !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP))
     if (NULL != tzp)
     {
         if (!tzflag)
@@ -62,9 +63,10 @@ static __inline int gettimeofday(struct timeval * tp, struct timezone * tzp)
         tzp->tz_minuteswest = _timezone / 60;
         tzp->tz_dsttime = _daylight;
     }
+#endif
     return 0;
 }
 
 #endif /* _MSC_VER */
 
-#endif /* _SMP_SYS_TIME_H_ */
+#endif /* SMP_SYS_TIME_H */
