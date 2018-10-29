@@ -117,9 +117,11 @@
 #include <sys/select.h>
 #endif				/* _AIX */
 #ifndef __QNX__
-#include <sys/shm.h>
 #include <signal.h>
+#if !defined(ANDROID)
+#include <sys/shm.h>
 #include <sys/signal.h>
+#endif
 #endif				/* __QNX__ */
 #include <sys/stat.h>
 #include <sys/types.h>		/* Verschiedene komische Typen */

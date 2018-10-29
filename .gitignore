@@ -1,7 +1,9 @@
 *.lo
 *.o
+.DS_Store
 .deps/
 .libs/
+build-*/
 po/*.gmo
 po/messages.mo
 /aclocal.m4
