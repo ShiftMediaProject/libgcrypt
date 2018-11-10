@@ -74,9 +74,10 @@
 /* Define to 1 if you have the `clock_gettime' function. */
 /* #undef HAVE_CLOCK_GETTIME */
 
+#if defined( __INTEL_COMPILER )
 /* Defined if underlying assembler is compatible with amd64 assembly
 implementations */
-/* #undef HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS */
+#define HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS 1
 
 /* Defined if underlying assembler is compatible with ARM assembly
 implementations */
@@ -84,7 +85,8 @@ implementations */
 
 /* Defined if underlying assembler is compatible with WIN64 assembly
 implementations */
-/* #undef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS */
+#define HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS 1
+#endif
 
 /* Defined for Alpha platforms */
 /* #undef HAVE_CPU_ARCH_ALPHA */
@@ -515,5 +517,13 @@ implementations */
 /* We basically use the original Camellia source.  Make sure the symbols
    properly prefixed.  */
 #define CAMELLIA_EXT_SYM_PREFIX _gcry_
+
+#ifdef _MSC_VER
+#   define inline __inline
+#   include <crtversion.h>
+#   if _VC_CRT_MAJOR_VERSION < 14
+#       define snprintf _snprintf
+#   endif
+#endif
 
 #endif /*_GCRYPT_CONFIG_H_INCLUDED*/
