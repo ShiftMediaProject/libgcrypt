@@ -444,7 +444,7 @@ AC_MSG_RESULT([$enabled_digests])
 
 # Implementation of the --enable-kdfs switch.
 AC_ARG_ENABLE(kdfs,
-      AC_HELP_STRING([--enable-kdfs=kdfs],
+      AC_HELP_STRING([--enable-kfds=kdfs],
 		     [select the KDFs to include]),
       [enabled_kdfs=`echo $enableval | tr ',:' '  ' | tr '[A-Z]' '[a-z]'`],
       [enabled_kdfs=""])
@@ -1752,18 +1752,6 @@ if test "$use_hmac_binary_check" = yes ; then
 fi
 AC_SUBST(DL_LIBS)
 
-#
-# Find fig2dev
-#
-AC_PATH_PROG([FIG2DEV], [fig2dev], [false])
-
-#
-# Check whether we need to link with a pthreads library.
-#
-if test "x$LIBTHREAD" != x; then
-  LIBGCRYPT_CONFIG_LIBS="${LIBGCRYPT_CONFIG_LIBS} ${LIBTHREAD}"
-fi
-
 
 #
 # Check whether we can use Linux capabilities as requested.
@@ -2582,16 +2570,6 @@ AC_ARG_ENABLE([doc], AC_HELP_STRING([--disable-doc],
                                     [do not build the documentation]),
                      build_doc=$enableval, build_doc=yes)
 AM_CONDITIONAL([BUILD_DOC], [test "x$build_doc" != xno])
-
-
-#
-# Option to disable building of test programs
-#
-build_tests=yes
-AC_ARG_ENABLE([tests], AC_HELP_STRING([--disable-tests],
-                                    [do not build the tests]),
-                     build_tests=$enableval, build_tests=yes)
-AM_CONDITIONAL([BUILD_TESTS], [test "x$build_tests" != xno])
 
 
 #

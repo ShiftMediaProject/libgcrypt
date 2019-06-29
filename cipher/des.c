@@ -139,7 +139,7 @@
 # define ATTR_ALIGNED_16
 #endif
 
-#if ( defined(__GNUC__) && defined(__GNU_LIBRARY__) ) || defined(_MSC_VER)
+#if (defined(__GNUC__) && defined(__GNU_LIBRARY__)) || defined(_MSC_VER)
 # define working_memcmp memcmp
 #else
 /*
@@ -1452,7 +1452,7 @@ do_des_decrypt( void *context, byte *outbuf, const byte *inbuf )
 
 
 
-
+
 /*
      Self-test section.
  */
@@ -1507,7 +1507,7 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 }
 
 
-
+
 gcry_cipher_spec_t _gcry_cipher_spec_des =
   {
     GCRY_CIPHER_DES, {0, 0},

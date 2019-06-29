@@ -115,8 +115,6 @@ sha1_init (void *context, unsigned int flags)
 
   (void)flags;
 
-  (void)flags;
-
   hd->h0 = 0x67452301;
   hd->h1 = 0xefcdab89;
   hd->h2 = 0x98badcfe;

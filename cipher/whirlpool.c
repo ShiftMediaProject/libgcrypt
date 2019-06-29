@@ -55,7 +55,7 @@
 /* Number of rounds.  */
 #define R 10
 
-
+
 
 /* Types.  */
 typedef u64 whirlpool_block_t[BLOCK_SIZE / 8];

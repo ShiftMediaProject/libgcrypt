@@ -127,7 +127,7 @@ libgcrypt_la_LIBADD = $(gcrypt_res) \
 
 dumpsexp_SOURCES = dumpsexp.c
 dumpsexp_CFLAGS = $(arch_gpg_error_cflags)
-dumpsexp_LDADD = $(arch_gpg_error_libs) $(LIBTHREAD)
+dumpsexp_LDADD = $(arch_gpg_error_libs)
 
 mpicalc_SOURCES = mpicalc.c
 mpicalc_CFLAGS = $(GPG_ERROR_CFLAGS)
@@ -135,12 +135,12 @@ mpicalc_LDADD = libgcrypt.la $(DL_LIBS) $(GPG_ERROR_LIBS)
 
 hmac256_SOURCES = hmac256.c
 hmac256_CFLAGS = -DSTANDALONE $(arch_gpg_error_cflags)
-hmac256_LDADD = $(arch_gpg_error_libs) $(LIBTHREAD)
+hmac256_LDADD = $(arch_gpg_error_libs)
 
 if USE_RANDOM_DAEMON
 gcryptrnd_SOURCES = gcryptrnd.c
 gcryptrnd_CFLAGS = $(GPG_ERROR_CFLAGS) $(PTH_CFLAGS)
-gcryptrnd_LDADD = libgcrypt.la $(GPG_ERROR_LIBS) $(PTH_LIBS) $(LIBTHREAD)
+gcryptrnd_LDADD = libgcrypt.la $(GPG_ERROR_LIBS) $(PTH_LIBS)
 
 getrandom_SOURCES = getrandom.c
 endif USE_RANDOM_DAEMON

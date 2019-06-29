@@ -28,19 +28,6 @@
 .syntax unified
 .arm
 
-#ifdef __PIC__
-#  define GET_DATA_POINTER(reg, name, rtmp) \
-		ldr reg, 1f; \
-		ldr rtmp, 2f; \
-		b 3f; \
-	1:	.word _GLOBAL_OFFSET_TABLE_-(3f+8); \
-	2:	.word name(GOT); \
-	3:	add reg, pc, reg; \
-		ldr reg, [reg, rtmp];
-#else
-#  define GET_DATA_POINTER(reg, name, rtmp) ldr reg, =name
-#endif
-
 /* register macros */
 #define CTX	%r0
 #define RTAB	%lr

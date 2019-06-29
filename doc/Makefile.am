@@ -45,16 +45,16 @@ yat2m: yat2m.c
 	$(CC_FOR_BUILD) -o $@ $(srcdir)/yat2m.c
 
 .fig.png:
-	$(FIG2DEV) -L png `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
+	fig2dev -L png `test -f '$<' || echo '$(srcdir)/'`$< $@
 
 .fig.jpg:
-	$(FIG2DEV) -L jpg `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
+	fig2dev -L jpg `test -f '$<' || echo '$(srcdir)/'`$< $@
 
 .fig.eps:
-	$(FIG2DEV) -L eps `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
+	fig2dev -L eps `test -f '$<' || echo '$(srcdir)/'`$< $@
 
 .fig.pdf:
-	$(FIG2DEV) -L pdf `test -f '$<' || echo '$(srcdir)/'`$< $@ || touch $@
+	fig2dev -L pdf `test -f '$<' || echo '$(srcdir)/'`$< $@
 
 yat2m-stamp: $(myman_sources)
 	@rm -f yat2m-stamp.tmp
@@ -92,7 +92,7 @@ online: gcrypt.html gcrypt.pdf gcrypt.info
 	cp libgcrypt-modules.png gcrypt.html/; \
 	cp fips-fsm.png gcrypt.html/; \
         user=werner ; dashdevel="" ; \
-        if echo "@PACKAGE_VERSION@" | grep "beta" >/dev/null; then \
+        if echo "@PACKAGE_VERSION@" | grep -- "-svn" >/dev/null; then \
 	  dashdevel="-devel" ; \
 	  cp gcrypt.pdf gcrypt.html/; \
 	  cp gcrypt.info gcrypt.html/; \
@@ -101,5 +101,5 @@ online: gcrypt.html gcrypt.pdf gcrypt.info
                $${user}@trithemius.gnupg.org:webspace/manuals/ ; \
         fi ; \
 	cd gcrypt.html ; \
-        rsync -vr --exclude='.git' .  \
+        rsync -vr --exclude='.svn' .  \
 	  $${user}@trithemius.gnupg.org:webspace/manuals/gcrypt$${dashdevel}/

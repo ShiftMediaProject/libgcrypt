@@ -121,8 +121,6 @@ sha256_init (void *context, unsigned int flags)
 
   (void)flags;
 
-  (void)flags;
-
   hd->h0 = 0x6a09e667;
   hd->h1 = 0xbb67ae85;
   hd->h2 = 0x3c6ef372;
@@ -161,8 +159,6 @@ sha224_init (void *context, unsigned int flags)
 {
   SHA256_CONTEXT *hd = context;
   unsigned int features = _gcry_get_hw_features ();
-
-  (void)flags;
 
   (void)flags;
 
