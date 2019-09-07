@@ -92,7 +92,7 @@ index 7b6e330d..3ca6d801 100644
  
    _gcry_md_block_write (context, NULL, 0); /* flush */ ;
 diff --git a/mpi/ec.c b/mpi/ec.c
-index 89077cd9..9beeba21 100644
+index adb02600..faba8452 100644
 --- a/mpi/ec.c
 +++ b/mpi/ec.c
 @@ -30,6 +30,12 @@
@@ -525,6 +525,19 @@ index af3fe2c6..096ee3bc 100644
  
  #include "g10lib.h"
  #include "cipher-proto.h"
+diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
+index 75c49a0d..98fd2035 100644
+--- a/src/gcrypt.h.in
++++ b/src/gcrypt.h.in
+@@ -36,7 +36,7 @@
+ # include <ws2tcpip.h>
+ # include <time.h>
+ # ifndef __GNUC__
+-  typedef long ssize_t;
++  typedef SSIZE_T ssize_t;
+   typedef int  pid_t;
+ # endif /*!__GNUC__*/
+ #else
 diff --git a/src/global.c b/src/global.c
 index cd3d9d90..d445348a 100644
 --- a/src/global.c
