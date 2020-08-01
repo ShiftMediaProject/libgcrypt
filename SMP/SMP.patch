@@ -204,11 +204,11 @@ index 8cb35e72..7c5b136c 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index 7f66997b..74a245ae 100644
+index ed04e2dc..2af5d018 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
-@@ -147,7 +147,9 @@
-  */
+@@ -149,7 +149,9 @@
+ #include <config.h>
  
  #include <string.h>
 +#ifdef HAVE_UNISTD_H
@@ -216,7 +216,7 @@ index 7f66997b..74a245ae 100644
 +#endif
  #include <stdint.h>
  
- #include <config.h>
+ #include "g10lib.h"
 @@ -157,6 +159,13 @@
  #include "rand-internal.h"
  #include "../cipher/bufhelp.h"
