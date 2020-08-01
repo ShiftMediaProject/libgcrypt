@@ -146,13 +146,13 @@
  * gcry_randomize(outbuf, OUTLEN, GCRY_STRONG_RANDOM);
  */
 
+#include <config.h>
+
 #include <string.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <stdint.h>
-
-#include <config.h>
 
 #include "g10lib.h"
 #include "random.h"
