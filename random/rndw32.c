@@ -845,12 +845,12 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
      We discard the upper 32-bit of those values.  */
 
   {
-    byte buffer[20*sizeof(intptr_t)], *bufptr;
+    byte buffer[20*sizeof(unsigned long)], *bufptr;
 
     bufptr = buffer;
-#define ADDINT(f)  do { intptr_t along = (intptr_t)(f);               \
-                        memcpy (bufptr, &along, sizeof (intptr_t) );  \
-                        bufptr += sizeof (along);                     \
+#define ADDINT(f)  do { unsigned long along = (unsigned long)(f);  \
+                        memcpy (bufptr, &along, sizeof (along) );  \
+                        bufptr += sizeof (along);                  \
                       } while (0)
 #define ADDPTR(f)  do { void *aptr = (f);                          \
                         ADDINT((SIZE_T)aptr);                      \

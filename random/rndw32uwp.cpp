@@ -48,7 +48,7 @@ _gcry_rnduwp_gather_random_fast(void(*add)(const void*, size_t,
                                            enum random_origins),
                                 enum random_origins origin)
 {
-	size_t size = 20 * sizeof(ulong) + 2 * sizeof(POINT) + sizeof(MEMORYSTATUS)
+	size_t size = 20 * sizeof(intptr_t) + 2 * sizeof(POINT) + sizeof(MEMORYSTATUS)
 				+ 8 * sizeof(FILETIME) + sizeof(LARGE_INTEGER);
 
 	_gcry_rnduwp_gather_random(add, origin, size, 1);

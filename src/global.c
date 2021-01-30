@@ -56,7 +56,7 @@ static unsigned int debug_flags;
 static int force_fips_mode;
 
 /* Controlled by global_init().  */
-static int any_init_done;
+int _gcry_global_any_init_done;
 
 /*
  * Functions called before and after blocking syscalls.
@@ -93,9 +93,9 @@ global_init (void)
 {
   gcry_error_t err = 0;
 
-  if (any_init_done)
+  if (_gcry_global_any_init_done)
     return;
-  any_init_done = 1;
+  _gcry_global_any_init_done = 1;
 
   /* Tell the random module that we have seen an init call.  */
   _gcry_set_preferred_rng_type (0);
@@ -163,7 +163,7 @@ global_init (void)
 int
 _gcry_global_is_operational (void)
 {
-  if (!any_init_done)
+  if (!_gcry_global_any_init_done)
     {
 #ifdef HAVE_SYSLOG
       syslog (LOG_USER|LOG_WARNING, "Libgcrypt warning: "
@@ -263,7 +263,8 @@ _gcry_check_version (const char *req_version)
     /* Compare version numbers.  */
     if ( my_major > rq_major
 	|| (my_major == rq_major && my_minor > rq_minor)
-	|| (my_major == rq_major && my_minor == rq_minor		                           		 && my_micro > rq_micro)
+	|| (my_major == rq_major && my_minor == rq_minor
+	    && my_micro > rq_micro)
 	|| (my_major == rq_major && my_minor == rq_minor
                                  && my_micro == rq_micro))
       {
@@ -533,7 +534,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
 			       & ~GCRY_SECMEM_FLAG_SUSPEND_WARNING));
       break;
 
-    case 78: /* GCRYCTL_AUTO_EXPAND_SECMEM (backport from 1.9) */
+    case GCRYCTL_AUTO_EXPAND_SECMEM:
       _gcry_secmem_set_auto_expand (va_arg (arg_ptr, unsigned int));
       break;
 
@@ -572,7 +573,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
       break;
 
     case GCRYCTL_ANY_INITIALIZATION_P:
-      if (any_init_done)
+      if (_gcry_global_any_init_done)
 	rc = GPG_ERR_GENERAL;
       break;
 
@@ -684,7 +685,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
          selftest is triggered.  It is not possible to put the libraty
          into fips mode after having passed the initialization. */
       _gcry_set_preferred_rng_type (0);
-      if (!any_init_done)
+      if (!_gcry_global_any_init_done)
         {
           /* Not yet initialized at all.  Set a flag so that we are put
              into fips mode during initialization.  */
@@ -711,7 +712,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
       rc = _gcry_fips_run_selftests (1);
       break;
 
-#if _GCRY_GCC_VERSION >= 40600
+#if _GCRY_GCC_VERSION >= 40200
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wswitch"
 #endif
@@ -739,7 +740,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
     case PRIV_CTL_DUMP_SECMEM_STATS:
       _gcry_secmem_dump_stats (1);
       break;
-#if _GCRY_GCC_VERSION >= 40600
+#if _GCRY_GCC_VERSION >= 40200
 # pragma GCC diagnostic pop
 #endif
 
@@ -751,7 +752,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
       break;
 
     case GCRYCTL_SET_ENFORCED_FIPS_FLAG:
-      if (!any_init_done)
+      if (!_gcry_global_any_init_done)
         {
           /* Not yet initialized at all.  Set the enforced fips mode flag */
           _gcry_set_preferred_rng_type (0);
@@ -775,7 +776,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
       {
         int *ip = va_arg (arg_ptr, int*);
         if (ip)
-          *ip = _gcry_get_rng_type (!any_init_done);
+          *ip = _gcry_get_rng_type (!_gcry_global_any_init_done);
       }
       break;
 
@@ -803,7 +804,8 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
         int npers = va_arg (arg_ptr, int);
         if (va_arg (arg_ptr, void *) || npers < 0)
           rc = GPG_ERR_INV_ARG;
-        else if (_gcry_get_rng_type (!any_init_done) != GCRY_RNG_TYPE_FIPS)
+        else if (_gcry_get_rng_type (!_gcry_global_any_init_done)
+                 != GCRY_RNG_TYPE_FIPS)
           rc = GPG_ERR_NOT_SUPPORTED;
         else
           rc = _gcry_rngdrbg_reinit (flagstr, pers, npers);

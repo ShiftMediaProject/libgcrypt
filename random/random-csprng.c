@@ -155,7 +155,7 @@ static int pool_balance;
 static int just_mixed;
 
 /* The name of the seed file or NULL if no seed file has been defined.
-   The seed file needs to be registered at initialiation time.  We
+   The seed file needs to be registered at initialization time.  We
    keep a malloced copy here.  */
 static char *seed_file_name;
 
@@ -801,6 +801,10 @@ lock_seed_file (int fd, const char *fname, int for_write)
       if (backoff < 10)
         backoff++ ;
     }
+#else
+  (void)fd;
+  (void)fname;
+  (void)for_write;
 #endif /*!LOCK_SEED_FILE*/
   return 0;
 }

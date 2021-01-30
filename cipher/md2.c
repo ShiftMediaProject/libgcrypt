@@ -135,7 +135,7 @@ md2_init (void *context, unsigned int flags)
   (void)flags;
 
   memset (ctx, 0, sizeof(*ctx));
-  ctx->bctx.blocksize = 16;
+  ctx->bctx.blocksize_shift = _gcry_ctz(16);
   ctx->bctx.bwrite = transform;
 }
 
@@ -145,8 +145,6 @@ md2_final (void *context)
 {
   MD2_CONTEXT *hd = context;
   unsigned int burn;
-
-  _gcry_md_block_write(hd, NULL, 0); /* flush */;
 
   /* pad */
   memset (hd->bctx.buf + hd->bctx.count,
@@ -178,5 +176,6 @@ gcry_md_spec_t _gcry_digest_spec_md2 =
     GCRY_MD_MD2, {0, 0},
     "MD2", asn, DIM (asn), oid_spec_md2, 16,
     md2_init, _gcry_md_block_write, md2_final, md2_read, NULL,
+    NULL, NULL,
     sizeof (MD2_CONTEXT)
   };
