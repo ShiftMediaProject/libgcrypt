@@ -68,8 +68,21 @@
 /* Defined if compiler has '__builtin_bswap64' intrinsic */
 #define HAVE_BUILTIN_BSWAP64 1
 
+/* Defined if compiler has '__builtin_clz' intrinsic */
+#define HAVE_BUILTIN_CLZ 1
+
+#ifdef _WIN64
+/* Defined if compiler has '__builtin_clzl' intrinsic */
+#define HAVE_BUILTIN_CLZL 1
+#endif
+
 /* Defined if compiler has '__builtin_ctz' intrinsic */
-/* #undef HAVE_BUILTIN_CTZ */
+#define HAVE_BUILTIN_CTZ 1
+
+#ifdef _WIN64
+/* Defined if compiler has '__builtin_ctzl' intrinsic */
+#define HAVE_BUILTIN_CTZL 1
+#endif
 
 /* Defined if a `byte' is typedef'd */
 /* #undef HAVE_BYTE_TYPEDEF */
@@ -206,6 +219,12 @@ implementations */
 
 /* Defined if inline assembler supports PowerISA 3.00 instructions */
 /* #undef HAVE_GCC_INLINE_ASM_PPC_ARCH_3_00 */
+
+/* Defined if inline assembler supports zSeries instruction */
+/* #undef HAVE_GCC_INLINE_ASM_S390X */
+
+/* Defined if inline assembler supports zSeries vector instructions */
+/* #undef HAVE_GCC_INLINE_ASM_S390X_VX */
 
 /* Defined if inline assembler supports SHA Extensions instructions */
 #define HAVE_GCC_INLINE_ASM_SHAEXT 1
@@ -572,6 +591,40 @@ implementations */
 #   if _VC_CRT_MAJOR_VERSION < 14
 #       define snprintf _snprintf
 #   endif
+#endif
+
+#define __builtin_bswap32 _byteswap_ulong
+#define __builtin_bswap64 _byteswap_uint64
+
+#include <intrin.h>
+unsigned int __inline __builtin_ctz(unsigned int value)
+{
+    unsigned long ret;
+    _BitScanForward(&ret, value);
+    return ret;
+}
+
+unsigned int __inline __builtin_clz(unsigned int value)
+{
+    unsigned long ret;
+    _BitScanReverse(&ret, value);
+    return ret;
+}
+
+#ifdef _WIN64
+unsigned int __inline __builtin_ctzl(unsigned long long value)
+{
+    unsigned long ret;
+    _BitScanForward(&ret, value);
+    return ret;
+}
+
+unsigned int __inline __builtin_clzl(unsigned long long value)
+{
+    unsigned long ret;
+    _BitScanReverse(&ret, value);
+    return ret;
+}
 #endif
 
 #endif /*_GCRYPT_CONFIG_H_INCLUDED*/

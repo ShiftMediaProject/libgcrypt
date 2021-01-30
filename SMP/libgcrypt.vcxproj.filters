@@ -257,9 +257,6 @@
     <ClCompile Include="..\cipher\hash-common.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
-    <ClCompile Include="..\cipher\hmac-tests.c">
-      <Filter>Source Files\cipher</Filter>
-    </ClCompile>
     <ClCompile Include="..\cipher\kdf.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
@@ -529,6 +526,24 @@
     </ClCompile>
     <ClCompile Include="..\random\rndw32uwp.cpp">
       <Filter>Source Files\random</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\cipher-eax.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\ecc-ecdh.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\ecc-sm2.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mpi\mpih-const-time.c">
+      <Filter>Source Files\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\sm3.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\sm4.c">
+      <Filter>Source Files\cipher</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
