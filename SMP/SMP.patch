@@ -1,8 +1,8 @@
 diff --git a/autogen.sh b/autogen.sh
-index 471193c2..42116d01 100755
+index 9b361581..8aaa998b 100755
 --- a/autogen.sh
 +++ b/autogen.sh
-@@ -385,8 +385,8 @@ info "Running $ACLOCAL ${aclocal_flags} ..."
+@@ -505,8 +505,8 @@ info "Running $ACLOCAL ${aclocal_flags} ..."
  $ACLOCAL ${aclocal_flags}
  info "Running autoheader..."
  $AUTOHEADER
@@ -13,21 +13,8 @@ index 471193c2..42116d01 100755
  info "Running autoconf${FORCE} ..."
  $AUTOCONF${FORCE}
  
-diff --git a/cipher/bufhelp.h b/cipher/bufhelp.h
-index 83d3f53a..64d6fd41 100644
---- a/cipher/bufhelp.h
-+++ b/cipher/bufhelp.h
-@@ -77,7 +77,7 @@ typedef struct bufhelp_int_s
- static inline void
- buf_cpy(void *_dst, const void *_src, size_t len)
- {
--#if __GNUC__ >= 4 && (defined(__x86_64__) || defined(__i386__))
-+#if ( __GNUC__ >= 4 && (defined(__x86_64__) || defined(__i386__)) ) || defined(_MSC_VER)
-   /* For AMD64 and i386, memcpy is faster.  */
-   memcpy(_dst, _src, len);
- #else
 diff --git a/cipher/cipher-ccm.c b/cipher/cipher-ccm.c
-index d7f14d89..1220c20e 100644
+index dcb268d0..2ee202ac 100644
 --- a/cipher/cipher-ccm.c
 +++ b/cipher/cipher-ccm.c
 @@ -38,7 +38,7 @@ static unsigned int
@@ -40,7 +27,7 @@ index d7f14d89..1220c20e 100644
    unsigned char tmp[blocksize];
    unsigned int burn = 0;
 diff --git a/cipher/cipher-internal.h b/cipher/cipher-internal.h
-index b7481255..d6ed2b1a 100644
+index a2d0e5c7..5f858455 100644
 --- a/cipher/cipher-internal.h
 +++ b/cipher/cipher-internal.h
 @@ -66,7 +66,7 @@
@@ -53,7 +40,7 @@ index b7481255..d6ed2b1a 100644
  #  endif
  # endif
 diff --git a/cipher/cipher-poly1305.c b/cipher/cipher-poly1305.c
-index a2a74e8f..5f35ee7b 100644
+index bb475236..f01b858f 100644
 --- a/cipher/cipher-poly1305.c
 +++ b/cipher/cipher-poly1305.c
 @@ -71,7 +71,7 @@ poly1305_fill_bytecounts (gcry_cipher_hd_t c)
@@ -66,10 +53,10 @@ index a2a74e8f..5f35ee7b 100644
  
    /* Padding to 16 byte boundary. */
 diff --git a/cipher/des.c b/cipher/des.c
-index 5c99f50d..e4b00ada 100644
+index 1580ea4e..e651de49 100644
 --- a/cipher/des.c
 +++ b/cipher/des.c
-@@ -139,7 +139,7 @@
+@@ -140,7 +140,7 @@
  # define ATTR_ALIGNED_16
  #endif
  
@@ -79,18 +66,18 @@ index 5c99f50d..e4b00ada 100644
  #else
  /*
 diff --git a/cipher/stribog.c b/cipher/stribog.c
-index 7b6e330d..3ca6d801 100644
+index c919182a..4a960bc2 100644
 --- a/cipher/stribog.c
 +++ b/cipher/stribog.c
-@@ -1284,7 +1284,7 @@ static void
+@@ -1286,7 +1286,7 @@ static void
  stribog_final (void *context)
  {
    STRIBOG_CONTEXT *hd = context;
 -  u64 Z[8] = {};
 +  u64 Z[8] = {0};
    int i;
- 
-   _gcry_md_block_write (context, NULL, 0); /* flush */ ;
+   
+   /* PAD. It does not count towards message length */
 diff --git a/mpi/ec.c b/mpi/ec.c
 index adb02600..faba8452 100644
 --- a/mpi/ec.c
@@ -109,7 +96,7 @@ index adb02600..faba8452 100644
  #define point_init(a)  _gcry_mpi_point_init ((a))
  #define point_free(a)  _gcry_mpi_point_free_parts ((a))
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index d6958f3b..26feceaf 100644
+index 6573c984..022f5770 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
 @@ -98,7 +98,7 @@ MA 02111-1307, USA. */
@@ -122,7 +109,7 @@ index d6958f3b..26feceaf 100644
  /* We sometimes need to clobber "cc" with gcc2, but that would not be
     understood by gcc1.	Use cpp to avoid major code duplication.  */
 diff --git a/random/rand-internal.h b/random/rand-internal.h
-index 2bc05f45..24c55c2c 100644
+index d99c6671..8f1d323c 100644
 --- a/random/rand-internal.h
 +++ b/random/rand-internal.h
 @@ -125,6 +125,15 @@ int _gcry_rndw32ce_gather_random (void (*add) (const void *, size_t,
@@ -142,7 +129,7 @@ index 2bc05f45..24c55c2c 100644
  /*-- rndjent.c --*/
  size_t _gcry_rndjent_poll (void (*add)(const void*,
 diff --git a/random/random-csprng.c b/random/random-csprng.c
-index 8cb35e72..7c5b136c 100644
+index 66f57864..ce636da3 100644
 --- a/random/random-csprng.c
 +++ b/random/random-csprng.c
 @@ -40,7 +40,9 @@
@@ -179,7 +166,7 @@ index 8cb35e72..7c5b136c 100644
  #endif
  #include "g10lib.h"
  #include "random.h"
-@@ -1138,7 +1153,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
+@@ -1224,7 +1239,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
  #endif
  
  #if USE_RNDW32
@@ -191,7 +178,7 @@ index 8cb35e72..7c5b136c 100644
    return fnc;
  #endif
  
-@@ -1160,7 +1179,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
+@@ -1246,7 +1265,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
                                   enum random_origins)
  {
  #if USE_RNDW32
@@ -204,7 +191,7 @@ index 8cb35e72..7c5b136c 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index ed04e2dc..2af5d018 100644
+index 6124f5fb..e23061ec 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
 @@ -149,7 +149,9 @@
@@ -306,7 +293,7 @@ index 9aab7893..ed7bc9ae 100644
  /* If not NULL a progress function called from certain places and the
     opaque value passed along.  Registered by
 diff --git a/random/rndw32.c b/random/rndw32.c
-index 08a8867d..9c40d247 100644
+index b3f63d20..9407306b 100644
 --- a/random/rndw32.c
 +++ b/random/rndw32.c
 @@ -141,8 +141,8 @@ typedef DWORD (WINAPI *NTPOWERINFORMATION)
@@ -402,26 +389,9 @@ index 08a8867d..9c40d247 100644
                              NULL, OPEN_EXISTING, 0, NULL);
        if (hDevice == INVALID_HANDLE_VALUE)
          break; /* No more drives.  */
-@@ -845,12 +845,12 @@ _gcry_rndw32_gather_random_fast (void (*add)(const void*, size_t,
-      We discard the upper 32-bit of those values.  */
- 
-   {
--    byte buffer[20*sizeof(ulong)], *bufptr;
-+    byte buffer[20*sizeof(intptr_t)], *bufptr;
- 
-     bufptr = buffer;
--#define ADDINT(f)  do { ulong along = (ulong)(f);                  \
--                        memcpy (bufptr, &along, sizeof (along) );  \
--                        bufptr += sizeof (along);                  \
-+#define ADDINT(f)  do { intptr_t along = (intptr_t)(f);               \
-+                        memcpy (bufptr, &along, sizeof (intptr_t) );  \
-+                        bufptr += sizeof (along);                     \
-                       } while (0)
- #define ADDPTR(f)  do { void *aptr = (f);                          \
-                         ADDINT((SIZE_T)aptr);                      \
 diff --git a/random/rndw32uwp.cpp b/random/rndw32uwp.cpp
 new file mode 100644
-index 00000000..638892d8
+index 00000000..b09ef5d8
 --- /dev/null
 +++ b/random/rndw32uwp.cpp
 @@ -0,0 +1,56 @@
@@ -475,7 +445,7 @@ index 00000000..638892d8
 +                                           enum random_origins),
 +                                enum random_origins origin)
 +{
-+	size_t size = 20 * sizeof(ulong) + 2 * sizeof(POINT) + sizeof(MEMORYSTATUS)
++	size_t size = 20 * sizeof(unsigned long) + 2 * sizeof(POINT) + sizeof(MEMORYSTATUS)
 +				+ 8 * sizeof(FILETIME) + sizeof(LARGE_INTEGER);
 +
 +	_gcry_rnduwp_gather_random(add, origin, size, 1);
@@ -498,7 +468,7 @@ index f77878bc..d54fefaa 100644
  #include "g10lib.h"
  #include "mpi.h"
 diff --git a/src/fips.c b/src/fips.c
-index af3fe2c6..096ee3bc 100644
+index 2facc450..07a5089f 100644
 --- a/src/fips.c
 +++ b/src/fips.c
 @@ -21,7 +21,9 @@
@@ -526,7 +496,7 @@ index af3fe2c6..096ee3bc 100644
  #include "g10lib.h"
  #include "cipher-proto.h"
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index 75c49a0d..98fd2035 100644
+index e77b6e74..e61e93da 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
 @@ -36,7 +36,7 @@
@@ -539,7 +509,7 @@ index 75c49a0d..98fd2035 100644
  # endif /*!__GNUC__*/
  #else
 diff --git a/src/global.c b/src/global.c
-index cd3d9d90..d445348a 100644
+index be65df54..8e39902d 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
@@ -554,7 +524,7 @@ index cd3d9d90..d445348a 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/hwf-x86.c b/src/hwf-x86.c
-index 0d3a1f40..7aac04e6 100644
+index 796e874f..79636783 100644
 --- a/src/hwf-x86.c
 +++ b/src/hwf-x86.c
 @@ -23,7 +23,9 @@
@@ -576,8 +546,8 @@ index 0d3a1f40..7aac04e6 100644
 +#if defined (__i386__) && SIZEOF_UNSIGNED_LONG == 4 && ( defined (__GNUC__) || defined(__INTEL_COMPILER) )
  # define HAS_X86_CPUID 1
  
- static int
-@@ -58,9 +60,9 @@ is_cpuid_available(void)
+ #if _GCRY_GCC_VERSION >= 40700 /* 4.7 */
+@@ -65,9 +67,9 @@ is_cpuid_available(void)
       "pushl %%ecx\n\t"           /* Restore flags from ECX.  */
       "popf\n\t"
       "xorl %%eax, %%ecx\n\t"     /* Compare flags against saved flags.  */
@@ -588,8 +558,8 @@ index 0d3a1f40..7aac04e6 100644
 +     "1:\n\t"
       : "+r" (has_cpuid)
       :
-      : "%eax", "%ecx", "cc"
-@@ -115,7 +117,7 @@ get_xgetbv(void)
+      : "%eax", "%ecx", "cc", "memory"
+@@ -122,7 +124,7 @@ get_xgetbv(void)
  #endif /* i386 && GNUC */
  
  
@@ -599,7 +569,7 @@ index 0d3a1f40..7aac04e6 100644
  
  static int
 diff --git a/src/hwfeatures.c b/src/hwfeatures.c
-index 1cad546d..61f6ab58 100644
+index bff0f1c8..98248b27 100644
 --- a/src/hwfeatures.c
 +++ b/src/hwfeatures.c
 @@ -24,7 +24,9 @@
@@ -614,7 +584,7 @@ index 1cad546d..61f6ab58 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/misc.c b/src/misc.c
-index 002a84f6..ed923507 100644
+index 4db2d9a4..a8eb41b7 100644
 --- a/src/misc.c
 +++ b/src/misc.c
 @@ -24,7 +24,12 @@
@@ -632,7 +602,7 @@ index 002a84f6..ed923507 100644
  #include "g10lib.h"
  #include "secmem.h"
 diff --git a/src/secmem.c b/src/secmem.c
-index 3e091d88..25b1b54a 100644
+index b36c44f6..fa6bfab4 100644
 --- a/src/secmem.c
 +++ b/src/secmem.c
 @@ -25,7 +25,9 @@

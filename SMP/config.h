@@ -38,8 +38,14 @@
 /* Enable support for Intel PCLMUL instructions. */
 #define ENABLE_PCLMUL_SUPPORT 1
 
+/* Enable support for POWER 8 (PowerISA 2.07) crypto extension. */
+/* #undef ENABLE_PPC_CRYPTO_SUPPORT */
+
 /* Enable support for Intel SSE4.1 instructions. */
 #define ENABLE_SSE41_SUPPORT 1
+
+/* Disable support for the Intel SHAEXT instructions. */
+#define ENABLE_SHAEXT_SUPPORT 1
 
 /* Define to use the GNU C visibility attribute. */
 /* #undef GCRY_USE_VISIBILITY */
@@ -82,6 +88,9 @@ implementations */
 /* Defined if underlying assembler is compatible with ARM assembly
 implementations */
 /* #undef HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS */
+
+/* [Defined if underlying compiler supports PowerPC AltiVec/VSX/crypto intrinsics */
+/* #undef HAVE_COMPATIBLE_CC_PPC_ALTIVEC */
 
 /* Defined if underlying assembler is compatible with WIN64 assembly
 implementations */
@@ -129,6 +138,15 @@ implementations */
 /* defined if we must run on a stupid file system */
 #define HAVE_DRIVE_LETTERS 1
 
+/* Define to 1 if you have the `elf_aux_info' function. */
+/* #undef HAVE_ELF_AUX_INFO */
+
+/* Define to 1 if you have the `explicit_bzero' function. */
+/* #undef HAVE_EXPLICIT_BZERO */
+
+/* Define to 1 if you have the `explicit_memset' function. */
+/* #undef HAVE_EXPLICIT_MEMSET */
+
 /* Define to 1 if you have the `fcntl' function. */
 /* #undef HAVE_FCNTL */
 
@@ -141,6 +159,12 @@ implementations */
 #if defined( __INTEL_COMPILER )
 /* Define if inline asm memory barrier is supported */
 #define HAVE_GCC_ASM_VOLATILE_MEMORY 1
+
+/* Defined if underlying assembler supports for CFI directives */
+#define HAVE_GCC_ASM_CFI_DIRECTIVES 1
+
+/* Defined if underlying assembler supports for ELF directives */
+#define HAVE_GCC_ASM_ELF_DIRECTIVES 1
 
 /* Defined if a GCC style "__attribute__ ((aligned (n))" is supported */
 /* #undef HAVE_GCC_ATTRIBUTE_ALIGNED */
@@ -177,9 +201,24 @@ implementations */
 /* Defined if inline assembler supports PCLMUL instructions */
 #define HAVE_GCC_INLINE_ASM_PCLMUL 1
 
+/* Defined if inline assembler supports PowerPC AltiVec/VSX/crypto instructions */
+/* #undef HAVE_GCC_INLINE_ASM_PPC_ALTIVEC */
+
+/* Defined if inline assembler supports PowerISA 3.00 instructions */
+/* #undef HAVE_GCC_INLINE_ASM_PPC_ARCH_3_00 */
+
+/* Defined if inline assembler supports SHA Extensions instructions */
+#define HAVE_GCC_INLINE_ASM_SHAEXT 1
+
 /* Defined if inline assembler supports SSSE3 instructions */
 #define HAVE_GCC_INLINE_ASM_SSSE3 1
 #endif
+
+/* Define to 1 if you have the `getauxval' function. */
+/* #undef HAVE_GETAUXVAL */
+
+/* Define to 1 if you have the `getentropy' function. */
+/* #undef HAVE_GETENTROPY */
 
 /* Define to 1 if you have the `gethrtime' function. */
 /* #undef HAVE_GETHRTIME */
@@ -257,6 +296,9 @@ implementations */
 /* Define to 1 if you have the `strtoul' function. */
 #define HAVE_STRTOUL 1
 
+/* Defined if compiler has '__sync_synchronize' intrinsic */
+/* #undef HAVE_SYNC_SYNCHRONIZE */
+
 /* Define to 1 if you have the `syscall' function. */
 /* #undef HAVE_SYSCALL */
 
@@ -333,10 +375,10 @@ implementations */
 /* #undef IS_DEVELOPMENT_VERSION */
 
 /* List of available cipher algorithms */
-#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20"
+#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20:sm4"
 
 /* List of available digest algorithms */
-#define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog:blake2"
+#define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog:blake2:sm3"
 
 /* List of available KDF algorithms */
 #define LIBGCRYPT_KDFS "s2k:pkdf2:scrypt"
@@ -493,6 +535,12 @@ implementations */
 
 /* Defined if this module should be included */
 #define USE_SHA512 1
+
+/* Defined if this module should be included */
+#define USE_SM3 1
+
+/* Defined if this module should be included */
+#define USE_SM4 1
 
 /* Defined if this module should be included */
 #define USE_TIGER 1

@@ -61,6 +61,7 @@
     <ClCompile Include="..\cipher\cipher-cfb.c" />
     <ClCompile Include="..\cipher\cipher-cmac.c" />
     <ClCompile Include="..\cipher\cipher-ctr.c" />
+    <ClCompile Include="..\cipher\cipher-eax.c" />
     <ClCompile Include="..\cipher\cipher-gcm-intel-pclmul.c" />
     <ClCompile Include="..\cipher\cipher-gcm.c" />
     <ClCompile Include="..\cipher\cipher-ocb.c" />
@@ -75,16 +76,17 @@
     <ClCompile Include="..\cipher\dsa-common.c" />
     <ClCompile Include="..\cipher\dsa.c" />
     <ClCompile Include="..\cipher\ecc-curves.c" />
+    <ClCompile Include="..\cipher\ecc-ecdh.c" />
     <ClCompile Include="..\cipher\ecc-ecdsa.c" />
     <ClCompile Include="..\cipher\ecc-eddsa.c" />
     <ClCompile Include="..\cipher\ecc-gost.c" />
     <ClCompile Include="..\cipher\ecc-misc.c" />
+    <ClCompile Include="..\cipher\ecc-sm2.c" />
     <ClCompile Include="..\cipher\ecc.c" />
     <ClCompile Include="..\cipher\elgamal.c" />
     <ClCompile Include="..\cipher\gost28147.c" />
     <ClCompile Include="..\cipher\gostr3411-94.c" />
     <ClCompile Include="..\cipher\hash-common.c" />
-    <ClCompile Include="..\cipher\hmac-tests.c" />
     <ClCompile Include="..\cipher\idea.c" />
     <ClCompile Include="..\cipher\kdf.c" />
     <ClCompile Include="..\cipher\keccak.c" />
@@ -115,6 +117,8 @@
     <ClCompile Include="..\cipher\sha1.c" />
     <ClCompile Include="..\cipher\sha256.c" />
     <ClCompile Include="..\cipher\sha512.c" />
+    <ClCompile Include="..\cipher\sm3.c" />
+    <ClCompile Include="..\cipher\sm4.c" />
     <ClCompile Include="..\cipher\stribog.c" />
     <ClCompile Include="..\cipher\tiger.c" />
     <ClCompile Include="..\cipher\twofish.c" />
@@ -142,6 +146,7 @@
     <ClCompile Include="..\mpi\mpi-pow.c" />
     <ClCompile Include="..\mpi\mpi-scan.c" />
     <ClCompile Include="..\mpi\mpicoder.c" />
+    <ClCompile Include="..\mpi\mpih-const-time.c" />
     <ClCompile Include="..\mpi\mpih-div.c" />
     <ClCompile Include="..\mpi\mpih-mul.c" />
     <ClCompile Include="..\mpi\mpiutil.c" />

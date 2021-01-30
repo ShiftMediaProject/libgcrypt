@@ -2114,14 +2114,15 @@ static struct
 {
   const char *oid;
   const u32 *sbox;
+  const int keymeshing;
 } gost_oid_map[] = {
-  { "1.2.643.2.2.30.0", sbox_test_3411 },
-  { "1.2.643.2.2.30.1", sbox_CryptoPro_3411 },
-  { "1.2.643.2.2.31.0", sbox_Test_89 },
-  { "1.2.643.2.2.31.1", sbox_CryptoPro_A },
-  { "1.2.643.2.2.31.2", sbox_CryptoPro_B },
-  { "1.2.643.2.2.31.3", sbox_CryptoPro_C },
-  { "1.2.643.2.2.31.4", sbox_CryptoPro_D },
-  { "1.2.643.7.1.2.5.1.1", sbox_TC26_Z },
-  { NULL, NULL }
+  { "1.2.643.2.2.30.0", sbox_test_3411, 0 },
+  { "1.2.643.2.2.30.1", sbox_CryptoPro_3411, 0 },
+  { "1.2.643.2.2.31.0", sbox_Test_89, 0 },
+  { "1.2.643.2.2.31.1", sbox_CryptoPro_A, 1 },
+  { "1.2.643.2.2.31.2", sbox_CryptoPro_B, 1 },
+  { "1.2.643.2.2.31.3", sbox_CryptoPro_C, 1 },
+  { "1.2.643.2.2.31.4", sbox_CryptoPro_D, 1 },
+  { "1.2.643.7.1.2.5.1.1", sbox_TC26_Z, 1 },
+  { NULL, NULL, 0 }
 };
