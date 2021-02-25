@@ -66,7 +66,7 @@ index 1580ea4e..e651de49 100644
  #else
  /*
 diff --git a/cipher/stribog.c b/cipher/stribog.c
-index c919182a..4a960bc2 100644
+index f8776a3e..c1686367 100644
 --- a/cipher/stribog.c
 +++ b/cipher/stribog.c
 @@ -1286,7 +1286,7 @@ static void
@@ -509,7 +509,7 @@ index e77b6e74..e61e93da 100644
  # endif /*!__GNUC__*/
  #else
 diff --git a/src/global.c b/src/global.c
-index 57f7329b..3aceef8f 100644
+index 8940cea0..af2d2ee6 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
