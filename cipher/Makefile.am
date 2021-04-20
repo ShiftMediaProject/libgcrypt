@@ -48,8 +48,7 @@ libcipher_la_SOURCES = \
 	cipher-aeswrap.c \
 	cipher-ccm.c \
 	cipher-cmac.c \
-	cipher-gcm.c cipher-gcm-intel-pclmul.c cipher-gcm-armv7-neon.S \
-	cipher-gcm-armv8-aarch32-ce.S cipher-gcm-armv8-aarch64-ce.S \
+	cipher-gcm.c \
 	cipher-poly1305.c \
 	cipher-ocb.c \
 	cipher-xts.c \
@@ -83,6 +82,8 @@ EXTRA_libcipher_la_SOURCES = \
 	chacha20.c chacha20-amd64-ssse3.S chacha20-amd64-avx2.S \
 	chacha20-armv7-neon.S chacha20-aarch64.S \
 	chacha20-ppc.c chacha20-s390x.S \
+	cipher-gcm-ppc.c cipher-gcm-intel-pclmul.c cipher-gcm-armv7-neon.S \
+	cipher-gcm-armv8-aarch32-ce.S cipher-gcm-armv8-aarch64-ce.S \
 	crc.c crc-intel-pclmul.c crc-armv8-ce.c \
 	crc-armv8-aarch64-ce.S \
 	crc-ppc.c \
@@ -100,6 +101,7 @@ EXTRA_libcipher_la_SOURCES = \
 	rijndael-aesni.c rijndael-padlock.c                \
 	rijndael-amd64.S rijndael-arm.S                    \
 	rijndael-ssse3-amd64.c rijndael-ssse3-amd64-asm.S  \
+	rijndael-vaes.c rijndael-vaes-avx2-amd64.S         \
 	rijndael-armv8-ce.c rijndael-armv8-aarch32-ce.S    \
 	rijndael-armv8-aarch64-ce.S rijndael-aarch64.S     \
 	rijndael-ppc.c rijndael-ppc9le.c                   \
@@ -133,6 +135,7 @@ EXTRA_libcipher_la_SOURCES = \
 	twofish-avx2-amd64.S \
 	rfc2268.c \
 	camellia.c camellia.h camellia-glue.c camellia-aesni-avx-amd64.S \
+	camellia-aesni-avx2-amd64.h camellia-vaes-avx2-amd64.S \
 	camellia-aesni-avx2-amd64.S camellia-arm.S camellia-aarch64.S \
 	blake2.c \
 	blake2b-amd64-avx2.S blake2s-amd64-avx.S
@@ -255,4 +258,10 @@ crc-ppc.o: $(srcdir)/crc-ppc.c Makefile
 	`echo $(COMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
 
 crc-ppc.lo: $(srcdir)/crc-ppc.c Makefile
+	`echo $(LTCOMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
+
+cipher-gcm-ppc.o: $(srcdir)/cipher-gcm-ppc.c Makefile
+	`echo $(COMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
+
+cipher-gcm-ppc.lo: $(srcdir)/cipher-gcm-ppc.c Makefile
 	`echo $(LTCOMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `

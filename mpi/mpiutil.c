@@ -46,6 +46,11 @@
 /* Constants allocated right away at startup.  */
 static gcry_mpi_t constants[MPI_NUMBER_OF_CONSTANTS];
 
+/* These variables are used to generate masks from conditional operation
+ * flag parameters.  Use of volatile prevents compiler optimizations from
+ * converting AND-masking to conditional branches.  */
+static volatile mpi_limb_t vzero = 0;
+static volatile mpi_limb_t vone = 1;
 
 
 const char *
@@ -514,23 +519,30 @@ _gcry_mpi_set_cond (gcry_mpi_t w, const gcry_mpi_t u, unsigned long set)
 {
   mpi_size_t i;
   mpi_size_t nlimbs = u->alloced;
-  mpi_limb_t mask = ((mpi_limb_t)0) - set;
-  mpi_limb_t x;
+  mpi_limb_t mask1 = vzero - set;
+  mpi_limb_t mask2 = set - vone;
+  mpi_limb_t xu;
+  mpi_limb_t xw;
+  mpi_limb_t *uu = u->d;
+  mpi_limb_t *uw = w->d;
 
   if (w->alloced != u->alloced)
     log_bug ("mpi_set_cond: different sizes\n");
 
   for (i = 0; i < nlimbs; i++)
     {
-      x = mask & (w->d[i] ^ u->d[i]);
-      w->d[i] = w->d[i] ^ x;
+      xu = uu[i];
+      xw = uw[i];
+      uw[i] = (xw & mask2) | (xu & mask1);
     }
 
-  x = mask & (w->nlimbs ^ u->nlimbs);
-  w->nlimbs = w->nlimbs ^ x;
+  xu = u->nlimbs;
+  xw = w->nlimbs;
+  w->nlimbs = (xw & mask2) | (xu & mask1);
 
-  x = mask & (w->sign ^ u->sign);
-  w->sign = w->sign ^ x;
+  xu = u->sign;
+  xw = w->sign;
+  w->sign = (xw & mask2) | (xu & mask1);
   return w;
 }
 
@@ -608,8 +620,12 @@ _gcry_mpi_swap_cond (gcry_mpi_t a, gcry_mpi_t b, unsigned long swap)
 {
   mpi_size_t i;
   mpi_size_t nlimbs;
-  mpi_limb_t mask = ((mpi_limb_t)0) - swap;
-  mpi_limb_t x;
+  mpi_limb_t mask1 = vzero - swap;
+  mpi_limb_t mask2 = swap - vone;
+  mpi_limb_t *ua = a->d;
+  mpi_limb_t *ub = b->d;
+  mpi_limb_t xa;
+  mpi_limb_t xb;
 
   if (a->alloced > b->alloced)
     nlimbs = b->alloced;
@@ -620,18 +636,21 @@ _gcry_mpi_swap_cond (gcry_mpi_t a, gcry_mpi_t b, unsigned long swap)
 
   for (i = 0; i < nlimbs; i++)
     {
-      x = mask & (a->d[i] ^ b->d[i]);
-      a->d[i] = a->d[i] ^ x;
-      b->d[i] = b->d[i] ^ x;
+      xa = ua[i];
+      xb = ub[i];
+      ua[i] = (xa & mask2) | (xb & mask1);
+      ub[i] = (xa & mask1) | (xb & mask2);
     }
 
-  x = mask & (a->nlimbs ^ b->nlimbs);
-  a->nlimbs = a->nlimbs ^ x;
-  b->nlimbs = b->nlimbs ^ x;
+  xa = a->nlimbs;
+  xb = b->nlimbs;
+  a->nlimbs = (xa & mask2) | (xb & mask1);
+  b->nlimbs = (xa & mask1) | (xb & mask2);
 
-  x = mask & (a->sign ^ b->sign);
-  a->sign = a->sign ^ x;
-  b->sign = b->sign ^ x;
+  xa = a->sign;
+  xb = b->sign;
+  a->sign = (xa & mask2) | (xb & mask1);
+  b->sign = (xa & mask1) | (xb & mask2);
 }
 
 

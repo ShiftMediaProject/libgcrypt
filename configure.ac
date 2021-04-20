@@ -31,7 +31,7 @@ min_automake_version="1.14"
 m4_define([mym4_package],[libgcrypt])
 m4_define([mym4_major], [1])
 m4_define([mym4_minor], [9])
-m4_define([mym4_micro], [2])
+m4_define([mym4_micro], [3])
 
 # Below is m4 magic to extract and compute the git revision number,
 # the decimalized short revision number, a beta version string and a
@@ -57,7 +57,7 @@ AC_INIT([mym4_package],[mym4_version],[https://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=23
 LIBGCRYPT_LT_AGE=3
-LIBGCRYPT_LT_REVISION=2
+LIBGCRYPT_LT_REVISION=3
 ################################################
 
 AC_SUBST(LIBGCRYPT_LT_CURRENT)
@@ -1610,6 +1610,31 @@ fi
 
 
 #
+# Check whether GCC inline assembler supports VAES and VPCLMUL instructions
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports VAES and VPCLMUL instructions],
+       [gcry_cv_gcc_inline_asm_vaes_vpclmul],
+       [if test "$mpi_cpu_arch" != "x86" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_vaes_vpclmul="n/a"
+        else
+          gcry_cv_gcc_inline_asm_vaes_vpclmul=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[void a(void) {
+              __asm__("vaesenclast %%ymm7,%%ymm7,%%ymm1\n\t":::"cc");/*256-bit*/
+              __asm__("vaesenclast %%zmm7,%%zmm7,%%zmm1\n\t":::"cc");/*512-bit*/
+              __asm__("vpclmulqdq \$0,%%ymm7,%%ymm7,%%ymm1\n\t":::"cc");/*256-bit*/
+              __asm__("vpclmulqdq \$0,%%zmm7,%%zmm7,%%zmm1\n\t":::"cc");/*512-bit*/
+            }]], [ a(); ] )],
+          [gcry_cv_gcc_inline_asm_vaes_vpclmul=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_vaes_vpclmul" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_VAES_VPCLMUL,1,
+     [Defined if inline assembler supports VAES and VPCLMUL instructions])
+fi
+
+
+#
 # Check whether GCC inline assembler supports BMI2 instructions
 #
 AC_CACHE_CHECK([whether GCC inline assembler supports BMI2 instructions],
@@ -2541,6 +2566,10 @@ if test "$found" = "1" ; then
          # Build with the SSSE3 implementation
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64.lo"
          GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64-asm.lo"
+
+         # Build with the VAES/AVX2 implementation
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-vaes.lo"
+         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-vaes-avx2-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
@@ -2679,6 +2708,9 @@ if test "$found" = "1" ; then
       if test x"$aesnisupport" = xyes ; then
         # Build with the AES-NI/AVX2 implementation
         GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-aesni-avx2-amd64.lo"
+
+        # Build with the VAES/AVX2 implementation
+        GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-vaes-avx2-amd64.lo"
       fi
    fi
 fi
@@ -2805,17 +2837,17 @@ if test "$found" = "1" ; then
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS crc-armv8-ce.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS crc-armv8-aarch64-ce.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-armv8-ce.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-armv8-aarch64-ce.lo"
       ;;
       powerpc64le-*-*)
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS crc-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
       ;;
       powerpc64-*-*)
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS crc-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
       ;;
       powerpc-*-*)
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS crc-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
       ;;
    esac
 fi
@@ -2882,17 +2914,17 @@ if test "$found" = "1" ; then
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha256-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
       ;;
       powerpc64-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha256-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
       ;;
       powerpc-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha256-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
    esac
 
    case "$mpi_cpu_arch" in
@@ -2925,17 +2957,17 @@ if test "$found" = "1" ; then
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha512-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
       ;;
       powerpc64-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha512-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
       ;;
       powerpc-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sha512-ppc.lo"
+         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
    esac
 
    if test x"$neonsupport" = xyes ; then
@@ -3023,6 +3055,23 @@ case "$mpi_cpu_arch" in
   x86)
     # Build with the SHAEXT implementation
     GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-intel-shaext.lo"
+  ;;
+esac
+
+# Arch specific GCM implementations
+case "${host}" in
+  i?86-*-* | x86_64-*-*)
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-intel-pclmul.lo"
+  ;;
+  arm*-*-*)
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv7-neon.lo"
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv8-aarch32-ce.lo"
+  ;;
+  aarch64-*-*)
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv8-aarch64-ce.lo"
+  ;;
+  powerpc64le-*-* | powerpc64-*-* | powerpc-*-*)
+    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-ppc.lo"
   ;;
 esac
 

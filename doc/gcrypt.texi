@@ -578,11 +578,19 @@ are
 @item intel-fast-vpgather
 @item intel-rdtsc
 @item intel-shaext
+@item intel-vaes-vpclmul
 @item arm-neon
 @item arm-aes
 @item arm-sha1
 @item arm-sha2
 @item arm-pmull
+@item ppc-vcrypto
+@item ppc-arch_3_00
+@item ppc-arch_2_07
+@item s390x-msa
+@item s390x-msa-4
+@item s390x-msa-8
+@item s390x-vx
 @end table
 
 To disable a feature for all processes using Libgcrypt 1.6 or newer,
@@ -1785,7 +1793,7 @@ ChaCha20 stream cipher. The block cipher modes
 @code{GCRY_CIPHER_MODE_CFB}, @code{GCRY_CIPHER_MODE_OFB},
 @code{GCRY_CIPHER_MODE_CTR} and @code{GCRY_CIPHER_MODE_EAX}) will work
 with any block cipher algorithm.  GCM mode
-(@code{GCRY_CIPHER_MODE_CCM}), CCM mode (@code{GCRY_CIPHER_MODE_GCM}),
+(@code{GCRY_CIPHER_MODE_GCM}), CCM mode (@code{GCRY_CIPHER_MODE_CCM}),
 OCB mode (@code{GCRY_CIPHER_MODE_OCB}), and XTS mode
 (@code{GCRY_CIPHER_MODE_XTS}) will only work with block cipher
 algorithms which have the block size of 16 bytes.
