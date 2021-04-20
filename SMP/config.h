@@ -231,6 +231,9 @@ implementations */
 
 /* Defined if inline assembler supports SSSE3 instructions */
 #define HAVE_GCC_INLINE_ASM_SSSE3 1
+
+/* Defined if inline assembler supports VAES and VPCLMUL instructions */
+#define HAVE_GCC_INLINE_ASM_VAES_VPCLMUL
 #endif
 
 /* Define to 1 if you have the `getauxval' function. */

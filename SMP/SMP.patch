@@ -27,7 +27,7 @@ index dcb268d0..2ee202ac 100644
    unsigned char tmp[blocksize];
    unsigned int burn = 0;
 diff --git a/cipher/cipher-internal.h b/cipher/cipher-internal.h
-index 59b36ce7..d64a5764 100644
+index 0e4a90fc..e9c72ce0 100644
 --- a/cipher/cipher-internal.h
 +++ b/cipher/cipher-internal.h
 @@ -66,7 +66,7 @@
@@ -79,7 +79,7 @@ index f8776a3e..c1686367 100644
  
    /* PAD. It does not count towards message length */
 diff --git a/mpi/ec.c b/mpi/ec.c
-index 659bb5ca..644c1abb 100644
+index 0b6ae9a9..4e02dea4 100644
 --- a/mpi/ec.c
 +++ b/mpi/ec.c
 @@ -30,6 +30,12 @@
@@ -496,7 +496,7 @@ index 2facc450..07a5089f 100644
  #include "g10lib.h"
  #include "cipher-proto.h"
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index e77b6e74..e61e93da 100644
+index 882f4387..73c44787 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
 @@ -36,7 +36,7 @@
@@ -524,7 +524,7 @@ index 8940cea0..af2d2ee6 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/hwf-x86.c b/src/hwf-x86.c
-index 9a9ed6d3..de7b9227 100644
+index 91e4c411..d982df03 100644
 --- a/src/hwf-x86.c
 +++ b/src/hwf-x86.c
 @@ -23,7 +23,9 @@
@@ -569,7 +569,7 @@ index 9a9ed6d3..de7b9227 100644
  
  static int
 diff --git a/src/hwfeatures.c b/src/hwfeatures.c
-index db58d2a3..53edb9d1 100644
+index 534c271d..bcd70553 100644
 --- a/src/hwfeatures.c
 +++ b/src/hwfeatures.c
 @@ -24,7 +24,9 @@

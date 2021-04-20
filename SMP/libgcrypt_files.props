@@ -106,6 +106,7 @@
     <ClCompile Include="..\cipher\rijndael-aesni.c" />
     <ClCompile Include="..\cipher\rijndael-padlock.c" />
     <ClCompile Include="..\cipher\rijndael-ssse3-amd64.c" />
+    <ClCompile Include="..\cipher\rijndael-vaes.c" />
     <ClCompile Include="..\cipher\rijndael.c" />
     <ClCompile Include="..\cipher\rmd160.c" />
     <ClCompile Include="..\cipher\rsa-common.c" />

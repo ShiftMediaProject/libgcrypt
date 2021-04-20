@@ -545,6 +545,9 @@
     <ClCompile Include="..\cipher\sm4.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-vaes.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="versioninfo.rc">

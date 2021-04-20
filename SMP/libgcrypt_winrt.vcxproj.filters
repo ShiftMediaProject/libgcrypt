@@ -545,6 +545,9 @@
     <ClCompile Include="..\mpi\mpih-const-time.c">
       <Filter>Source Files\mpi</Filter>
     </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-vaes.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="versioninfo.rc">
