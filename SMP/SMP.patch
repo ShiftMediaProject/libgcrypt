@@ -96,7 +96,7 @@ index 0b6ae9a9..4e02dea4 100644
  
  #define point_init(a)  _gcry_mpi_point_init ((a))
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index 6bb6bedf..36c1c71a 100644
+index 630993b4..a6777602 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
 @@ -98,7 +98,7 @@ MA 02111-1307, USA. */
@@ -509,7 +509,7 @@ index 882f4387..73c44787 100644
  # endif /*!__GNUC__*/
  #else
 diff --git a/src/global.c b/src/global.c
-index 8940cea0..af2d2ee6 100644
+index 20efae3c..39a43373 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
@@ -524,7 +524,7 @@ index 8940cea0..af2d2ee6 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/hwf-x86.c b/src/hwf-x86.c
-index 91e4c411..d982df03 100644
+index a1aa02e7..54a6b611 100644
 --- a/src/hwf-x86.c
 +++ b/src/hwf-x86.c
 @@ -23,7 +23,9 @@
@@ -559,7 +559,7 @@ index 91e4c411..d982df03 100644
       : "+r" (has_cpuid)
       :
       : "%eax", "%ecx", "cc", "memory"
-@@ -122,7 +124,7 @@ get_xgetbv(void)
+@@ -120,7 +122,7 @@ get_xgetbv(void)
  #endif /* i386 && GNUC */
  
  
