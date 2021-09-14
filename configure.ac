@@ -31,7 +31,7 @@ min_automake_version="1.14"
 m4_define([mym4_package],[libgcrypt])
 m4_define([mym4_major], [1])
 m4_define([mym4_minor], [9])
-m4_define([mym4_micro], [3])
+m4_define([mym4_micro], [4])
 
 # Below is m4 magic to extract and compute the git revision number,
 # the decimalized short revision number, a beta version string and a
@@ -57,7 +57,7 @@ AC_INIT([mym4_package],[mym4_version],[https://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=23
 LIBGCRYPT_LT_AGE=3
-LIBGCRYPT_LT_REVISION=3
+LIBGCRYPT_LT_REVISION=4
 ################################################
 
 AC_SUBST(LIBGCRYPT_LT_CURRENT)
@@ -295,7 +295,7 @@ case "${host}" in
     m68k-atari-mint)
         ;;
     *-apple-darwin*)
-        AC_DEFINE(_DARWIN_C_SOURCE, 900000L,
+        AC_DEFINE(_DARWIN_C_SOURCE, 1,
                   Expose all libc features (__DARWIN_C_FULL).)
         AC_DEFINE(USE_POSIX_SPAWN_FOR_TESTS, 1,
                   [defined if we use posix_spawn in test program])
