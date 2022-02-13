@@ -27,7 +27,7 @@ index dcb268d0..2ee202ac 100644
    unsigned char tmp[blocksize];
    unsigned int burn = 0;
 diff --git a/cipher/cipher-internal.h b/cipher/cipher-internal.h
-index 0e4a90fc..e9c72ce0 100644
+index c8a1097a..4b2eccf3 100644
 --- a/cipher/cipher-internal.h
 +++ b/cipher/cipher-internal.h
 @@ -66,7 +66,7 @@
@@ -53,7 +53,7 @@ index bb475236..f01b858f 100644
  
    /* Padding to 16 byte boundary. */
 diff --git a/cipher/des.c b/cipher/des.c
-index 1580ea4e..e651de49 100644
+index 51116fcf..d3e3b739 100644
 --- a/cipher/des.c
 +++ b/cipher/des.c
 @@ -140,7 +140,7 @@
@@ -66,7 +66,7 @@ index 1580ea4e..e651de49 100644
  #else
  /*
 diff --git a/cipher/stribog.c b/cipher/stribog.c
-index f8776a3e..c1686367 100644
+index 21e385ae..f894bcf6 100644
 --- a/cipher/stribog.c
 +++ b/cipher/stribog.c
 @@ -1286,7 +1286,7 @@ static void
@@ -78,8 +78,88 @@ index f8776a3e..c1686367 100644
    int i;
  
    /* PAD. It does not count towards message length */
+diff --git a/mpi/ec-nist.c b/mpi/ec-nist.c
+index 69b05a6d..3247ee34 100644
+--- a/mpi/ec-nist.c
++++ b/mpi/ec-nist.c
+@@ -95,8 +95,13 @@ _gcry_mpi_ec_nist192_mod (gcry_mpi_t w, mpi_ec_t ctx)
+   const mpi_limb64_t zero = LIMB_TO64(0);
+   mpi_ptr_t wp;
+   mpi_size_t wsize = 192 / BITS_PER_MPI_LIMB64;
++#if defined(_MSC_VER)
++  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* o = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++#else
+   mpi_limb64_t s[wsize + 1];
+   mpi_limb64_t o[wsize + 1];
++#endif
+   mpi_limb_t mask1;
+   mpi_limb_t mask2;
+   mpi_limb_t s_is_negative;
+@@ -188,8 +193,13 @@ _gcry_mpi_ec_nist224_mod (gcry_mpi_t w, mpi_ec_t ctx)
+   mpi_ptr_t wp;
+   mpi_size_t wsize = (224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
+   mpi_size_t psize = ctx->p->nlimbs;
++#if defined(_MSC_VER)
++  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
++#else
+   mpi_limb64_t s[wsize];
+   mpi_limb64_t d[wsize];
++#endif
+   mpi_limb_t mask1;
+   mpi_limb_t mask2;
+   mpi_limb_t s_is_negative;
+@@ -347,10 +357,17 @@ _gcry_mpi_ec_nist256_mod (gcry_mpi_t w, mpi_ec_t ctx)
+   mpi_ptr_t wp;
+   mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
+   mpi_size_t psize = ctx->p->nlimbs;
++#if defined(_MSC_VER)
++  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* e = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++#else
+   mpi_limb64_t s[wsize + 1];
+   mpi_limb64_t t[wsize + 1];
+   mpi_limb64_t d[wsize + 1];
+   mpi_limb64_t e[wsize + 1];
++#endif
+   mpi_limb_t mask1;
+   mpi_limb_t mask2;
+   mpi_limb_t mask3;
+@@ -600,10 +617,17 @@ _gcry_mpi_ec_nist384_mod (gcry_mpi_t w, mpi_ec_t ctx)
+ #if (BITS_PER_MPI_LIMB64 == BITS_PER_MPI_LIMB) && defined(WORDS_BIGENDIAN)
+   mpi_limb_t wp_shr32[wsize * LIMBS_PER_LIMB64];
+ #endif
++#if defined(_MSC_VER)
++  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++  mpi_limb64_t* x = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
++#else
+   mpi_limb64_t s[wsize + 1];
+   mpi_limb64_t t[wsize + 1];
+   mpi_limb64_t d[wsize + 1];
+   mpi_limb64_t x[wsize + 1];
++#endif
+   mpi_limb_t mask1;
+   mpi_limb_t mask2;
+   mpi_limb_t s_is_negative;
+@@ -792,7 +816,11 @@ void
+ _gcry_mpi_ec_nist521_mod (gcry_mpi_t w, mpi_ec_t ctx)
+ {
+   mpi_size_t wsize = (521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
++#if defined(_MSC_VER)
++  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize) * sizeof(mpi_limb_t));
++#else
+   mpi_limb_t s[wsize];
++#endif
+   mpi_limb_t cy;
+   mpi_ptr_t wp;
+ 
 diff --git a/mpi/ec.c b/mpi/ec.c
-index 0b6ae9a9..4e02dea4 100644
+index c24921ee..b59726d6 100644
 --- a/mpi/ec.c
 +++ b/mpi/ec.c
 @@ -30,6 +30,12 @@
@@ -95,8 +175,22 @@ index 0b6ae9a9..4e02dea4 100644
  extern void reverse_buffer (unsigned char *buffer, unsigned int length);
  
  #define point_init(a)  _gcry_mpi_point_init ((a))
+@@ -582,8 +588,13 @@ static void
+ ec_secp256k1_mod (gcry_mpi_t w, mpi_ec_t ctx)
+ {
+   mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
++#if defined(_MSC_VER)
++  mpi_limb_t* n = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
++  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
++#else
+   mpi_limb_t n[wsize + 1];
+   mpi_limb_t s[wsize + 1];
++#endif
+   mpi_limb_t cy, borrow;
+   mpi_ptr_t wp;
+ 
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index 630993b4..a6777602 100644
+index 39cdd0c2..02cb2c3c 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
 @@ -98,7 +98,7 @@ MA 02111-1307, USA. */
@@ -109,10 +203,10 @@ index 630993b4..a6777602 100644
  /* We sometimes need to clobber "cc" with gcc2, but that would not be
     understood by gcc1.	Use cpp to avoid major code duplication.  */
 diff --git a/random/rand-internal.h b/random/rand-internal.h
-index 34221569..b975506d 100644
+index 2d2b8909..eef6dc27 100644
 --- a/random/rand-internal.h
 +++ b/random/rand-internal.h
-@@ -125,6 +125,15 @@ int _gcry_rndw32ce_gather_random (void (*add) (const void *, size_t,
+@@ -129,6 +129,15 @@ int _gcry_rndw32ce_gather_random (void (*add) (const void *, size_t,
  void _gcry_rndw32ce_gather_random_fast (void (*add)(const void*, size_t,
                                                      enum random_origins),
                                          enum random_origins origin );
@@ -129,7 +223,7 @@ index 34221569..b975506d 100644
  /*-- rndjent.c --*/
  size_t _gcry_rndjent_poll (void (*add)(const void*,
 diff --git a/random/random-csprng.c b/random/random-csprng.c
-index 66f57864..ce636da3 100644
+index 85d11789..6da11933 100644
 --- a/random/random-csprng.c
 +++ b/random/random-csprng.c
 @@ -40,7 +40,9 @@
@@ -164,9 +258,9 @@ index 66f57864..ce636da3 100644
 +#  define getpid() GetCurrentProcessId()
 +# endif
  #endif
- #include "g10lib.h"
- #include "random.h"
-@@ -1224,7 +1239,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
+ #ifdef HAVE_W32_SYSTEM
+ #include <windows.h>
+@@ -1175,7 +1190,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
  #endif
  
  #if USE_RNDW32
@@ -178,7 +272,7 @@ index 66f57864..ce636da3 100644
    return fnc;
  #endif
  
-@@ -1246,7 +1265,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
+@@ -1197,7 +1216,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
                                   enum random_origins)
  {
  #if USE_RNDW32
@@ -191,7 +285,7 @@ index 66f57864..ce636da3 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index 6124f5fb..e23061ec 100644
+index a42b9ce8..29390047 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
 @@ -149,7 +149,9 @@
@@ -218,7 +312,7 @@ index 6124f5fb..e23061ec 100644
  
  
  /******************************************************************
-@@ -625,12 +634,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
+@@ -628,12 +637,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
    rc = _gcry_rndunix_gather_random (drbg_read_cb, 0, len,
  				    GCRY_VERY_STRONG_RANDOM);
  #elif USE_RNDW32
@@ -236,7 +330,7 @@ index 6124f5fb..e23061ec 100644
    rc = -1;
  #endif
 diff --git a/random/random-system.c b/random/random-system.c
-index 8b79511c..be47d44d 100644
+index a1d17ad0..330a89a6 100644
 --- a/random/random-system.c
 +++ b/random/random-system.c
 @@ -27,7 +27,9 @@
@@ -249,7 +343,7 @@ index 8b79511c..be47d44d 100644
  #ifdef HAVE_GETTIMEOFDAY
  #include <sys/time.h>
  #endif
-@@ -152,11 +154,15 @@ get_random (void *buffer, size_t length, int level)
+@@ -154,11 +156,15 @@ get_random (void *buffer, size_t length, int level)
  #elif USE_RNDUNIX
    rc = _gcry_rndunix_gather_random (read_cb, 0, length, level);
  #elif USE_RNDW32
@@ -266,7 +360,7 @@ index 8b79511c..be47d44d 100644
    rc = -1;
  #endif
 diff --git a/random/random.c b/random/random.c
-index 9aab7893..ed7bc9ae 100644
+index c0435d7b..d83483b1 100644
 --- a/random/random.c
 +++ b/random/random.c
 @@ -28,7 +28,9 @@
@@ -292,6 +386,34 @@ index 9aab7893..ed7bc9ae 100644
  
  /* If not NULL a progress function called from certain places and the
     opaque value passed along.  Registered by
+diff --git a/random/rndgetentropy.c b/random/rndgetentropy.c
+index 7580873e..a4cf456a 100644
+--- a/random/rndgetentropy.c
++++ b/random/rndgetentropy.c
+@@ -25,7 +25,9 @@
+ #include <errno.h>
+ #include <sys/types.h>
+ #include <string.h>
++#ifdef HAVE_UNISTD_H
+ #include <unistd.h>
++#endif
+ #ifdef HAVE_SYS_RANDOM_H
+ #include <sys/random.h>
+ #endif
+diff --git a/random/rndjent.c b/random/rndjent.c
+index 14d23794..e8850eec 100644
+--- a/random/rndjent.c
++++ b/random/rndjent.c
+@@ -43,7 +43,9 @@
+ #ifdef HAVE_STDINT_H
+ # include <stdint.h>
+ #endif
++#ifdef HAVE_UNISTD_H
+ #include <unistd.h>
++#endif
+ #include <errno.h>
+ 
+ #include "types.h"
 diff --git a/random/rndw32.c b/random/rndw32.c
 index b3f63d20..9407306b 100644
 --- a/random/rndw32.c
@@ -453,7 +575,7 @@ index 00000000..b7bd6b8d
 +}
 \ No newline at end of file
 diff --git a/src/context.c b/src/context.c
-index f77878bc..d54fefaa 100644
+index da9948a6..257578d0 100644
 --- a/src/context.c
 +++ b/src/context.c
 @@ -22,7 +22,9 @@
@@ -468,7 +590,7 @@ index f77878bc..d54fefaa 100644
  #include "g10lib.h"
  #include "mpi.h"
 diff --git a/src/fips.c b/src/fips.c
-index 2facc450..07a5089f 100644
+index 391b94f1..2647a594 100644
 --- a/src/fips.c
 +++ b/src/fips.c
 @@ -21,7 +21,9 @@
@@ -482,7 +604,7 @@ index 2facc450..07a5089f 100644
  #include <string.h>
  #ifdef ENABLE_HMAC_BINARY_CHECK
  # include <dlfcn.h>
-@@ -29,6 +31,12 @@
+@@ -30,6 +32,12 @@
  #ifdef HAVE_SYSLOG
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
@@ -493,23 +615,23 @@ index 2facc450..07a5089f 100644
 +# endif
 +#endif
  
- #include "g10lib.h"
- #include "cipher-proto.h"
+ /* The name of the file used to force libgcrypt into fips mode. */
+ #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index 882f4387..73c44787 100644
+index b1364123..cb454607 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
-@@ -36,7 +36,7 @@
- # include <ws2tcpip.h>
- # include <time.h>
+@@ -34,7 +34,7 @@
+ 
+ #if defined _WIN32 || defined __WIN32__
  # ifndef __GNUC__
 -  typedef long ssize_t;
 +  typedef SSIZE_T ssize_t;
    typedef int  pid_t;
  # endif /*!__GNUC__*/
- #else
+ #endif /*_WIN32*/
 diff --git a/src/global.c b/src/global.c
-index 20efae3c..39a43373 100644
+index 7cf40e4a..254283d9 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
@@ -569,7 +691,7 @@ index a1aa02e7..54a6b611 100644
  
  static int
 diff --git a/src/hwfeatures.c b/src/hwfeatures.c
-index 534c271d..bcd70553 100644
+index 97e67b3c..dbc581ee 100644
 --- a/src/hwfeatures.c
 +++ b/src/hwfeatures.c
 @@ -24,7 +24,9 @@

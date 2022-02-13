@@ -19,6 +19,7 @@
     <ClInclude Include="..\cipher\rijndael-tables.h" />
     <ClInclude Include="..\cipher\sha1.h" />
     <ClInclude Include="..\compat\libcompat.h" />
+    <ClInclude Include="..\mpi\ec-inline.h" />
     <ClInclude Include="..\mpi\ec-internal.h" />
     <ClInclude Include="..\mpi\generic\mpi-asm-defs.h" />
     <ClInclude Include="..\mpi\longlong.h" />
@@ -64,10 +65,12 @@
     <ClCompile Include="..\cipher\cipher-eax.c" />
     <ClCompile Include="..\cipher\cipher-gcm-intel-pclmul.c" />
     <ClCompile Include="..\cipher\cipher-gcm.c" />
+    <ClCompile Include="..\cipher\cipher-gcm-siv.c" />
     <ClCompile Include="..\cipher\cipher-ocb.c" />
     <ClCompile Include="..\cipher\cipher-ofb.c" />
     <ClCompile Include="..\cipher\cipher-poly1305.c" />
     <ClCompile Include="..\cipher\cipher-selftest.c" />
+    <ClCompile Include="..\cipher\cipher-siv.c" />
     <ClCompile Include="..\cipher\cipher-xts.c" />
     <ClCompile Include="..\cipher\cipher.c" />
     <ClCompile Include="..\cipher\crc-intel-pclmul.c" />
@@ -105,6 +108,7 @@
     <ClCompile Include="..\cipher\rfc2268.c" />
     <ClCompile Include="..\cipher\rijndael-aesni.c" />
     <ClCompile Include="..\cipher\rijndael-padlock.c" />
+    <ClCompile Include="..\cipher\rijndael-p10le.c" />
     <ClCompile Include="..\cipher\rijndael-ssse3-amd64.c" />
     <ClCompile Include="..\cipher\rijndael-vaes.c" />
     <ClCompile Include="..\cipher\rijndael.c" />
@@ -126,6 +130,8 @@
     <ClCompile Include="..\cipher\whirlpool.c" />
     <ClCompile Include="..\compat\compat.c" />
     <ClCompile Include="..\mpi\ec-ed25519.c" />
+    <ClCompile Include="..\mpi\ec-hw-s390x.c" />
+    <ClCompile Include="..\mpi\ec-nist.c" />
     <ClCompile Include="..\mpi\ec.c" />
     <ClCompile Include="..\mpi\generic\mpih-add1.c" />
     <ClCompile Include="..\mpi\generic\mpih-lshift.c" />
