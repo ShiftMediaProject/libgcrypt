@@ -25,7 +25,9 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <string.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #ifdef HAVE_SYS_RANDOM_H
 #include <sys/random.h>
 #endif

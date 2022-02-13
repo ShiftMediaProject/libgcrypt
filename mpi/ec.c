@@ -588,8 +588,13 @@ static void
 ec_secp256k1_mod (gcry_mpi_t w, mpi_ec_t ctx)
 {
   mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
+#if defined(_MSC_VER)
+  mpi_limb_t* n = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
+  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
+#else
   mpi_limb_t n[wsize + 1];
   mpi_limb_t s[wsize + 1];
+#endif
   mpi_limb_t cy, borrow;
   mpi_ptr_t wp;
 
