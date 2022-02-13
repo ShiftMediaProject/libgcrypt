@@ -32,11 +32,11 @@ List of Copyright holders
   Copyright (C) 2003 Nikos Mavroyanopoulos
   Copyright (c) 2006 CRYPTOGAMS
   Copyright (C) 2006-2007 NTT (Nippon Telegraph and Telephone Corporation)
-  Copyright (C) 2012-2021 g10 Code GmbH
+  Copyright (C) 2012-2022 g10 Code GmbH
   Copyright (C) 2012 Simon Josefsson, Niels Möller
   Copyright (c) 2012 Intel Corporation
   Copyright (C) 2013 Christian Grothoff
-  Copyright (C) 2013-2021 Jussi Kivilinna
+  Copyright (C) 2013-2022 Jussi Kivilinna
   Copyright (C) 2013-2014 Dmitry Eremin-Solenikov
   Copyright (C) 2014 Stephan Mueller
   Copyright (C) 2017 Jia Zhang
@@ -155,6 +155,9 @@ Christian Aistleitner <christian@quelltextlich.at>
 
 Christian Grothoff <christian@grothoff.org>
 2013-03-21:514B5D8A.6040705@grothoff.org:
+
+Danny Tsen <dtsen@us.ibm.com>
+2021-12-20:OF85D11C2F.7A339D7D-ON002587B1.0042A81E-002587B1.0042B94D@ibm.com
 
 Dmitry Baryshkov <dbaryshkov@gmail.com>
 Dmitry Eremin-Solenikov <dbaryshkov@gmail.com>

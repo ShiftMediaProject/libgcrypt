@@ -631,27 +631,18 @@ sha1_read( void *context )
   return hd->bctx.buf;
 }
 
+
 /****************
- * Shortcut functions which puts the hash value of the supplied buffer
+ * Shortcut functions which puts the hash value of the supplied buffer iov
  * into outbuf which must have a size of 20 bytes.
  */
-void
-_gcry_sha1_hash_buffer (void *outbuf, const void *buffer, size_t length)
+static void
+_gcry_sha1_hash_buffers (void *outbuf, size_t nbytes,
+			 const gcry_buffer_t *iov, int iovcnt)
 {
   SHA1_CONTEXT hd;
 
-  sha1_init (&hd, 0);
-  _gcry_md_block_write (&hd, buffer, length);
-  sha1_final (&hd);
-  memcpy (outbuf, hd.bctx.buf, 20);
-}
-
-
-/* Variant of the above shortcut function using a multiple buffers.  */
-void
-_gcry_sha1_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt)
-{
-  SHA1_CONTEXT hd;
+  (void)nbytes;
 
   sha1_init (&hd, 0);
   for (;iovcnt > 0; iov++, iovcnt--)
@@ -659,6 +650,18 @@ _gcry_sha1_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt)
                           (const char*)iov[0].data + iov[0].off, iov[0].len);
   sha1_final (&hd);
   memcpy (outbuf, hd.bctx.buf, 20);
+}
+
+/* Variant of the above shortcut function using a single buffer.  */
+void
+_gcry_sha1_hash_buffer (void *outbuf, const void *buffer, size_t length)
+{
+  gcry_buffer_t iov = { 0 };
+
+  iov.data = (void *)buffer;
+  iov.len = length;
+
+  _gcry_sha1_hash_buffers (outbuf, 20, &iov, 1);
 }
 
 
@@ -735,11 +738,11 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 
 
 
-static unsigned char asn[15] = /* Object ID is 1.3.14.3.2.26 */
+static const unsigned char asn[15] = /* Object ID is 1.3.14.3.2.26 */
   { 0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03,
     0x02, 0x1a, 0x05, 0x00, 0x04, 0x14 };
 
-static gcry_md_oid_spec_t oid_spec_sha1[] =
+static const gcry_md_oid_spec_t oid_spec_sha1[] =
   {
     /* iso.member-body.us.rsadsi.pkcs.pkcs-1.5 (sha1WithRSAEncryption) */
     { "1.2.840.113549.1.1.5" },
@@ -754,12 +757,12 @@ static gcry_md_oid_spec_t oid_spec_sha1[] =
     { NULL },
   };
 
-gcry_md_spec_t _gcry_digest_spec_sha1 =
+const gcry_md_spec_t _gcry_digest_spec_sha1 =
   {
     GCRY_MD_SHA1, {0, 1},
     "SHA1", asn, DIM (asn), oid_spec_sha1, 20,
     sha1_init, _gcry_md_block_write, sha1_final, sha1_read, NULL,
-    _gcry_sha1_hash_buffer, _gcry_sha1_hash_buffers,
+    _gcry_sha1_hash_buffers,
     sizeof (SHA1_CONTEXT),
     run_selftests
   };

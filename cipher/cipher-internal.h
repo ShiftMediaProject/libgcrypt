@@ -157,6 +157,8 @@ typedef struct cipher_bulk_ops
 		  const void *inbuf_arg, size_t nblocks);
   void (*ctr_enc)(void *context, unsigned char *iv, void *outbuf_arg,
 		  const void *inbuf_arg, size_t nblocks);
+  void (*ctr32le_enc)(void *context, unsigned char *iv, void *outbuf_arg,
+		      const void *inbuf_arg, size_t nblocks);
   size_t (*ocb_crypt)(gcry_cipher_hd_t c, void *outbuf_arg,
 		      const void *inbuf_arg, size_t nblocks, int encrypt);
   size_t (*ocb_auth)(gcry_cipher_hd_t c, const void *abuf_arg, size_t nblocks);
@@ -301,7 +303,7 @@ struct gcry_cipher_handle
       gcry_cmac_context_t cmac_ciphertext;
     } eax;
 
-    /* Mode specific storage for GCM mode. */
+    /* Mode specific storage for GCM mode and GCM-SIV mode. */
     struct {
       /* The interim tag for GCM mode.  */
       union {
@@ -347,6 +349,12 @@ struct gcry_cipher_handle
 
       /* GHASH implementation in use. */
       ghash_fn_t ghash_fn;
+
+      /* POLYVAL implementation in use (GCM-SIV). */
+      ghash_fn_t polyval_fn;
+
+      /* Key length used for GCM-SIV key generating key. */
+      unsigned int siv_keylen;
     } gcm;
 
     /* Mode specific storage for OCB mode. */
@@ -398,6 +406,36 @@ struct gcry_cipher_handle
        * cipher context. */
       char *tweak_context;
     } xts;
+
+    /* Mode specific storage for SIV mode. */
+    struct {
+      /* Tag used for decryption. */
+      unsigned char dec_tag[GCRY_SIV_BLOCK_LEN];
+
+      /* S2V state. */
+      unsigned char s2v_d[GCRY_SIV_BLOCK_LEN];
+
+      /* Number of AAD elements processed. */
+      unsigned int aad_count:8;
+
+      /* Flags for SIV state. */
+      unsigned int dec_tag_set:1;
+
+      /* --- Following members are not cleared in gcry_cipher_reset --- */
+
+      /* S2V CMAC state. */
+      gcry_cmac_context_t s2v_cmac;
+      unsigned char s2v_zero_block[GCRY_SIV_BLOCK_LEN];
+
+      /* Pointer to CTR cipher context, allocated after actual
+       * cipher context. */
+      char *ctr_context;
+    } siv;
+
+    /* Mode specific storage for WRAP mode. */
+    struct {
+      unsigned char plen[4];
+    } wrap;
   } u_mode;
 
   /* What follows are two contexts of the cipher in use.  The first
@@ -453,6 +491,11 @@ gcry_err_code_t _gcry_cipher_ofb_encrypt
                  const unsigned char *inbuf, size_t inbuflen);
 
 /*-- cipher-ctr.c --*/
+gcry_err_code_t _gcry_cipher_ctr_encrypt_ctx
+/*           */ (gcry_cipher_hd_t c,
+		 unsigned char *outbuf, size_t outbuflen,
+		 const unsigned char *inbuf, size_t inbuflen,
+		 void *algo_context);
 gcry_err_code_t _gcry_cipher_ctr_encrypt
 /*           */ (gcry_cipher_hd_t c,
                  unsigned char *outbuf, size_t outbuflen,
@@ -460,11 +503,15 @@ gcry_err_code_t _gcry_cipher_ctr_encrypt
 
 
 /*-- cipher-aeswrap.c --*/
-gcry_err_code_t _gcry_cipher_aeswrap_encrypt
+gcry_err_code_t _gcry_cipher_keywrap_encrypt
 /*           */   (gcry_cipher_hd_t c,
                    byte *outbuf, size_t outbuflen,
                    const byte *inbuf, size_t inbuflen);
-gcry_err_code_t _gcry_cipher_aeswrap_decrypt
+gcry_err_code_t _gcry_cipher_keywrap_encrypt_padding
+/*           */   (gcry_cipher_hd_t c,
+                   byte *outbuf, size_t outbuflen,
+                   const byte *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_keywrap_decrypt_auto
 /*           */   (gcry_cipher_hd_t c,
                    byte *outbuf, size_t outbuflen,
                    const byte *inbuf, size_t inbuflen);
@@ -553,6 +600,8 @@ gcry_err_code_t _gcry_cipher_gcm_check_tag
                    const unsigned char *intag, size_t taglen);
 void _gcry_cipher_gcm_setkey
 /*           */   (gcry_cipher_hd_t c);
+void _gcry_cipher_gcm_setupM
+/*           */   (gcry_cipher_hd_t c);
 
 
 /*-- cipher-poly1305.c --*/
@@ -620,6 +669,59 @@ gcry_err_code_t _gcry_cipher_xts_encrypt
 gcry_err_code_t _gcry_cipher_xts_decrypt
 /*           */ (gcry_cipher_hd_t c, unsigned char *outbuf, size_t outbuflen,
 		 const unsigned char *inbuf, size_t inbuflen);
+
+
+/*-- cipher-siv.c --*/
+gcry_err_code_t _gcry_cipher_siv_encrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_siv_decrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_siv_set_nonce
+/*           */ (gcry_cipher_hd_t c, const unsigned char *nonce,
+                 size_t noncelen);
+gcry_err_code_t _gcry_cipher_siv_authenticate
+/*           */ (gcry_cipher_hd_t c, const unsigned char *abuf, size_t abuflen);
+gcry_err_code_t _gcry_cipher_siv_set_decryption_tag
+/*           */ (gcry_cipher_hd_t c, const byte *tag, size_t taglen);
+gcry_err_code_t _gcry_cipher_siv_get_tag
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outtag, size_t taglen);
+gcry_err_code_t _gcry_cipher_siv_check_tag
+/*           */ (gcry_cipher_hd_t c,
+                 const unsigned char *intag, size_t taglen);
+gcry_err_code_t _gcry_cipher_siv_setkey
+/*           */ (gcry_cipher_hd_t c,
+                 const unsigned char *ctrkey, size_t ctrkeylen);
+
+
+/*-- cipher-gcm-siv.c --*/
+gcry_err_code_t _gcry_cipher_gcm_siv_encrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_gcm_siv_decrypt
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outbuf, size_t outbuflen,
+                 const unsigned char *inbuf, size_t inbuflen);
+gcry_err_code_t _gcry_cipher_gcm_siv_set_nonce
+/*           */ (gcry_cipher_hd_t c, const unsigned char *nonce,
+                 size_t noncelen);
+gcry_err_code_t _gcry_cipher_gcm_siv_authenticate
+/*           */ (gcry_cipher_hd_t c, const unsigned char *abuf, size_t abuflen);
+gcry_err_code_t _gcry_cipher_gcm_siv_set_decryption_tag
+/*           */ (gcry_cipher_hd_t c, const byte *tag, size_t taglen);
+gcry_err_code_t _gcry_cipher_gcm_siv_get_tag
+/*           */ (gcry_cipher_hd_t c,
+                 unsigned char *outtag, size_t taglen);
+gcry_err_code_t _gcry_cipher_gcm_siv_check_tag
+/*           */ (gcry_cipher_hd_t c,
+                 const unsigned char *intag, size_t taglen);
+gcry_err_code_t _gcry_cipher_gcm_siv_setkey
+/*           */ (gcry_cipher_hd_t c, unsigned int keylen);
 
 
 /* Return the L-value for block N.  Note: 'cipher_ocb.c' ensures that N
@@ -804,6 +906,29 @@ cipher_block_xor_n_copy_2(void *_dst_xor, const void *_src_xor,
       buf_put_he64(dst_xor + 8, sx[1]);
       buf_put_he64(srcdst_cpy + 0, sc[0]);
       buf_put_he64(srcdst_cpy + 8, sc[1]);
+    }
+}
+
+
+/* Optimized function for combined cipher block byte-swapping.  */
+static inline void
+cipher_block_bswap (void *_dst_bswap, const void *_src_bswap,
+                    size_t blocksize)
+{
+  byte *dst_bswap = _dst_bswap;
+  const byte *src_bswap = _src_bswap;
+  u64 t[2];
+
+  if (blocksize == 8)
+    {
+      buf_put_le64(dst_bswap, buf_get_be64(src_bswap));
+    }
+  else
+    {
+      t[0] = buf_get_be64(src_bswap + 0);
+      t[1] = buf_get_be64(src_bswap + 8);
+      buf_put_le64(dst_bswap + 8, t[0]);
+      buf_put_le64(dst_bswap + 0, t[1]);
     }
 }
 

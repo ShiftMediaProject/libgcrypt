@@ -70,6 +70,9 @@
 #  define getpid() GetCurrentProcessId()
 # endif
 #endif
+#ifdef HAVE_W32_SYSTEM
+#include <windows.h>
+#endif
 #include "g10lib.h"
 #include "random.h"
 #include "rand-internal.h"
@@ -216,26 +219,6 @@ static struct
 
 
 
-/* --- Stuff pertaining to the random daemon support. --- */
-#ifdef USE_RANDOM_DAEMON
-
-/* If ALLOW_DAEMON is true, the module will try to use the random
-   daemon first.  If the daemon has failed, this variable is set to
-   back to false and the code continues as normal.  Note, we don't
-   test this flag in a locked state because a wrong value does not
-   harm and the trhead will find out itself that the daemon does not
-   work and set it (again) to false.  */
-static int allow_daemon;
-
-/* During initialization, the user may set a non-default socket name
-   for accessing the random daemon.  If this value is NULL, the
-   default name will be used. */
-static char *daemon_socket_name;
-
-#endif /*USE_RANDOM_DAEMON*/
-
-
-
 /* ---  Prototypes  --- */
 static void read_pool (byte *buffer, size_t length, int level );
 static void add_randomness (const void *buffer, size_t length,
@@ -269,10 +252,6 @@ initialize_basics(void)
   if (!initialized)
     {
       initialized = 1;
-
-#ifdef USE_RANDOM_DAEMON
-      _gcry_daemon_initialize_basics ();
-#endif /*USE_RANDOM_DAEMON*/
 
       /* Make sure that we are still using the values we have
          traditionally used for the random levels.  */
@@ -359,15 +338,28 @@ _gcry_rngcsprng_initialize (int full)
 
 
 /* Try to close the FDs of the random gather module.  This is
-   currently only implemented for rndlinux. */
+   currently only implemented for rndgetentropy/rndoldlinux. */
 void
 _gcry_rngcsprng_close_fds (void)
 {
   lock_pool ();
-#if USE_RNDLINUX
-  _gcry_rndlinux_gather_random (NULL, 0, 0, 0);
-  pool_filled = 0; /* Force re-open on next use.  */
+#if USE_RNDGETENTROPY
+  _gcry_rndgetentropy_gather_random (NULL, 0, 0, 0);
 #endif
+#if USE_RNDOLDLINUX
+  _gcry_rndoldlinux_gather_random (NULL, 0, 0, 0);
+#endif
+  pool_writepos = 0;
+  pool_readpos = 0;
+  pool_filled = 0;
+  pool_filled_counter = 0;
+  did_initial_extra_seeding = 0;
+  pool_balance = 0;
+  just_mixed = 0;
+  xfree (rndpool);
+  xfree (keypool);
+  rndpool = NULL;
+  keypool = NULL;
   unlock_pool ();
 }
 
@@ -405,45 +397,6 @@ void
 _gcry_rngcsprng_enable_quick_gen (void)
 {
   quick_test = 1;
-}
-
-
-void
-_gcry_rngcsprng_set_daemon_socket (const char *socketname)
-{
-#ifdef USE_RANDOM_DAEMON
-  if (daemon_socket_name)
-    BUG ();
-
-  daemon_socket_name = gcry_xstrdup (socketname);
-#else /*!USE_RANDOM_DAEMON*/
-  (void)socketname;
-#endif /*!USE_RANDOM_DAEMON*/
-}
-
-/* With ONOFF set to 1, enable the use of the daemon.  With ONOFF set
-   to 0, disable the use of the daemon.  With ONOF set to -1, return
-   whether the daemon has been enabled. */
-int
-_gcry_rngcsprng_use_daemon (int onoff)
-{
-#ifdef USE_RANDOM_DAEMON
-  int last;
-
-  /* This is not really thread safe.  However it is expected that this
-     function is being called during initialization and at that point
-     we are for other reasons not really thread safe.  We do not want
-     to lock it because we might eventually decide that this function
-     may even be called prior to gcry_check_version.  */
-  last = allow_daemon;
-  if (onoff != -1)
-    allow_daemon = onoff;
-
-  return last;
-#else /*!USE_RANDOM_DAEMON*/
-  (void)onoff;
-  return 0;
-#endif /*!USE_RANDOM_DAEMON*/
 }
 
 
@@ -521,13 +474,6 @@ _gcry_rngcsprng_randomize (void *buffer, size_t length,
 
   /* Make sure the level is okay. */
   level &= 3;
-
-#ifdef USE_RANDOM_DAEMON
-  if (allow_daemon
-      && !_gcry_daemon_randomize (daemon_socket_name, buffer, length, level))
-    return; /* The daemon succeeded. */
-  allow_daemon = 0; /* Daemon failed - switch off. */
-#endif /*USE_RANDOM_DAEMON*/
 
   /* Acquire the pool lock. */
   lock_pool ();
@@ -1216,11 +1162,16 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
   int (*fnc)(void (*)(const void*, size_t, enum random_origins),
              enum random_origins, size_t, int);
 
-#if USE_RNDLINUX
+#if USE_RNDGETENTROPY
+  fnc = _gcry_rndgetentropy_gather_random;
+  return fnc;
+#endif
+
+#if USE_RNDOLDLINUX
   if ( !access (NAME_OF_DEV_RANDOM, R_OK)
        && !access (NAME_OF_DEV_URANDOM, R_OK))
     {
-      fnc = _gcry_rndlinux_gather_random;
+      fnc = _gcry_rndoldlinux_gather_random;
       return fnc;
     }
 #endif

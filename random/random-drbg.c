@@ -627,9 +627,12 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
   read_cb_buffer = buffer;
   read_cb_size = len;
   read_cb_len = 0;
-#if USE_RNDLINUX
-  rc = _gcry_rndlinux_gather_random (drbg_read_cb, 0, len,
-				     GCRY_VERY_STRONG_RANDOM);
+#if USE_RNDGETENTROPY
+  rc = _gcry_rndgetentropy_gather_random (drbg_read_cb, 0, len,
+                                          GCRY_VERY_STRONG_RANDOM);
+#elif USE_RNDOLDLINUX
+  rc = _gcry_rndoldlinux_gather_random (drbg_read_cb, 0, len,
+                                        GCRY_VERY_STRONG_RANDOM);
 #elif USE_RNDUNIX
   rc = _gcry_rndunix_gather_random (drbg_read_cb, 0, len,
 				    GCRY_VERY_STRONG_RANDOM);
@@ -1873,16 +1876,26 @@ _gcry_rngdrbg_reinit (const char *flagstr, gcry_buffer_t *pers, int npers)
   return ret;
 }
 
-/* Try to close the FDs of the random gather module.  This is
- * currently only implemented for rndlinux. */
+/* Release resources used by this DRBG module.  That is, close the FDs
+ * of the random gather module (if any), and release memory used.
+ */
 void
 _gcry_rngdrbg_close_fds (void)
 {
-#if USE_RNDLINUX
   drbg_lock ();
-  _gcry_rndlinux_gather_random (NULL, 0, 0, 0);
-  drbg_unlock ();
+#if USE_RNDGETENTROPY
+  _gcry_rndgetentropy_gather_random (NULL, 0, 0, 0);
 #endif
+#if USE_RNDOLDLINUX
+  _gcry_rndoldlinux_gather_random (NULL, 0, 0, 0);
+#endif
+  if (drbg_state)
+    {
+      drbg_uninstantiate (drbg_state);
+      xfree (drbg_state);
+      drbg_state = NULL;
+    }
+  drbg_unlock ();
 }
 
 /* Print some statistics about the RNG.  */

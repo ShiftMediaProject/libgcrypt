@@ -38,7 +38,7 @@
  * must have allocated R and S.
  */
 gpg_err_code_t
-_gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
+_gcry_ecc_ecdsa_sign (gcry_mpi_t input, gcry_mpi_t k_supplied, mpi_ec_t ec,
                       gcry_mpi_t r, gcry_mpi_t s,
                       int flags, int hashalgo)
 {
@@ -51,16 +51,29 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
   unsigned int abits, qbits;
   gcry_mpi_t b;                /* Random number needed for blinding.  */
   gcry_mpi_t bi;               /* multiplicative inverse of B.        */
+  gcry_mpi_t hash_computed_internally = NULL;
 
   if (DBG_CIPHER)
     log_mpidump ("ecdsa sign hash  ", input );
 
   qbits = mpi_get_nbits (ec->n);
 
+  if ((flags & PUBKEY_FLAG_PREHASH))
+    {
+      rc = _gcry_dsa_compute_hash (&hash_computed_internally, input, hashalgo);
+      if (rc)
+        return rc;
+      input = hash_computed_internally;
+    }
+
   /* Convert the INPUT into an MPI if needed.  */
   rc = _gcry_dsa_normalize_hash (input, &hash, qbits);
+
   if (rc)
-    return rc;
+    {
+      mpi_free (hash_computed_internally);
+      return rc;
+    }
 
   b  = mpi_snew (qbits);
   bi = mpi_snew (qbits);
@@ -81,34 +94,39 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
   /* Two loops to avoid R or S are zero.  This is more of a joke than
      a real demand because the probability of them being zero is less
      than any hardware failure.  Some specs however require it.  */
-  do
+  while (1)
     {
-      do
+      while (1)
         {
-          mpi_free (k);
-          k = NULL;
-          if ((flags & PUBKEY_FLAG_RFC6979) && hashalgo)
-            {
-              /* Use Pornin's method for deterministic DSA.  If this
-                 flag is set, it is expected that HASH is an opaque
-                 MPI with the to be signed hash.  That hash is also
-                 used as h1 from 3.2.a.  */
-              if (!mpi_is_opaque (input))
-                {
-                  rc = GPG_ERR_CONFLICT;
-                  goto leave;
-                }
-
-              abuf = mpi_get_opaque (input, &abits);
-              rc = _gcry_dsa_gen_rfc6979_k (&k, ec->n, ec->d,
-                                            abuf, (abits+7)/8,
-                                            hashalgo, extraloops);
-              if (rc)
-                goto leave;
-              extraloops++;
-            }
+          if (k_supplied)
+            k = k_supplied;
           else
-            k = _gcry_dsa_gen_k (ec->n, GCRY_STRONG_RANDOM);
+            {
+              mpi_free (k);
+              k = NULL;
+              if ((flags & PUBKEY_FLAG_RFC6979) && hashalgo)
+                {
+                  /* Use Pornin's method for deterministic DSA.  If this
+                     flag is set, it is expected that HASH is an opaque
+                     MPI with the to be signed hash.  That hash is also
+                     used as h1 from 3.2.a.  */
+                  if (!mpi_is_opaque (input))
+                    {
+                      rc = GPG_ERR_CONFLICT;
+                      goto leave;
+                    }
+
+                  abuf = mpi_get_opaque (input, &abits);
+                  rc = _gcry_dsa_gen_rfc6979_k (&k, ec->n, ec->d,
+                                                abuf, (abits+7)/8,
+                                                hashalgo, extraloops);
+                  if (rc)
+                    goto leave;
+                  extraloops++;
+                }
+              else
+                k = _gcry_dsa_gen_k (ec->n, GCRY_STRONG_RANDOM);
+            }
 
           mpi_invm (k_1, k, ec->n);     /* k_1 = k^(-1) mod n  */
 
@@ -123,8 +141,16 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
               goto leave;
             }
           mpi_mod (r, x, ec->n);  /* r = x mod n */
+
+          if (mpi_cmp_ui (r, 0))
+            break;
+
+          if (k_supplied)
+            {
+              rc = GPG_ERR_INV_VALUE;
+              goto leave;
+            }
         }
-      while (!mpi_cmp_ui (r, 0));
 
       /* Computation of dr, sum, and s are blinded with b.  */
       mpi_mulm (dr, b, ec->d, ec->n);
@@ -134,8 +160,15 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
       mpi_mulm (s, k_1, sum, ec->n);    /* s = k^(-1)*(hash+(d*r)) mod n */
       /* Undo blinding by b^-1 */
       mpi_mulm (s, bi, s, ec->n);
+      if (mpi_cmp_ui (s, 0))
+        break;
+
+      if (k_supplied)
+        {
+          rc = GPG_ERR_INV_VALUE;
+          break;
+        }
     }
-  while (!mpi_cmp_ui (s, 0));
 
   if (DBG_CIPHER)
     {
@@ -151,10 +184,12 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
   mpi_free (k_1);
   mpi_free (sum);
   mpi_free (dr);
-  mpi_free (k);
+  if (!k_supplied)
+    mpi_free (k);
 
   if (hash != input)
     mpi_free (hash);
+  mpi_free (hash_computed_internally);
 
   return rc;
 }
@@ -165,12 +200,13 @@ _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
  */
 gpg_err_code_t
 _gcry_ecc_ecdsa_verify (gcry_mpi_t input, mpi_ec_t ec,
-                        gcry_mpi_t r, gcry_mpi_t s)
+                        gcry_mpi_t r, gcry_mpi_t s, int flags, int hashalgo)
 {
   gpg_err_code_t err = 0;
   gcry_mpi_t hash, h, h1, h2, x;
   mpi_point_struct Q, Q1, Q2;
   unsigned int nbits;
+  gcry_mpi_t hash_computed_internally = NULL;
 
   if (!_gcry_mpi_ec_curve_point (ec->Q, ec))
     return GPG_ERR_BROKEN_PUBKEY;
@@ -181,9 +217,21 @@ _gcry_ecc_ecdsa_verify (gcry_mpi_t input, mpi_ec_t ec,
     return GPG_ERR_BAD_SIGNATURE; /* Assertion	0 < s < n  failed.  */
 
   nbits = mpi_get_nbits (ec->n);
+  if ((flags & PUBKEY_FLAG_PREHASH))
+    {
+      err = _gcry_dsa_compute_hash (&hash_computed_internally, input,
+                                    hashalgo);
+      if (err)
+        return err;
+      input = hash_computed_internally;
+    }
+
   err = _gcry_dsa_normalize_hash (input, &hash, nbits);
   if (err)
-    return err;
+    {
+      mpi_free (hash_computed_internally);
+      return err;
+    }
 
   h  = mpi_alloc (0);
   h1 = mpi_alloc (0);
@@ -243,6 +291,7 @@ _gcry_ecc_ecdsa_verify (gcry_mpi_t input, mpi_ec_t ec,
   mpi_free (h);
   if (hash != input)
     mpi_free (hash);
+  mpi_free (hash_computed_internally);
 
   return err;
 }

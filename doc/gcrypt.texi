@@ -211,6 +211,7 @@ of the library are verified.
 * Initializing the library::    How to initialize the library.
 * Multi-Threading::             How Libgcrypt can be used in a MT environment.
 * Enabling FIPS mode::          How to enable the FIPS mode.
+* Disabling FIPS mode::         How to disable the FIPS mode.
 * Hardware features::           How to disable hardware features.
 @end menu
 
@@ -506,14 +507,14 @@ Just like the function @code{gpg_strerror}, the function
 @cindex FIPS 140
 
 @anchor{enabling fips mode}
-Libgcrypt may be used in a FIPS 140-2 mode.  Note, that this does not
-necessary mean that Libcgrypt is an appoved FIPS 140-2 module.  Check the
+Libgcrypt may be used in a FIPS 140-3 mode.  Note, that this does not
+necessary mean that Libcgrypt is an appoved FIPS 140-3 module.  Check the
 NIST database at @url{http://csrc.nist.gov/groups/STM/cmvp/} to see what
 versions of Libgcrypt are approved.
 
 Because FIPS 140 has certain restrictions on the use of cryptography
 which are not always wanted, Libgcrypt needs to be put into FIPS mode
-explicitly.  Three alternative mechanisms are provided to switch
+explicitly.  Four alternative mechanisms are provided to switch
 Libgcrypt into this mode:
 
 @itemize
@@ -529,26 +530,36 @@ into FIPS mode at initialization time.  Note that this filename is
 hardwired and does not depend on any configuration options.
 
 @item
+By setting the environment variable @code{LIBGCRYPT_FORCE_FIPS_MODE},
+Libgcrypt is put into FIPS mode at initialization time.
+
+@item
 If the application requests FIPS mode using the control command
 @code{GCRYCTL_FORCE_FIPS_MODE}.  This must be done prior to any
 initialization (i.e. before @code{gcry_check_version}).
 
 @end itemize
 
-@cindex Enforced FIPS mode
 
-In addition to the standard FIPS mode, Libgcrypt may also be put into
-an Enforced FIPS mode by writing a non-zero value into the file
-@file{/etc/gcrypt/fips_enabled} or by using the control command
-@code{GCRYCTL_SET_ENFORCED_FIPS_FLAG} before any other calls to
-libgcrypt.  The Enforced FIPS mode helps to detect applications
-which don't fulfill all requirements for using
-Libgcrypt in FIPS mode (@pxref{FIPS Mode}).
+@node Disabling FIPS mode
+@section How to disable the FIPS mode
+@cindex FIPS mode
+@cindex FIPS 140
 
-Once Libgcrypt has been put into FIPS mode, it is not possible to
-switch back to standard mode without terminating the process first.
-If the logging verbosity level of Libgcrypt has been set to at least
-2, the state transitions and the self-tests are logged.
+@anchor{disabling fips mode}
+When the system is configured using libgcrypt in FIPS mode (by file or
+environement variable), but an application wants to use non-FIPS
+features, Libgcrypt needs to be gotten out of FIPS mode.  A mechanism
+is provided to switch Libgcrypt into non-FIPS mode:
+
+@itemize
+@item
+If the application requests non-FIPS mode using the control command
+@code{GCRYCTL_NO_FIPS_MODE}.  This must be done prior to any
+initialization (i.e. before @code{gcry_check_version}).
+@end itemize
+
+
 
 @node Hardware features
 @section How to disable hardware features
@@ -587,9 +598,11 @@ are
 @item ppc-vcrypto
 @item ppc-arch_3_00
 @item ppc-arch_2_07
+@item ppc-arch_3_10
 @item s390x-msa
 @item s390x-msa-4
 @item s390x-msa-8
+@item s390x-msa-9
 @item s390x-vx
 @end table
 
@@ -677,10 +690,8 @@ to disable secure memory is to use @code{GCRYCTL_DISABLE_SECMEM} right
 after initialization.
 
 @item GCRYCTL_DISABLE_SECMEM; Arguments: none
-This command disables the use of secure memory.  If this command is
-used in FIPS mode, FIPS mode will be disabled and the function
-@code{gcry_fips_mode_active} returns false.  However, in Enforced FIPS
-mode this command has no effect at all.
+This command disables the use of secure memory.  In FIPS mode this command
+has no effect at all.
 
 Many applications do not require secure memory, so they should disable
 it right away.  This command should be executed right after
@@ -782,8 +793,8 @@ reduce the "up to 16 bytes" above to 0.  Then the dependencies of the
 initial states of the pools are completely known.  Note that this is not
 an issue if random of @code{GCRY_VERY_STRONG_RANDOM} quality is
 requested as in this case enough extra entropy gets mixed.  It is also
-not an issue when using Linux (rndlinux driver), because this one
-guarantees to read full 16 bytes from /dev/urandom and thus there is no
+not an issue when using rndgetentropy or rndoldlinux module, because the
+module guarantees to read full 16 bytes and thus there is no
 way for an attacker without kernel access to control these 16 bytes.
 
 @item GCRYCTL_CLOSE_RANDOM_DEVICE; Arguments: none
@@ -888,14 +899,15 @@ to @code{gcry_check_version} and that is actually the recommended way to let an
 application switch the library into FIPS mode.  Note that Libgcrypt will
 reject an attempt to switch to fips mode during or after the initialization.
 
+@item GCRYCTL_NO_FIPS_MODE; Arguments: none
+Running this command puts the library into non-FIPS mode.  This
+command may be used before a call to @code{gcry_check_version} and
+that is actually the recommended way to let an application switch the
+library into non-FIPS mode.  Note that Libgcrypt will reject an attempt to
+switch to non-FIPS mode during or after the initialization.
+
 @item GCRYCTL_SET_ENFORCED_FIPS_FLAG; Arguments: none
-Running this command sets the internal flag that puts the library into
-the enforced FIPS mode during the FIPS mode initialization.  This command
-does not affect the library if the library is not put into the FIPS mode and
-it must be used before any other libgcrypt library calls that initialize
-the library such as @code{gcry_check_version}. Note that Libgcrypt will
-reject an attempt to switch to the enforced fips mode during or after
-the initialization.
+This command is obsolete and has no effect; do not use it.
 
 @item GCRYCTL_SET_PREFERRED_RNG_TYPE; Arguments: int
 These are advisory commands to select a certain random number
@@ -961,6 +973,19 @@ been registered with Libgpg-error and advise Libgcrypt to read the
 clamp again.  Obviously this control code may only be used before a
 second thread is started in a process.
 
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_CIPHER; Arguments: enum gcry_cipher_algos [, enum gcry_cipher_modes]
+
+Check if the given symmetric cipher and optional cipher mode combination
+is approved under the current FIPS 140-3 certification. If the
+combination is approved, this function returns @code{GPG_ERR_NO_ERROR}.
+Otherwise @code{GPG_ERR_NOT_SUPPORTED} is returned.
+
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_KDF; Arguments: enum gcry_kdf_algos
+
+Check if the given KDF is approved under the current FIPS 140-3
+certification. If the KDF is approved, this function returns
+@code{GPG_ERR_NO_ERROR}. Otherwise @code{GPG_ERR_NOT_SUPPORTED}
+is returned.
 
 @end table
 
@@ -980,7 +1005,7 @@ descriptive message to the user and cancelling the operation.
 
 Some error values do not indicate a system error or an error in the
 operation, but the result of an operation that failed properly.  For
-example, if you try to decrypt a tempered message, the decryption will
+example, if you try to decrypt a tampered message, the decryption will
 fail.  Another error value actually means that the end of a data
 buffer or list has been reached.  The following descriptions explain
 for many error codes what they mean usually.  Some error values have
@@ -1760,6 +1785,44 @@ EAX is an Authenticated Encryption with Associated Data (AEAD) block cipher
 mode by Bellare, Rogaway, and Wagner (see
 @uref{http://web.cs.ucdavis.edu/~rogaway/papers/eax.html}).
 
+@item  GCRY_CIPHER_MODE_SIV
+@cindex SIV, SIV mode
+Synthetic Initialization Vector (SIV) is an Authenticated Encryption
+with Associated Data (AEAD) block cipher mode, which is specified in
+RFC-5297.  This mode works with block ciphers with block size of 128
+bits and uses tag length of 128 bits.  Depending on how it is used,
+SIV achieves either the goal of deterministic authenticated encryption
+or the goal of nonce-based, misuse-resistant authenticated encryption.
+
+The SIV mode requires doubling key-length, for example, using 512-bit
+key with AES-256 (@code{GCRY_CIPHER_AES256}). Multiple AD instances can
+be passed to SIV mode with separate calls to
+@code{gcry_cipher_authenticate}. Nonce may be passed either through
+@code{gcry_cipher_setiv} or in the last call to
+@code{gcry_cipher_authenticate}. Note that use of @code{gcry_cipher_setiv}
+blocks any further calls to @code{gcry_cipher_authenticate} as nonce needs
+to be the last AD element with the SIV mode. When encrypting or decrypting,
+full-sized plaintext or ciphertext needs to be passed to
+@code{gcry_cipher_encrypt} or @code{gcry_cipher_decrypt}. Decryption tag
+needs to be given to SIV mode before decryption using
+@code{gcry_cipher_set_decryption_tag}.
+
+@item  GCRY_CIPHER_MODE_GCM_SIV
+@cindex GCM-SIV, GCM-SIV mode, AES-GCM-SIV
+This mode implements is GCM-SIV Authenticated Encryption with
+Associated Data (AEAD) block cipher mode specified in RFC-5297
+(AES-GCM-SIV: Nonce Misuse-Resistant Authenticated Encryption).
+This implementations works with block ciphers with block size of
+128 bits and uses tag length of 128 bits.  Supported key lengths
+by the mode are 128 bits and 256 bits. GCM-SIV is specified as
+nonce misuse resistant, so that it does not fail catastrophically
+if a nonce is repeated.
+
+When encrypting or decrypting, full-sized plaintext or ciphertext
+needs to be passed to @code{gcry_cipher_encrypt} or
+@code{gcry_cipher_decrypt}. Decryption tag needs to be given to
+GCM-SIV mode before decryption using @code{gcry_cipher_set_decryption_tag}.
+
 @end table
 
 @node Working with cipher handles
@@ -1794,8 +1857,10 @@ ChaCha20 stream cipher. The block cipher modes
 @code{GCRY_CIPHER_MODE_CTR} and @code{GCRY_CIPHER_MODE_EAX}) will work
 with any block cipher algorithm.  GCM mode
 (@code{GCRY_CIPHER_MODE_GCM}), CCM mode (@code{GCRY_CIPHER_MODE_CCM}),
-OCB mode (@code{GCRY_CIPHER_MODE_OCB}), and XTS mode
-(@code{GCRY_CIPHER_MODE_XTS}) will only work with block cipher
+OCB mode (@code{GCRY_CIPHER_MODE_OCB}), XTS mode
+(@code{GCRY_CIPHER_MODE_XTS}), SIV mode
+(@code{GCRY_CIPHER_MODE_SIV}) and GCM-SIV mode
+(@code{GCRY_CIPHER_MODE_GCM_SIV}) will only work with block cipher
 algorithms which have the block size of 16 bytes.
 
 The third argument @var{flags} can either be passed as @code{0} or as
@@ -1984,6 +2049,16 @@ Set a flag in the context to tell the encrypt and decrypt functions
 that their next call will provide the last chunk of data.  Only the
 first call to this function has an effect and only for modes which
 support it.  Checking the error is in general not necessary.  This is
+implemented as a macro.
+@end deftypefun
+
+
+The SIV mode and the GCM-SIV mode requires decryption tag to be input
+before decryption. This is done with:
+
+@deftypefun gcry_error_t gcry_cipher_set_decryption_tag (gcry_cipher_hd_t @var{h}, const void *@var{tag}, size_t @var{taglen})
+
+Set decryption tag for SIV or GCM-SIV mode decryption.  This is
 implemented as a macro.
 @end deftypefun
 
@@ -2436,6 +2511,78 @@ The Brainpool 384 bit curve and its OID.
 @itemx 1.3.36.3.3.2.8.1.1.13
 The Brainpool 512 bit curve and its OID.
 
+@item GOST2001-test
+@itemx 1.2.643.2.2.35.0
+
+@item GOST2001-CryptoPro-A
+@itemx 1.2.643.2.2.35.1
+
+@item GOST2001-CryptoPro-B
+@itemx 1.2.643.2.2.35.2
+
+@item GOST2001-CryptoPro-C
+@itemx 1.2.643.2.2.35.3
+
+@item GOST2001-CryptoPro-A
+@itemx GOST2001-CryptoPro-XchA
+
+@item GOST2001-CryptoPro-C
+@itemx GOST2001-CryptoPro-XchB
+
+@item GOST2001-CryptoPro-A
+@itemx 1.2.643.2.2.36.0
+
+@item GOST2001-CryptoPro-C
+@itemx 1.2.643.2.2.36.1
+
+@item GOST2012-256-tc26-A
+@itemx 1.2.643.7.1.2.1.1.1
+
+@item GOST2001-CryptoPro-A
+@itemx 1.2.643.7.1.2.1.1.2
+
+@item GOST2001-CryptoPro-A
+@itemx GOST2012-256-tc26-B
+
+@item GOST2001-CryptoPro-B
+@itemx 1.2.643.7.1.2.1.1.3
+
+@item GOST2001-CryptoPro-B
+@itemx GOST2012-256-tc26-C
+
+@item GOST2001-CryptoPro-C
+@itemx 1.2.643.7.1.2.1.1.4
+
+@item GOST2001-CryptoPro-C
+@itemx GOST2012-256-tc26-D
+
+@item GOST2012-512-test
+@itemx GOST2012-test
+
+@item GOST2012-512-test
+@itemx 1.2.643.7.1.2.1.2.0
+
+@item GOST2012-512-tc26-A
+@itemx GOST2012-tc26-A
+
+@item GOST2012-512-tc26-B
+@itemx GOST2012-tc26-B
+
+@item GOST2012-512-tc26-A
+@itemx 1.2.643.7.1.2.1.2.1
+
+@item GOST2012-512-tc26-B
+@itemx 1.2.643.7.1.2.1.2.2
+
+@item GOST2012-512-tc26-C
+@itemx 1.2.643.7.1.2.1.2.3
+
+@item secp256k1
+@itemx 1.3.132.0.10
+
+@item sm2p256v1
+@itemx 1.2.156.10197.1.301
+
 @end table
 As usual the OIDs may optionally be prefixed with the string @code{OID.}
 or @code{oid.}.
@@ -2804,6 +2951,58 @@ to indicate that the signature does not match the provided data.
 
 @end deftypefun
 @c end gcry_pk_verify
+
+Additionally, libgcrypt provides three functions for digital
+signatures.  Those functions are useful when hashing computation
+should be closely combined with signature computation.
+
+@deftypefun gcry_error_t gcry_pk_hash_sign (@w{gcry_sexp_t *@var{result},} @w{const char *@var{data_tmpl},} @w{gcry_sexp_t @var{skey},} @w{gcry_md_hd_t @var{hd},} @w{gcry_ctx_t @var{ctx}})
+
+This function is a variant of @code{gcry_pk_sign} which takes as
+additional parameter @var{hd}, handle for hash, and an optional
+context @var{ctx}.  @var{skey} is a private key in S-expression.  The
+hash algorithm used by the handle needs to be enabled and input needs
+to be supplied beforehand.  @var{data-tmpl} specifies a template to
+compose an S-expression to be signed.  A template should include
+@code{"(hash %s %b)"} or @code{"(hash ALGONAME %b)"}.  For the former
+case, "%s" is substituted by the string of algorithm of
+@code{gcry_md_get_algo (}@var{hd}@code{)} and when @code{gcry_md_read}
+is called, @code{ALGO=0} is used internally.  For the latter case,
+hash algorithm by @code{ALGONAME} is used when @code{gcry_md_read} is
+called internally.  The hash handle must not yet been finalized; the
+function takes a copy of the state and does a finalize on the copy.
+The last argument, @var{ctx}, may be used for supplying nonce
+externally.  If no need, @var{ctx} should be passed as @code{NULL}.
+
+@end deftypefun
+@c end gcry_pk_hash_sign
+
+@deftypefun gcry_error_t gcry_pk_hash_verify (@w{gcry_sexp_t @var{sigval},} @w{const char *@var{data_tmpl}}, @w{gcry_sexp_t @var{pkey},} @w{gcry_md_hd_t @var{hd},} @w{gcry_ctx_t @var{ctx}})
+
+This function is a variant of @code{gcry_pk_verify} which takes as
+additional parameter @var{hd}, handle for hash, and an optional
+context @var{ctx}.  @var{pkey} is a public key in S-expression.  See
+@code{gcry_pk_hash_sign}, for the explanation of handle for hash,
+@var{data-tmpl} and @var{ctx}.
+
+@end deftypefun
+@c end gcry_pk_hash_verify
+
+@deftypefun gcry_error_t gcry_pk_random_override_new (@w{gcry_ctx_t *@var{r_ctx},} @w{const unsigned char *@var{p},} @w{size_t @var{len}})
+
+This function is used to allocate a new context for nonce, by memory
+area pointed to by @var{p} to @var{len} bytes.  This context can be
+used when calling @code{gcry_pk_hash_sign} or
+@code{gcry_pk_hash_verify} to supply nonce externally, instead of
+generating internally.
+
+On success the function returns 0 and stores the new context object at
+@var{r_ctx}; this object eventually needs to be released
+(@pxref{gcry_ctx_release}).  On error the function stores @code{NULL} at
+@var{r_ctx} and returns an error code.
+
+@end deftypefun
+@c end gcry_pk_random_override_new
 
 
 @node Dedicated ECC Functions
@@ -5687,6 +5886,11 @@ The environment variables considered by Libgcrypt are:
 
 @table @code
 
+@item LIBGCRYPT_FORCE_FIPS_MODE
+@cindex LIBGCRYPT_FORCE_FIPS_MODE
+By setting this variable to any value, Libgcrypt is put into FIPS mode
+at initialization time (@pxref{enabling fips mode}).
+
 @item GCRYPT_BARRETT
 @cindex GCRYPT_BARRETT
 By setting this variable to any value a different algorithm for
@@ -6107,7 +6311,7 @@ for weaker usages like nonces.  There is also a level
 multi-precision-integer using the @code{gcry_create_nonce} function.
 
 @noindent
-There are two distinct random generators available:
+There are three distinct random generators available:
 
 @itemize
 @item
@@ -6115,15 +6319,25 @@ The Continuously Seeded Pseudo Random Number Generator (CSPRNG), which
 is based on the classic GnuPG derived big pool implementation.
 Implemented in @code{random/random-csprng.c} and used by default.
 @item
-A FIPS approved ANSI X9.31 PRNG using AES with a 128 bit key. Implemented in
-@code{random/random-fips.c} and used if Libgcrypt is in FIPS mode.
+The Deterministic Random Bits Generator (DRBG), based on the
+specification by NIST SP800-90A.  Implemented in
+@code{random/random-drbg.c} and used if Libgcrypt is in FIPS mode,
+or Libgcrypt is configured by GCRYCTL_SET_PREFERRED_RNG_TYPE with
+GCRY_RNG_TYPE_FIPS.
+@item
+Direct access to native RNG on the system.  Implemented in
+@code{random/random-system.c} and used if Libgcrypt is configured by
+GCRYCTL_SET_PREFERRED_RNG_TYPE with GCRY_RNG_TYPE_SYSTEM.
 @end itemize
 
 @noindent
-Both generators make use of so-called entropy gathering modules:
+All generators make use of so-called entropy gathering modules:
 
 @table @asis
-@item rndlinux
+@item rndgetentropy
+Uses the operating system provided @code{getentropy} function.
+
+@item rndoldlinux
 Uses the operating system provided @file{/dev/random} and
 @file{/dev/urandom} devices.  The @file{/dev/gcrypt/random.conf}
 config option @option{only-urandom} can be used to inhibit the use of
@@ -6132,7 +6346,7 @@ the blocking @file{/dev/random} device.
 @item rndunix
 Runs several operating system commands to collect entropy from sources
 like virtual machine and process statistics.  It is a kind of
-poor-man's @code{/dev/random} implementation. It is not available in
+poor-man's @code{/dev/random} implementation.  It is not available in
 FIPS mode.
 
 @item rndegd
@@ -6140,8 +6354,7 @@ Uses the operating system provided Entropy Gathering Daemon (EGD).
 The EGD basically uses the same algorithms as rndunix does.  However
 as a system daemon it keeps on running and thus can serve several
 processes requiring entropy input and does not waste collected entropy
-if the application does not need all the collected entropy. It is not
-available in FIPS mode.
+if the application does not need all the collected entropy.
 
 @item rndw32
 Targeted for the Microsoft Windows OS.  It uses certain properties of
@@ -6151,12 +6364,11 @@ that system and is the only gathering module available for that OS.
 Extra module to collect additional entropy by utilizing a hardware
 random number generator.  As of now the supported hardware RNG is
 the Padlock engine of VIA (Centaur) CPUs and x86 CPUs with the RDRAND
-instruction.  It is not available in FIPS mode.
+instruction.
 
 @item rndjent
 Extra module to collect additional entropy using a CPU jitter based
-approach.  This is only used on X86 hardware where the RDTSC opcode is
-available.  The @file{/dev/gcrypt/random.conf} config option
+approach.  The @file{/dev/gcrypt/random.conf} config option
 @option{disable-jent} can be used to inhibit the use of this module.
 
 @end table
@@ -6164,7 +6376,7 @@ available.  The @file{/dev/gcrypt/random.conf} config option
 
 @menu
 * CSPRNG Description::      Description of the CSPRNG.
-* FIPS PRNG Description::   Description of the FIPS X9.31 PRNG.
+* DRBG Description::   Description of the DRBG.
 @end menu
 
 
@@ -6202,14 +6414,14 @@ created by hashing all the 28 bytes with SHA-1 and saving that again
 in the first 20 bytes.  The hash is also returned as result.
 
 
-@node FIPS PRNG Description
-@subsection Description of the FIPS X9.31 PRNG
+@node DRBG Description
+@subsection Description of the DRBG
 
 The core of this deterministic random number generator is implemented
-according to the document ``NIST-Recommended Random Number Generator
-Based on ANSI X9.31 Appendix A.2.4 Using the 3-Key Triple DES and AES
-Algorithms'', dated 2005-01-31.  This implementation uses the AES
-variant.
+according to the document ``NIST Recommended DRBG Based on ANSI NIST
+SP800-90A''.  By default, this implementation uses the
+DRBG_NOPR_HMACSHA256 variant (HMAC DRBG with DF with SHA256, without
+prediction resistance.
 
 The generator is based on contexts to utilize the same core functions
 for all random levels as required by the high-level interface.  All
@@ -6221,27 +6433,17 @@ output blocks.
 
 On Unix like systems the @code{GCRY_VERY_STRONG_RANDOM} and
 @code{GCRY_STRONG_RANDOM} generators are keyed and seeded using the
-rndlinux module with the @file{/dev/random} device. Thus these
+rndgetentropy or rndoldlinux module.  With rndoldlinux module, these
 generators may block until the OS kernel has collected enough entropy.
 When used with Microsoft Windows the rndw32 module is used instead.
 
 The generator used for @code{gcry_create_nonce} is keyed and seeded
-from the @code{GCRY_STRONG_RANDOM} generator.  Thus is may also block
-if the @code{GCRY_STRONG_RANDOM} generator has not yet been used
-before and thus gets initialized on the first use by
-@code{gcry_create_nonce}.  This special treatment is justified by the
-weaker requirements for a nonce generator and to save precious kernel
-entropy for use by the ``real'' random generators.
-
-A self-test facility uses a separate context to check the
-functionality of the core X9.31 functions using a known answers test.
-During runtime each output block is compared to the previous one to
-detect a stuck generator.
-
-The DT value for the generator is made up of the current time down to
-microseconds (if available) and a free running 64 bit counter.  When
-used with the test context the DT value is taken from the context and
-incremented on each use.
+from the @code{GCRY_STRONG_RANDOM} generator.  Thus, with rndoldlinux
+module, it may also block if the @code{GCRY_STRONG_RANDOM} generator
+has not yet been used before and thus gets initialized on the first
+use by @code{gcry_create_nonce}.  This special treatment is justified
+by the weaker requirements for a nonce generator and to save precious
+kernel entropy for use by the ``real'' random generators.
 
 @c @node Helper Subsystems Architecture
 @c @section Helper Subsystems Architecture
@@ -6320,25 +6522,6 @@ The following symmetric encryption algorithm tests are run during
 power-up:
 
 @table @asis
-@item 3DES
-To test the 3DES 3-key EDE encryption in ECB mode these tests are
-run:
-@enumerate
-@item
-A known answer test is run on a 64 bit test vector processed by 64
-rounds of Single-DES block encryption and decryption using a key
-changed with each round.
-@item
-A known answer test is run on a 64 bit test vector processed by 16
-rounds of 2-key and 3-key Triple-DES block encryption and decryptions
-using a key changed with each round.
-@item
-10 known answer tests using 3-key Triple-DES EDE encryption, comparing
-the ciphertext to the known value, then running a decryption and
-comparing it to the initial plaintext.
-@end enumerate
-(@code{cipher/des.c:selftest})
-
 @item AES-128
 A known answer tests is run using one test vector and one test
 key with AES in ECB mode. (@code{cipher/rijndael.c:selftest_basic_128})
@@ -6381,19 +6564,28 @@ The following MAC algorithm tests are run during power-up:
 @table @asis
 @item HMAC SHA-1
 A known answer test using 9 byte of data and a 64 byte key is run.
-(@code{cipher/hmac-tests.c:selftests_sha1})
+(@code{cipher/mac-hmac.c:selftests_sha1})
 @item HMAC SHA-224
 A known answer test using 28 byte of data and a 4 byte key is run.
-(@code{cipher/hmac-tests.c:selftests_sha224})
+(@code{cipher/mac-hmac.c:selftests_sha224})
 @item HMAC SHA-256
 A known answer test using 28 byte of data and a 4 byte key is run.
-(@code{cipher/hmac-tests.c:selftests_sha256})
+(@code{cipher/mac-hmac.c:selftests_sha256})
 @item HMAC SHA-384
 A known answer test using 28 byte of data and a 4 byte key is run.
-(@code{cipher/hmac-tests.c:selftests_sha384})
+(@code{cipher/mac-hmac.c:selftests_sha384})
 @item HMAC SHA-512
 A known answer test using 28 byte of data and a 4 byte key is run.
-(@code{cipher/hmac-tests.c:selftests_sha512})
+(@code{cipher/mac-hmac.c:selftests_sha512})
+@item HMAC SHA3-224
+@itemx HMAC SHA3-256
+@itemx HMAC SHA3-384
+@itemx HMAC SHA3-512
+A known answer test using 9 byte of data and a 20 byte key is run.
+(@code{cipher/mac-hmac.c:selftests_sha3})
+@item CMAC AES
+A known answer test using 40 byte of data and a 16 byte key is run.
+(@code{cipher/mac-cmac.c:selftests_cmac_aes})
 @end table
 
 @subsection Random Number Power-Up Test
@@ -6416,7 +6608,7 @@ The public key algorithms are tested during power-up:
 
 @table @asis
 @item RSA
-A pre-defined 1024 bit RSA key is used and these tests are run
+A pre-defined 2048 bit RSA key is used and these tests are run
 in turn:
 @enumerate
 @item
@@ -6426,31 +6618,41 @@ Conversion of S-expression to internal format.
 Private key consistency check.
 (@code{cipher/@/rsa.c:@/selftests_rsa})
 @item
-A pre-defined 20 byte value is signed with PKCS#1 padding for SHA-1.
+A pre-defined 20 byte value is signed with PKCS#1 padding for SHA-256.
 The result is verified using the public key against the original data
-and against modified data.  (@code{cipher/@/rsa.c:@/selftest_sign_1024})
+and against modified data.  (@code{cipher/@/rsa.c:@/selftest_sign_2048})
 @item
-A 1000 bit random value is encrypted and checked that it does not
-match the original random value.  The encrypted result is then
+A predefined 66 byte value is encrypted and checked that it matches
+reference encyrpted message.  The encrypted result is then
 decrypted and checked that it matches the original random value.
-(@code{cipher/@/rsa.c:@/selftest_encr_1024})
+(@code{cipher/@/rsa.c:@/selftest_encr_2048})
 @end enumerate
 
-@item DSA
-A pre-defined 1024 bit DSA key is used and these tests are run in turn:
+@item ECC
+A pre-defined SEC P-256 ECDSA key is used and these tests are run
+in turn:
 @enumerate
 @item
 Conversion of S-expression to internal format.
-(@code{cipher/@/dsa.c:@/selftests_dsa})
+(@code{cipher/@/ecc.c:@/selftests_ecdsa})
 @item
 Private key consistency check.
-(@code{cipher/@/dsa.c:@/selftests_dsa})
+(@code{cipher/@/ecc.c:@/selftests_ecdsa})
 @item
-A pre-defined 20 byte value is signed with PKCS#1 padding for
-SHA-1.  The result is verified using the public key against the
-original data and against modified data.
-(@code{cipher/@/dsa.c:@/selftest_sign_1024})
+A pre-defined 32 byte value (SHA-256 digest) is signed.
+The result is verified using the public key against the original data
+and against modified data.  (@code{cipher/@/ecc.c:@/selftest_sign})
 @end enumerate
+@end table
+
+@subsection Key derivation function Power-Up Tests
+
+The key derivation functions are tested during power-up:
+
+@table @asis
+@item PBKDF2
+A known answer tests with 8 byte password and 4 byte salt and SHA-1 is used.
+(@code{cipher/@/kdf.c:@/selftest_pbkdf2})
 @end table
 
 @subsection Integrity Power-Up Tests
@@ -6458,18 +6660,8 @@ original data and against modified data.
 The integrity of the Libgcrypt is tested during power-up but only if
 checking has been enabled at build time.  The check works by computing
 a HMAC SHA-256 checksum over the file used to load Libgcrypt into
-memory.  That checksum is compared against a checksum stored in a file
-of the same name but with a single dot as a prefix and a suffix of
-@file{.hmac}.
-
-
-@subsection Critical Functions Power-Up Tests
-
-The 3DES weak key detection is tested during power-up by calling the
-detection function with keys taken from a table listening all weak
-keys.  The table itself is protected using a SHA-1 hash.
-(@code{cipher/@/des.c:@/selftest})
-
+memory.  That checksum is compared against a checksum stored inside of
+the same file as in the text in the .rodata1 section of the ELF file.
 
 
 @c --------------------------------
@@ -6499,12 +6691,6 @@ to test the correctness of the signing operation.  As a second signing
 test, the signature is modified by incrementing its value and then
 verified with the expected result that the verification fails.
 (@code{cipher/@/rsa.c:@/test_keys})
-@item DSA
-The test uses a random number of the size of the Q parameter to create
-a signature and then checks that the signature verifies.  As a second
-signing test, the data is modified by incrementing its value and then
-verified against the signature with the expected result that the
-verification fails.  (@code{cipher/@/dsa.c:@/test_keys})
 @end table
 
 
@@ -6515,18 +6701,6 @@ No code is loaded at runtime.
 @subsection Manual Key Entry Tests
 
 A manual key entry feature is not implemented in Libgcrypt.
-
-
-@subsection Continuous RNG Tests
-
-The continuous random number test is only used in FIPS mode.  The RNG
-generates blocks of 128 bit size; the first block generated per
-context is saved in the context and another block is generated to be
-returned to the caller.  Each block is compared against the saved
-block and then stored in the context.  If a duplicated block is
-detected an error is signaled and the library is put into the
-``Fatal-Error'' state.
-(@code{random/@/random-fips.c:@/x931_aes_driver})
 
 
 
@@ -6601,7 +6775,7 @@ A known answer test using 9 byte of data and a 100 byte key is run.
 @item
 A known answer test using 9 byte of data and a 49 byte key is run.
 @end enumerate
-(@code{cipher/hmac-tests.c:selftests_sha1})
+(@code{cipher/mac-hmac.c:selftests_sha1})
 @item HMAC SHA-224
 @itemx HMAC SHA-256
 @itemx HMAC SHA-384
@@ -6618,12 +6792,62 @@ A known answer test using 54 byte of data and a 131 byte key is run.
 @item
 A known answer test using 152 byte of data and a 131 byte key is run.
 @end enumerate
-(@code{cipher/@/hmac-tests.c:@/selftests_sha224},
-@code{cipher/@/hmac-tests.c:@/selftests_sha256},
-@code{cipher/@/hmac-tests.c:@/selftests_sha384},
-@code{cipher/@/hmac-tests.c:@/selftests_sha512})
+(@code{cipher/@/mac-hmac.c:@/selftests_sha224},
+@code{cipher/@/mac-hmac.c:@/selftests_sha256},
+@code{cipher/@/mac-hmac.c:@/selftests_sha384},
+@code{cipher/@/mac-hmac.c:@/selftests_sha512})
 @end table
 
+@table @asis
+@item HMAC SHA3-224
+@itemx HMAC SHA3-256
+@itemx HMAC SHA3-384
+@itemx HMAC SHA3-512
+@enumerate
+@item
+A known answer test using 28 byte of data and a 4 byte key is run.
+@item
+A known answer test using 50 byte of data and a 20 byte key is run.
+@item
+A known answer test using 50 byte of data and a 25 byte key is run.
+@item
+A known answer test using 20 byte of data and a 20 byte key with truncation is run.
+@item
+A known answer test using 54 byte of data and a 131 byte key is run.
+@item
+A known answer test using 54 byte of data and a 147 byte key is run.
+@item
+A known answer test using 152 byte of data and a 131 byte key is run.
+@item
+A known answer test using 152 byte of data and a 147 byte key is run.
+@end enumerate
+(@code{cipher/@/mac-hmac.c:@/selftests_sha3},
+@end table
+
+@table @asis
+@item CMAC AES
+@enumerate
+@item
+A known answer test using 0 byte of data and a 16 byte key is run.
+@item
+A known answer test using 24 byte of data and a 16 byte key is run.
+@item
+A known answer test using 64 byte of data and a 32 byte key is run.
+@item
+A known answer test using 16 byte of data and a 16 byte key is run.
+@item
+A known answer test using 64 byte of data and a 16 byte key is run.
+@item
+A known answer test using 0 byte of data and a 24 byte key is run.
+@item
+A known answer test using 64 byte of data and a 24 byte key is run.
+@item
+A known answer test using 0 byte of data and a 32 byte key is run.
+@item
+A known answer test using 16 byte of data and a 32 byte key is run.
+@end enumerate
+(@code{cipher/@/mac-cmac.c:@/selftests_cmac_aes},
+@end table
 
 @c ********************************************
 @node FIPS Mode
@@ -6645,8 +6869,6 @@ If Libgcrypt is used in FIPS mode these restrictions are effective:
 The cryptographic algorithms are restricted to this list:
 
 @table @asis
-@item GCRY_CIPHER_3DES
-3 key EDE Triple-DES symmetric encryption.
 @item GCRY_CIPHER_AES128
 AES 128 bit symmetric encryption.
 @item GCRY_CIPHER_AES192
@@ -6663,6 +6885,14 @@ SHA-256 message digest.
 SHA-384 message digest.
 @item GCRY_MD_SHA512
 SHA-512 message digest.
+@item GCRY_MD_SHA3_224
+SHA3-224 message digest.
+@item GCRY_MD_SHA3_256
+SHA3-256 message digest.
+@item GCRY_MD_SHA3_384
+SHA3-384 message digest.
+@item GCRY_MD_SHA3_512
+SHA3-512 message digest.
 @item GCRY_MD_SHA1,GCRY_MD_FLAG_HMAC
 HMAC using a SHA-1 message digest.
 @item GCRY_MD_SHA224,GCRY_MD_FLAG_HMAC
@@ -6673,38 +6903,45 @@ HMAC using a SHA-256 message digest.
 HMAC using a SHA-384 message digest.
 @item GCRY_MD_SHA512,GCRY_MD_FLAG_HMAC
 HMAC using a SHA-512 message digest.
+@item GCRY_MD_SHA3_224,GCRY_MD_FLAG_HMAC
+HMAC using a SHA3-224 message digest.
+@item GCRY_MD_SHA3_256,GCRY_MD_FLAG_HMAC
+HMAC using a SHA3-256 message digest.
+@item GCRY_MD_SHA3_384,GCRY_MD_FLAG_HMAC
+HMAC using a SHA3-384 message digest.
+@item GCRY_MD_SHA3_512,GCRY_MD_FLAG_HMAC
+HMAC using a SHA3-512 message digest.
+@item GCRY_MAC_CMAC_AES
+CMAC using a AES key.
 @item GCRY_PK_RSA
 RSA encryption and signing.
-@item GCRY_PK_DSA
-DSA signing.
+@item GCRY_PK_ECC
+ECC encryption and signing.
 @end table
 
 Note that the CRC algorithms are not considered cryptographic algorithms
 and thus are in addition available.
 
 @item
-RSA key generation refuses to create a key with a keysize of
-less than 1024 bits.
+RSA key generation refuses to create and uyse ea key with a keysize of
+less than 2048 bits.
 
 @item
-DSA key generation refuses to create a key with a keysize other
-than 1024 bits.
-
-@item
-The @code{transient-key} flag for RSA and DSA key generation is ignored.
+The @code{transient-key} flag for RSA key generation is ignored.
 
 @item
 Support for the VIA Padlock engine is disabled.
 
 @item
-FIPS mode may only be used on systems with a /dev/random device.
-Switching into FIPS mode on other systems will fail at runtime.
+FIPS mode may only be used on systems with a /dev/random device or
+with a getentropy syscall. Switching into FIPS mode on other systems
+will fail at runtime.
 
 @item
 Saving and loading a random seed file is ignored.
 
 @item
-An X9.31 style random number generator is used in place of the
+The DRBG style random number generator is used in place of the
 large-pool-CSPRNG generator.
 
 @item
@@ -6721,21 +6958,22 @@ On-the-fly self-tests are not performed, instead self-tests are run
 before entering operational state.
 
 @item
-The function @code{gcry_set_allocation_handler} may not be used.  If
-it is used Libgcrypt disables FIPS mode unless Enforced FIPS mode is
-enabled, in which case Libgcrypt will enter the error state.
+The function @code{gcry_set_allocation_handler} may not be used. In FIPS mode
+this function does not have any effect, because FIPS has a requirements for
+memory zeroization.
 
 @item
-The digest algorithm MD5 may not be used.  If it is used Libgcrypt
-disables FIPS mode unless Enforced FIPS mode is enabled, in which case
-Libgcrypt will enter the error state.
+The digest algorithm MD5 may not be used.
 
 @item
-In Enforced FIPS mode the command @code{GCRYCTL_DISABLE_SECMEM} is
-ignored.  In standard FIPS mode it disables FIPS mode.
+The signatures using SHA-1 digest algorithm may not be used.
+
+@item
+In FIPS mode the command @code{GCRYCTL_DISABLE_SECMEM} is ignored.
 
 @item
 A handler set by @code{gcry_set_outofcore_handler} is ignored.
+
 @item
 A handler set by @code{gcry_set_fatalerror_handler} is ignored.
 
@@ -6939,14 +7177,5 @@ memory and thus also the encryption contexts with these keys.
 
 
 @bye
-
-GCRYCTL_SET_RANDOM_DAEMON_SOCKET
-GCRYCTL_USE_RANDOM_DAEMON
-The random daemon is still a bit experimental, thus we do not document
-them.  Note that they should be used during initialization and that
-these functions are not really thread safe.
-
-
-
 
 @c  LocalWords:  int HD

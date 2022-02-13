@@ -252,13 +252,15 @@ char **_gcry_strtokenize (const char *string, const char *delim);
 #define HWF_PPC_VCRYPTO         (1 << 0)
 #define HWF_PPC_ARCH_3_00       (1 << 1)
 #define HWF_PPC_ARCH_2_07       (1 << 2)
+#define HWF_PPC_ARCH_3_10       (1 << 3)
 
 #elif defined(HAVE_CPU_ARCH_S390X)
 
 #define HWF_S390X_MSA           (1 << 0)
 #define HWF_S390X_MSA_4         (1 << 1)
 #define HWF_S390X_MSA_8         (1 << 2)
-#define HWF_S390X_VX            (1 << 3)
+#define HWF_S390X_MSA_9         (1 << 3)
+#define HWF_S390X_VX            (1 << 4)
 
 #endif
 
@@ -358,56 +360,34 @@ void __gcry_burn_stack (unsigned int bytes);
 	do { __gcry_burn_stack (bytes); \
 	     __gcry_burn_stack_dummy (); } while(0)
 
-/* To avoid that a compiler optimizes certain memset calls away, these
-   macros may be used instead.  For small constant length buffers,
-   memory wiping is inlined.  For non-constant or large length buffers,
-   memory is wiped with memset through _gcry_fast_wipememory. */
+/* To avoid that a compiler optimizes certain memset calls away, this
+   macro may be used instead.  For constant length buffers, memory
+   wiping is inlined.  Dead store elimination of inlined memset is
+   avoided here by using assembly block after memset.  For non-constant
+   length buffers, memory is wiped through _gcry_fast_wipememory.  */
+#ifdef HAVE_GCC_ASM_VOLATILE_MEMORY
+#define fast_wipememory2_inline(_ptr,_set,_len) do { \
+	      memset((_ptr), (_set), (_len)); \
+	      asm volatile ("\n" :: "r" (_ptr) : "memory"); \
+	    } while(0)
+#else
+#define fast_wipememory2_inline(_ptr,_set,_len) \
+	    _gcry_fast_wipememory2((void *)_ptr, _set, _len)
+#endif
 #define wipememory2(_ptr,_set,_len) do { \
-	      if (!CONSTANT_P(_len) || _len > 64) { \
+	      if (!CONSTANT_P(_len) || !CONSTANT_P(_set)) { \
 		if (CONSTANT_P(_set) && (_set) == 0) \
-		  _gcry_fast_wipememory((void *)_ptr, _len); \
+		  _gcry_fast_wipememory((void *)(_ptr), (_len)); \
 		else \
-		  _gcry_fast_wipememory2((void *)_ptr, _set, _len); \
-	      } else {\
-		volatile char *_vptr = (volatile char *)(_ptr); \
-		size_t _vlen = (_len); \
-		const unsigned char _vset = (_set); \
-		fast_wipememory2(_vptr, _vset, _vlen); \
-		while(_vlen) { *_vptr = (_vset); _vptr++; _vlen--; } \
+		  _gcry_fast_wipememory2((void *)(_ptr), (_set), (_len)); \
+	      } else { \
+		fast_wipememory2_inline((void *)(_ptr), (_set), (_len)); \
 	      } \
 	    } while(0)
-#define wipememory(_ptr,_len) wipememory2(_ptr,0,_len)
+#define wipememory(_ptr,_len) wipememory2((_ptr),0,(_len))
 
 void _gcry_fast_wipememory(void *ptr, size_t len);
 void _gcry_fast_wipememory2(void *ptr, int set, size_t len);
-
-#if defined(HAVE_GCC_ATTRIBUTE_PACKED) && \
-    defined(HAVE_GCC_ATTRIBUTE_ALIGNED) && \
-    defined(HAVE_GCC_ATTRIBUTE_MAY_ALIAS)
-typedef struct fast_wipememory_s
-{
-  u64 a;
-} __attribute__((packed, aligned(1), may_alias)) fast_wipememory_t;
-/* fast_wipememory may leave tail bytes unhandled, in which case tail bytes
-   are handled by wipememory. */
-# define fast_wipememory2(_vptr,_vset,_vlen) do { \
-	      fast_wipememory_t _vset_long; \
-	      if (_vlen < sizeof(fast_wipememory_t)) \
-		break; \
-	      _vset_long.a = (_vset); \
-	      _vset_long.a *= U64_C(0x0101010101010101); \
-	      do { \
-		volatile fast_wipememory_t *_vptr_long = \
-		  (volatile void *)_vptr; \
-		_vptr_long->a = _vset_long.a; \
-		_vlen -= sizeof(fast_wipememory_t); \
-		_vptr += sizeof(fast_wipememory_t); \
-	      } while (_vlen >= sizeof(fast_wipememory_t)); \
-	    } while (0)
-#else
-# define fast_wipememory2(_vptr,_vset,_vlen)
-#endif
-
 
 /* Digit predicates.  */
 
@@ -446,6 +426,7 @@ gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
 extern int _gcry_no_fips_mode_required;
 
 void _gcry_initialize_fips_mode (int force);
+int _gcry_fips_to_activate (void);
 
 /* This macro returns true if fips mode is enabled.  This is
    independent of the fips required finite state machine and only used
@@ -455,13 +436,6 @@ void _gcry_initialize_fips_mode (int force);
    variable is only initialized once with no other threads
    existing.  */
 #define fips_mode() (!_gcry_no_fips_mode_required)
-
-int _gcry_enforced_fips_mode (void);
-
-void _gcry_set_enforced_fips_mode (void);
-
-void _gcry_inactivate_fips_mode (const char *text);
-int _gcry_is_fips_mode_inactive (void);
 
 
 void _gcry_fips_signal_error (const char *srcfile,
@@ -480,6 +454,9 @@ void _gcry_fips_signal_error (const char *srcfile,
 # define fips_signal_fatal_error(a) \
            _gcry_fips_signal_error (__FILE__, __LINE__, NULL, 1, (a))
 #endif
+
+int _gcry_fips_indicator_cipher (va_list arg_ptr);
+int _gcry_fips_indicator_kdf (va_list arg_ptr);
 
 int _gcry_fips_is_operational (void);
 

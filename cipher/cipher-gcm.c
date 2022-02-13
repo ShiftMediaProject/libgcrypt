@@ -43,6 +43,11 @@ extern void _gcry_ghash_setup_intel_pclmul (gcry_cipher_hd_t c);
 
 extern unsigned int _gcry_ghash_intel_pclmul (gcry_cipher_hd_t c, byte *result,
                                               const byte *buf, size_t nblocks);
+
+extern unsigned int _gcry_polyval_intel_pclmul (gcry_cipher_hd_t c,
+                                                byte *result,
+                                                const byte *buf,
+                                                size_t nblocks);
 #endif
 
 #ifdef GCM_USE_ARM_PMULL
@@ -51,6 +56,11 @@ extern void _gcry_ghash_setup_armv8_ce_pmull (void *gcm_key, void *gcm_table);
 extern unsigned int _gcry_ghash_armv8_ce_pmull (void *gcm_key, byte *result,
                                                 const byte *buf, size_t nblocks,
                                                 void *gcm_table);
+
+extern unsigned int _gcry_polyval_armv8_ce_pmull (void *gcm_key, byte *result,
+                                                  const byte *buf,
+                                                  size_t nblocks,
+                                                  void *gcm_table);
 
 static void
 ghash_setup_armv8_ce_pmull (gcry_cipher_hd_t c)
@@ -65,6 +75,14 @@ ghash_armv8_ce_pmull (gcry_cipher_hd_t c, byte *result, const byte *buf,
 {
   return _gcry_ghash_armv8_ce_pmull(c->u_mode.gcm.u_ghash_key.key, result, buf,
                                     nblocks, c->u_mode.gcm.gcm_table);
+}
+
+static unsigned int
+polyval_armv8_ce_pmull (gcry_cipher_hd_t c, byte *result, const byte *buf,
+                        size_t nblocks)
+{
+  return _gcry_polyval_armv8_ce_pmull(c->u_mode.gcm.u_ghash_key.key, result,
+                                      buf, nblocks, c->u_mode.gcm.gcm_table);
 }
 #endif /* GCM_USE_ARM_PMULL */
 
@@ -564,19 +582,20 @@ ghash_internal (gcry_cipher_hd_t c, byte *result, const byte *buf,
 static void
 setupM (gcry_cipher_hd_t c)
 {
-#if defined(GCM_USE_INTEL_PCLMUL) || defined(GCM_USE_ARM_PMULL) || \
-    defined(GCM_USE_S390X_CRYPTO) || defined(GCM_USE_PPC_VPMSUM)
   unsigned int features = _gcry_get_hw_features ();
-#endif
 
   c->u_mode.gcm.ghash_fn = NULL;
+  c->u_mode.gcm.polyval_fn = NULL;
 
   if (0)
-    ;
+    {
+      (void)features;
+    }
 #ifdef GCM_USE_INTEL_PCLMUL
   else if (features & HWF_INTEL_PCLMUL)
     {
       c->u_mode.gcm.ghash_fn = _gcry_ghash_intel_pclmul;
+      c->u_mode.gcm.polyval_fn = _gcry_polyval_intel_pclmul;
       _gcry_ghash_setup_intel_pclmul (c);
     }
 #endif
@@ -584,6 +603,7 @@ setupM (gcry_cipher_hd_t c)
   else if (features & HWF_ARM_PMULL)
     {
       c->u_mode.gcm.ghash_fn = ghash_armv8_ce_pmull;
+      c->u_mode.gcm.polyval_fn = polyval_armv8_ce_pmull;
       ghash_setup_armv8_ce_pmull (c);
     }
 #endif
@@ -1002,6 +1022,13 @@ _gcry_cipher_gcm_authenticate (gcry_cipher_hd_t c,
   do_ghash_buf(c, c->u_mode.gcm.u_tag.tag, aadbuf, aadbuflen, 0);
 
   return 0;
+}
+
+
+void
+_gcry_cipher_gcm_setupM (gcry_cipher_hd_t c)
+{
+  setupM (c);
 }
 
 

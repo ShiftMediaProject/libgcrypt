@@ -26,6 +26,7 @@ tests_bin = \
 	t-mpi-bit t-mpi-point curves t-lock \
 	prime basic keygen pubkey hmac hashtest t-kdf keygrip \
 	fips186-dsa aeswrap pkcs1v2 random dsa-rfc6979 \
+	t-dsa t-ecdsa t-rsa-pss t-rsa-15 \
 	t-ed25519 t-cv25519 t-x448 t-ed448
 
 tests_bin_last = benchmark bench-slope
@@ -61,11 +62,11 @@ noinst_HEADERS = t-common.h
 
 CLEANFILES = testdrv-build
 
-EXTRA_DIST = README rsa-16k.key cavs_tests.sh cavs_driver.pl \
+EXTRA_DIST = README rsa-16k.key \
 	     pkcs1v2-oaep.h pkcs1v2-pss.h pkcs1v2-v15c.h pkcs1v2-v15s.h \
-	     t-ed25519.inp t-ed448.inp stopwatch.h hashtest-256g.in \
-	     sha3-224.h sha3-256.h sha3-384.h sha3-512.h \
-	     blake2b.h blake2s.h \
+	     t-ed25519.inp t-ed448.inp t-dsa.inp t-ecdsa.inp t-rsa-15.inp \
+	     t-rsa-pss.inp stopwatch.h hashtest-256g.in sha3-224.h \
+	     sha3-256.h sha3-384.h sha3-512.h blake2b.h blake2s.h \
 	     basic-disable-all-hwf.in basic_all_hwfeature_combinations.sh
 
 LDADD = $(standard_ldadd) $(GPG_ERROR_LIBS) @LDADD_FOR_TESTS_KLUDGE@
@@ -88,9 +89,13 @@ if HAVE_W32_SYSTEM
 xtestsuite_libs = ../src/.libs/libgcrypt-20.dll \
                   $(prefix)/bin/libgpg-error*-0.dll
 xtestsuite_driver = .libs/testdrv.exe
+t_kdf_LDADD = $(standard_ldadd) $(GPG_ERROR_LIBS) @LDADD_FOR_TESTS_KLUDGE@
+t_kdf_CFLAGS = $(GPG_ERROR_CFLAGS)
 else
 xtestsuite_libs = ../src/.libs/libgcrypt.so*
 xtestsuite_driver = testdrv
+t_kdf_LDADD = $(standard_ldadd) $(GPG_ERROR_MT_LIBS) @LDADD_FOR_TESTS_KLUDGE@
+t_kdf_CFLAGS = $(GPG_ERROR_MT_CFLAGS)
 endif
 
 # xcheck uses our new testdrv instead of the automake test runner.

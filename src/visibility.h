@@ -167,8 +167,15 @@ MARK_VISIBLEX (gcry_pk_verify)
 MARK_VISIBLEX (gcry_pubkey_get_sexp)
 MARK_VISIBLEX (gcry_ecc_get_algo_keylen)
 MARK_VISIBLEX (gcry_ecc_mul_point)
+MARK_VISIBLEX (gcry_pk_hash_sign)
+MARK_VISIBLEX (gcry_pk_hash_verify)
+MARK_VISIBLEX (gcry_pk_random_override_new)
 
 MARK_VISIBLEX (gcry_kdf_derive)
+MARK_VISIBLEX (gcry_kdf_open)
+MARK_VISIBLEX (gcry_kdf_compute)
+MARK_VISIBLEX (gcry_kdf_final)
+MARK_VISIBLEX (gcry_kdf_close)
 
 MARK_VISIBLEX (gcry_prime_check)
 MARK_VISIBLEX (gcry_prime_generate)
@@ -366,6 +373,9 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_pubkey_get_sexp        _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_ecc_get_algo_keylen    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_ecc_mul_point          _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_pk_hash_sign           _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_pk_hash_verify         _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_pk_random_override_new _gcry_USE_THE_UNDERSCORED_FUNCTION
 
 #define gcry_md_algo_info           _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_algo_name           _gcry_USE_THE_UNDERSCORED_FUNCTION
@@ -406,6 +416,10 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_mac_ctl                _gcry_USE_THE_UNDERSCORED_FUNCTION
 
 #define gcry_kdf_derive             _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kdf_open               _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kdf_compute            _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kdf_final              _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kdf_close              _gcry_USE_THE_UNDERSCORED_FUNCTION
 
 #define gcry_prime_check            _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_prime_generate         _gcry_USE_THE_UNDERSCORED_FUNCTION

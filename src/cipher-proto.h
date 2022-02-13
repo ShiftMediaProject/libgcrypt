@@ -184,7 +184,7 @@ typedef struct gcry_cipher_spec
   } flags;
   const char *name;
   const char **aliases;
-  gcry_cipher_oid_spec_t *oids;
+  const gcry_cipher_oid_spec_t *oids;
   size_t blocksize;
   size_t keylen;
   size_t contextsize;
@@ -221,13 +221,10 @@ typedef unsigned char *(*gcry_md_read_t) (void *c);
 /* Type for the md_extract function.  */
 typedef void (*gcry_md_extract_t) (void *c, void *outbuf, size_t nbytes);
 
-/* Type for the md_hash_buffer function. */
-typedef void (*gcry_md_hash_buffer_t) (void *outbuf, const void *buffer,
-				       size_t length);
-
 /* Type for the md_hash_buffers function. */
-typedef void (*gcry_md_hash_buffers_t) (void *outbuf, const gcry_buffer_t *iov,
-				        int iovcnt);
+typedef void (*gcry_md_hash_buffers_t) (void *outbuf, size_t nbytes,
+					const gcry_buffer_t *iov,
+					int iovcnt);
 
 typedef struct gcry_md_oid_spec
 {
@@ -243,16 +240,15 @@ typedef struct gcry_md_spec
     unsigned int fips:1;
   } flags;
   const char *name;
-  unsigned char *asnoid;
+  const unsigned char *asnoid;
   int asnlen;
-  gcry_md_oid_spec_t *oids;
+  const gcry_md_oid_spec_t *oids;
   int mdlen;
   gcry_md_init_t init;
   gcry_md_write_t write;
   gcry_md_final_t final;
   gcry_md_read_t read;
   gcry_md_extract_t extract;
-  gcry_md_hash_buffer_t hash_buffer;
   gcry_md_hash_buffers_t hash_buffers;
   size_t contextsize; /* allocate this amount of context */
   selftest_func_t selftest;

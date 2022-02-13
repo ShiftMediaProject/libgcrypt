@@ -1221,25 +1221,10 @@ keccak_extract (void *context, void *out, size_t outlen)
 }
 
 
-/* Shortcut functions which puts the hash value of the supplied buffer
- * into outbuf which must have a size of 'spec->mdlen' bytes.  */
-static void
-_gcry_sha3_hash_buffer (void *outbuf, const void *buffer, size_t length,
-                        const gcry_md_spec_t *spec)
-{
-  KECCAK_CONTEXT hd;
-
-  spec->init (&hd, 0);
-  keccak_write (&hd, buffer, length);
-  keccak_final (&hd);
-  memcpy (outbuf, keccak_read (&hd), spec->mdlen);
-}
-
-
 /* Variant of the above shortcut function using multiple buffers.  */
 static void
-_gcry_sha3_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt,
-                         const gcry_md_spec_t *spec)
+_gcry_sha3_hash_buffers (void *outbuf, size_t nbytes, const gcry_buffer_t *iov,
+			 int iovcnt, const gcry_md_spec_t *spec)
 {
   KECCAK_CONTEXT hd;
 
@@ -1247,60 +1232,59 @@ _gcry_sha3_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt,
   for (;iovcnt > 0; iov++, iovcnt--)
     keccak_write (&hd, (const char*)iov[0].data + iov[0].off, iov[0].len);
   keccak_final (&hd);
-  memcpy (outbuf, keccak_read (&hd), spec->mdlen);
+  if (spec->mdlen > 0)
+    memcpy (outbuf, keccak_read (&hd), spec->mdlen);
+  else
+    keccak_extract (&hd, outbuf, nbytes);
 }
 
 
 static void
-_gcry_sha3_224_hash_buffer (void *outbuf, const void *buffer, size_t length)
+_gcry_sha3_224_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffer (outbuf, buffer, length, &_gcry_digest_spec_sha3_224);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_sha3_224);
 }
 
 static void
-_gcry_sha3_256_hash_buffer (void *outbuf, const void *buffer, size_t length)
+_gcry_sha3_256_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffer (outbuf, buffer, length, &_gcry_digest_spec_sha3_256);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_sha3_256);
 }
 
 static void
-_gcry_sha3_384_hash_buffer (void *outbuf, const void *buffer, size_t length)
+_gcry_sha3_384_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffer (outbuf, buffer, length, &_gcry_digest_spec_sha3_384);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_sha3_384);
 }
 
 static void
-_gcry_sha3_512_hash_buffer (void *outbuf, const void *buffer, size_t length)
+_gcry_sha3_512_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffer (outbuf, buffer, length, &_gcry_digest_spec_sha3_512);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_sha3_512);
 }
 
 static void
-_gcry_sha3_224_hash_buffers (void *outbuf, const gcry_buffer_t *iov,
-                             int iovcnt)
+_gcry_shake128_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffers (outbuf, iov, iovcnt, &_gcry_digest_spec_sha3_224);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_shake128);
 }
 
 static void
-_gcry_sha3_256_hash_buffers (void *outbuf, const gcry_buffer_t *iov,
-                             int iovcnt)
+_gcry_shake256_hash_buffers (void *outbuf, size_t nbytes,
+			     const gcry_buffer_t *iov, int iovcnt)
 {
-  _gcry_sha3_hash_buffers (outbuf, iov, iovcnt, &_gcry_digest_spec_sha3_256);
-}
-
-static void
-_gcry_sha3_384_hash_buffers (void *outbuf, const gcry_buffer_t *iov,
-                             int iovcnt)
-{
-  _gcry_sha3_hash_buffers (outbuf, iov, iovcnt, &_gcry_digest_spec_sha3_384);
-}
-
-static void
-_gcry_sha3_512_hash_buffers (void *outbuf, const gcry_buffer_t *iov,
-                             int iovcnt)
-{
-  _gcry_sha3_hash_buffers (outbuf, iov, iovcnt, &_gcry_digest_spec_sha3_512);
+  _gcry_sha3_hash_buffers (outbuf, nbytes, iov, iovcnt,
+			   &_gcry_digest_spec_shake256);
 }
 
 
@@ -1472,48 +1456,48 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 
 
 
-static byte sha3_224_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_sha3_224[] =
+static const byte sha3_224_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_sha3_224[] =
   {
     { "2.16.840.1.101.3.4.2.7" },
     /* PKCS#1 sha3_224WithRSAEncryption */
     { "?" },
     { NULL }
   };
-static byte sha3_256_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_sha3_256[] =
+static const byte sha3_256_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_sha3_256[] =
   {
     { "2.16.840.1.101.3.4.2.8" },
     /* PKCS#1 sha3_256WithRSAEncryption */
     { "?" },
     { NULL }
   };
-static byte sha3_384_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_sha3_384[] =
+static const byte sha3_384_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_sha3_384[] =
   {
     { "2.16.840.1.101.3.4.2.9" },
     /* PKCS#1 sha3_384WithRSAEncryption */
     { "?" },
     { NULL }
   };
-static byte sha3_512_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_sha3_512[] =
+static const byte sha3_512_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_sha3_512[] =
   {
     { "2.16.840.1.101.3.4.2.10" },
     /* PKCS#1 sha3_512WithRSAEncryption */
     { "?" },
     { NULL }
   };
-static byte shake128_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_shake128[] =
+static const byte shake128_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_shake128[] =
   {
     { "2.16.840.1.101.3.4.2.11" },
     /* PKCS#1 shake128WithRSAEncryption */
     { "?" },
     { NULL }
   };
-static byte shake256_asn[] = { 0x30 };
-static gcry_md_oid_spec_t oid_spec_shake256[] =
+static const byte shake256_asn[] = { 0x30 };
+static const gcry_md_oid_spec_t oid_spec_shake256[] =
   {
     { "2.16.840.1.101.3.4.2.12" },
     /* PKCS#1 shake256WithRSAEncryption */
@@ -1521,57 +1505,57 @@ static gcry_md_oid_spec_t oid_spec_shake256[] =
     { NULL }
   };
 
-gcry_md_spec_t _gcry_digest_spec_sha3_224 =
+const gcry_md_spec_t _gcry_digest_spec_sha3_224 =
   {
     GCRY_MD_SHA3_224, {0, 1},
     "SHA3-224", sha3_224_asn, DIM (sha3_224_asn), oid_spec_sha3_224, 28,
     sha3_224_init, keccak_write, keccak_final, keccak_read, NULL,
-    _gcry_sha3_224_hash_buffer, _gcry_sha3_224_hash_buffers,
+    _gcry_sha3_224_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };
-gcry_md_spec_t _gcry_digest_spec_sha3_256 =
+const gcry_md_spec_t _gcry_digest_spec_sha3_256 =
   {
     GCRY_MD_SHA3_256, {0, 1},
     "SHA3-256", sha3_256_asn, DIM (sha3_256_asn), oid_spec_sha3_256, 32,
     sha3_256_init, keccak_write, keccak_final, keccak_read, NULL,
-    _gcry_sha3_256_hash_buffer, _gcry_sha3_256_hash_buffers,
+    _gcry_sha3_256_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };
-gcry_md_spec_t _gcry_digest_spec_sha3_384 =
+const gcry_md_spec_t _gcry_digest_spec_sha3_384 =
   {
     GCRY_MD_SHA3_384, {0, 1},
     "SHA3-384", sha3_384_asn, DIM (sha3_384_asn), oid_spec_sha3_384, 48,
     sha3_384_init, keccak_write, keccak_final, keccak_read, NULL,
-    _gcry_sha3_384_hash_buffer, _gcry_sha3_384_hash_buffers,
+    _gcry_sha3_384_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };
-gcry_md_spec_t _gcry_digest_spec_sha3_512 =
+const gcry_md_spec_t _gcry_digest_spec_sha3_512 =
   {
     GCRY_MD_SHA3_512, {0, 1},
     "SHA3-512", sha3_512_asn, DIM (sha3_512_asn), oid_spec_sha3_512, 64,
     sha3_512_init, keccak_write, keccak_final, keccak_read, NULL,
-    _gcry_sha3_512_hash_buffer, _gcry_sha3_512_hash_buffers,
+    _gcry_sha3_512_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };
-gcry_md_spec_t _gcry_digest_spec_shake128 =
+const gcry_md_spec_t _gcry_digest_spec_shake128 =
   {
     GCRY_MD_SHAKE128, {0, 1},
     "SHAKE128", shake128_asn, DIM (shake128_asn), oid_spec_shake128, 0,
     shake128_init, keccak_write, keccak_final, NULL, keccak_extract,
-    NULL, NULL,
+    _gcry_shake128_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };
-gcry_md_spec_t _gcry_digest_spec_shake256 =
+const gcry_md_spec_t _gcry_digest_spec_shake256 =
   {
     GCRY_MD_SHAKE256, {0, 1},
     "SHAKE256", shake256_asn, DIM (shake256_asn), oid_spec_shake256, 0,
     shake256_init, keccak_write, keccak_final, NULL, keccak_extract,
-    NULL, NULL,
+    _gcry_shake256_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };

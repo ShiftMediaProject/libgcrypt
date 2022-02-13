@@ -737,14 +737,16 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
 
 
 /* RFC-3447 (pkcs#1 v2.1) PSS encoding.  Encode {VALUE,VALUELEN} for
-   an NBITS key.  Note that VALUE is already the mHash from the
-   picture below.  ALGO is a valid hash algorithm and SALTLEN is the
-   length of salt to be used.  On success the result is stored as a
-   new MPI at R_RESULT.  On error the value at R_RESULT is undefined.
+   an NBITS key.  ALGO is a valid hash algorithm and SALTLEN is the
+   length of salt to be used.  When HASHED_ALREADY is set, VALUE is
+   already the mHash from the picture below.  Otherwise, VALUE is M.
 
-   If {RANDOM_OVERRIDE, RANDOM_OVERRIDE_LEN} is given it is used as
-   the salt instead of using a random string for the salt.  This
-   feature is only useful for regression tests.
+   On success the result is stored as a new MPI at R_RESULT.  On error
+   the value at R_RESULT is undefined.
+
+   If RANDOM_OVERRIDE is given it is used as the salt instead of using
+   a random string for the salt.  This feature is only useful for
+   regression tests.
 
    Here is figure 2 from the RFC (errata 595 applied) depicting the
    process:
@@ -777,10 +779,13 @@ _gcry_rsa_oaep_decode (unsigned char **r_result, size_t *r_resultlen,
   */
 gpg_err_code_t
 _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
-                      const unsigned char *value, size_t valuelen, int saltlen,
-                      const void *random_override, size_t random_override_len)
+                      int saltlen, int hashed_already,
+                      const unsigned char *value, size_t valuelen,
+                      const void *random_override)
 {
   gcry_err_code_t rc = 0;
+  gcry_md_hd_t hd = NULL;
+  unsigned char *digest;
   size_t hlen;                 /* Length of the hash digest.  */
   unsigned char *em = NULL;    /* Encoded message.  */
   size_t emlen = (nbits+7)/8;  /* Length in bytes of EM.  */
@@ -793,7 +798,12 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
   unsigned char *p;
   size_t n;
 
+
   /* This code is implemented as described by rfc-3447 9.1.1.  */
+
+  rc = _gcry_md_open (&hd, algo, 0);
+  if (rc)
+    return rc;
 
   /* Get the length of the digest.  */
   hlen = _gcry_md_get_algo_dlen (algo);
@@ -811,14 +821,23 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
   salt  = mhash + hlen;
   dbmask= salt + saltlen;
 
-  /* Step 2: That would be: mHash = Hash(M) but our input is already
-     mHash thus we do only a consistency check and copy to MHASH.  */
-  if (valuelen != hlen)
+  /* Step 2: mHash = Hash(M) (or copy input to mHash, if already hashed).   */
+  if (!hashed_already)
     {
-      rc = GPG_ERR_INV_LENGTH;
-      goto leave;
+      _gcry_md_write (hd, value, valuelen);
+      digest = _gcry_md_read (hd, 0);
+      memcpy (mhash, digest, hlen);
+      _gcry_md_reset (hd);
     }
-  memcpy (mhash, value, hlen);
+  else
+    {
+      if (valuelen != hlen)
+        {
+          rc = GPG_ERR_INV_LENGTH;
+          goto leave;
+        }
+      memcpy (mhash, value, hlen);
+    }
 
   /* Step 3: Check length constraints.  */
   if (emlen < hlen + saltlen + 2)
@@ -840,21 +859,17 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
   if (saltlen)
     {
       if (random_override)
-        {
-          if (random_override_len != saltlen)
-            {
-              rc = GPG_ERR_INV_ARG;
-              goto leave;
-            }
-          memcpy (salt, random_override, saltlen);
-        }
+        memcpy (salt, random_override, saltlen);
       else
         _gcry_randomize (salt, saltlen, GCRY_STRONG_RANDOM);
     }
 
   /* Step 5 and 6: M' = Hash(Padding1 || mHash || salt).  */
   memset (buf, 0, 8);  /* Padding.  */
-  _gcry_md_hash_buffer (algo, h, buf, 8 + hlen + saltlen);
+
+  _gcry_md_write (hd, buf, 8 + hlen + saltlen);
+  digest = _gcry_md_read (hd, 0);
+  memcpy (h, digest, hlen);
 
   /* Step 7 and 8: DB = PS || 0x01 || salt.  */
   /* Note that we use EM to store DB and later Xor in-place.  */
@@ -882,6 +897,7 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
     log_mpidump ("PSS encoded data", *r_result);
 
  leave:
+  _gcry_md_close (hd);
   if (em)
     {
       wipememory (em, emlen);
@@ -896,17 +912,21 @@ _gcry_rsa_pss_encode (gcry_mpi_t *r_result, unsigned int nbits, int algo,
 }
 
 
-/* Verify a signature assuming PSS padding.  VALUE is the hash of the
-   message (mHash) encoded as an MPI; its length must match the digest
-   length of ALGO.  ENCODED is the output of the RSA public key
-   function (EM).  NBITS is the size of the public key.  ALGO is the
-   hash algorithm and SALTLEN is the length of the used salt.  The
+/* Verify a signature assuming PSS padding.  When HASHED_ALREADY is
+   set, VALUE is the hash of the message (mHash); its length must
+   match the digest length of ALGO.  Otherwise, its M (before mHash).
+   VALUE is an opaque MPI.  ENCODED is the output of the RSA public
+   key function (EM).  NBITS is the size of the public key.  ALGO is
+   the hash algorithm and SALTLEN is the length of the used salt.  The
    function returns 0 on success or on error code.  */
 gpg_err_code_t
-_gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
+_gcry_rsa_pss_verify (gcry_mpi_t value, int hashed_already,
+                      gcry_mpi_t encoded,
                       unsigned int nbits, int algo, size_t saltlen)
 {
   gcry_err_code_t rc = 0;
+  gcry_md_hd_t hd = NULL;
+  unsigned char *digest;
   size_t hlen;                 /* Length of the hash digest.  */
   unsigned char *em = NULL;    /* Encoded message.  */
   size_t emlen = (nbits+7)/8;  /* Length in bytes of EM.  */
@@ -918,8 +938,13 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   unsigned char *mhash;        /* Points into BUF.  */
   unsigned char *p;
   size_t n;
+  unsigned int input_nbits;
 
   /* This code is implemented as described by rfc-3447 9.1.2.  */
+
+  rc = _gcry_md_open (&hd, algo, 0);
+  if (rc)
+    return rc;
 
   /* Get the length of the digest.  */
   hlen = _gcry_md_get_algo_dlen (algo);
@@ -950,11 +975,23 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   dbmask = buf;
   mhash = buf + buflen - hlen;
 
-  /* Step 2: That would be: mHash = Hash(M) but our input is already
-     mHash thus we only need to convert VALUE into MHASH.  */
-  rc = octet_string_from_mpi (NULL, mhash, value, hlen);
-  if (rc)
-    goto leave;
+  /* Step 2: mHash = Hash(M) (or copy input to mHash, if already hashed).   */
+  p = mpi_get_opaque (value, &input_nbits);
+  if (!p)
+    {
+      rc = GPG_ERR_INV_ARG;
+      goto leave;
+    }
+
+  if (!hashed_already)
+    {
+      _gcry_md_write (hd, p, (input_nbits+7)/8);
+      digest = _gcry_md_read (hd, 0);
+      memcpy (mhash, digest, hlen);
+      _gcry_md_reset (hd);
+    }
+  else
+    memcpy (mhash, p, hlen);
 
   /* Convert the signature into an octet string.  */
   rc = octet_string_from_mpi (&em, NULL, encoded, emlen);
@@ -1018,12 +1055,15 @@ _gcry_rsa_pss_verify (gcry_mpi_t value, gcry_mpi_t encoded,
   memcpy (buf+8+hlen, salt, saltlen);
 
   /* Step 13:  H' = Hash(M').  */
-  _gcry_md_hash_buffer (algo, buf, buf, 8 + hlen + saltlen);
+  _gcry_md_write (hd, buf, 8 + hlen + saltlen);
+  digest = _gcry_md_read (hd, 0);
+  memcpy (buf, digest, hlen);
 
   /* Step 14:  Check H == H'.   */
   rc = memcmp (h, buf, hlen) ? GPG_ERR_BAD_SIGNATURE : GPG_ERR_NO_ERROR;
 
  leave:
+  _gcry_md_close (hd);
   if (em)
     {
       wipememory (em, emlen);

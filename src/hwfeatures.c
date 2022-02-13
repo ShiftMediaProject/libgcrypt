@@ -74,10 +74,12 @@ static struct
     { HWF_PPC_VCRYPTO,         "ppc-vcrypto" },
     { HWF_PPC_ARCH_3_00,       "ppc-arch_3_00" },
     { HWF_PPC_ARCH_2_07,       "ppc-arch_2_07" },
+    { HWF_PPC_ARCH_3_10,       "ppc-arch_3_10" },
 #elif defined(HAVE_CPU_ARCH_S390X)
     { HWF_S390X_MSA,           "s390x-msa" },
     { HWF_S390X_MSA_4,         "s390x-msa-4" },
     { HWF_S390X_MSA_8,         "s390x-msa-8" },
+    { HWF_S390X_MSA_9,         "s390x-msa-9" },
     { HWF_S390X_VX,            "s390x-vx" },
 #endif
   };
@@ -214,9 +216,6 @@ void
 _gcry_detect_hw_features (void)
 {
   hw_features = 0;
-
-  if (fips_mode ())
-    return; /* Hardware support is not to be evaluated.  */
 
   parse_hwf_deny_file ();
 

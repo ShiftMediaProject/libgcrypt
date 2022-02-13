@@ -923,7 +923,7 @@ gcry_mac_get_algo_keylen (int algo)
 
 gcry_error_t
 gcry_mac_open (gcry_mac_hd_t *handle, int algo, unsigned int flags,
-	       gcry_ctx_t ctx)
+               gcry_ctx_t ctx)
 {
   if (!fips_is_operational ())
     {
@@ -1028,11 +1028,31 @@ gcry_pk_sign (gcry_sexp_t *result, gcry_sexp_t data, gcry_sexp_t skey)
 }
 
 gcry_error_t
+gcry_pk_hash_sign (gcry_sexp_t *result, const char *data_tmpl, gcry_sexp_t skey,
+                   gcry_md_hd_t hd, gcry_ctx_t ctx)
+{
+  return gpg_error (_gcry_pk_sign_md (result, data_tmpl, hd, skey, ctx));
+}
+
+gcry_error_t
 gcry_pk_verify (gcry_sexp_t sigval, gcry_sexp_t data, gcry_sexp_t pkey)
 {
   if (!fips_is_operational ())
     return gpg_error (fips_not_operational ());
   return gpg_error (_gcry_pk_verify (sigval, data, pkey));
+}
+
+gcry_error_t
+gcry_pk_hash_verify (gcry_sexp_t sigval, const char *data_tmpl, gcry_sexp_t pkey,
+                     gcry_md_hd_t hd, gcry_ctx_t ctx)
+{
+  return gpg_error (_gcry_pk_verify_md (sigval, data_tmpl, hd, pkey, ctx));
+}
+
+gcry_error_t
+gcry_pk_random_override_new (gcry_ctx_t *r_ctx, const unsigned char *p, size_t len)
+{
+  return gpg_error (_gcry_pk_random_override_new (r_ctx, p, len));
 }
 
 gcry_error_t
@@ -1337,6 +1357,43 @@ gcry_kdf_derive (const void *passphrase, size_t passphraselen,
   return gpg_error (_gcry_kdf_derive (passphrase, passphraselen, algo, hashalgo,
                                       salt, saltlen, iterations,
                                       keysize, keybuffer));
+}
+
+gpg_error_t
+gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
+               const unsigned long *param, unsigned int paramlen,
+               const void *passphrase, size_t passphraselen,
+               const void *salt, size_t saltlen,
+               const void *key, size_t keylen,
+               const void *ad, size_t adlen)
+{
+  if (!fips_is_operational ())
+    return gpg_error (fips_not_operational ());
+  return gpg_error (_gcry_kdf_open (hd, algo, subalgo, param, paramlen,
+                                    passphrase, passphraselen, salt, saltlen,
+                                    key, keylen, ad, adlen));
+}
+
+gcry_error_t
+gcry_kdf_compute (gcry_kdf_hd_t h, const struct gcry_kdf_thread_ops *ops)
+{
+  if (!fips_is_operational ())
+    return gpg_error (fips_not_operational ());
+  return gpg_error (_gcry_kdf_compute (h, ops));
+}
+
+gcry_error_t
+gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result)
+{
+  if (!fips_is_operational ())
+    return gpg_error (fips_not_operational ());
+  return gpg_error (_gcry_kdf_final (h, resultlen, result));
+}
+
+void
+gcry_kdf_close (gcry_kdf_hd_t h)
+{
+  _gcry_kdf_close (h);
 }
 
 void

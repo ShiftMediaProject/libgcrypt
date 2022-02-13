@@ -29,7 +29,7 @@
 
 /* This is the list of the digest implementations included in
    libgcrypt.  */
-static gcry_mac_spec_t * const mac_list[] = {
+static const gcry_mac_spec_t * const mac_list[] = {
 #if USE_SHA1
   &_gcry_mac_type_spec_hmac_sha1,
 #endif
@@ -49,11 +49,11 @@ static gcry_mac_spec_t * const mac_list[] = {
   &_gcry_mac_type_spec_hmac_sha3_384,
   &_gcry_mac_type_spec_hmac_sha3_512,
 #endif
-#ifdef USE_GOST_R_3411_94
+#if USE_GOST_R_3411_94
   &_gcry_mac_type_spec_hmac_gost3411_94,
   &_gcry_mac_type_spec_hmac_gost3411_cp,
 #endif
-#ifdef USE_GOST_R_3411_12
+#if USE_GOST_R_3411_12
   &_gcry_mac_type_spec_hmac_stribog256,
   &_gcry_mac_type_spec_hmac_stribog512,
 #endif
@@ -122,7 +122,7 @@ static gcry_mac_spec_t * const mac_list[] = {
   &_gcry_mac_type_spec_gmac_camellia,
   &_gcry_mac_type_spec_poly1305mac_camellia,
 #endif
-#ifdef USE_IDEA
+#if USE_IDEA
   &_gcry_mac_type_spec_cmac_idea,
 #endif
 #if USE_GOST28147
@@ -137,7 +137,7 @@ static gcry_mac_spec_t * const mac_list[] = {
 };
 
 /* HMAC implementations start with index 101 (enum gcry_mac_algos) */
-static gcry_mac_spec_t * const mac_list_algo101[] =
+static const gcry_mac_spec_t * const mac_list_algo101[] =
   {
 #if USE_SHA256
     &_gcry_mac_type_spec_hmac_sha256,
@@ -183,12 +183,12 @@ static gcry_mac_spec_t * const mac_list_algo101[] =
 #else
     NULL,
 #endif
-#ifdef USE_GOST_R_3411_94
+#if USE_GOST_R_3411_94
     &_gcry_mac_type_spec_hmac_gost3411_94,
 #else
     NULL,
 #endif
-#ifdef USE_GOST_R_3411_12
+#if USE_GOST_R_3411_12
     &_gcry_mac_type_spec_hmac_stribog256,
     &_gcry_mac_type_spec_hmac_stribog512,
 #else
@@ -211,7 +211,7 @@ static gcry_mac_spec_t * const mac_list_algo101[] =
     NULL,
     NULL,
 #endif
-#ifdef USE_GOST_R_3411_94
+#if USE_GOST_R_3411_94
     &_gcry_mac_type_spec_hmac_gost3411_cp,
 #else
     NULL,
@@ -250,7 +250,7 @@ static gcry_mac_spec_t * const mac_list_algo101[] =
   };
 
 /* CMAC implementations start with index 201 (enum gcry_mac_algos) */
-static gcry_mac_spec_t * const mac_list_algo201[] =
+static const gcry_mac_spec_t * const mac_list_algo201[] =
   {
 #if USE_AES
     &_gcry_mac_type_spec_cmac_aes,
@@ -297,7 +297,7 @@ static gcry_mac_spec_t * const mac_list_algo201[] =
 #else
     NULL,
 #endif
-#ifdef USE_IDEA
+#if USE_IDEA
     &_gcry_mac_type_spec_cmac_idea,
 #else
     NULL,
@@ -315,7 +315,7 @@ static gcry_mac_spec_t * const mac_list_algo201[] =
   };
 
 /* GMAC implementations start with index 401 (enum gcry_mac_algos) */
-static gcry_mac_spec_t * const mac_list_algo401[] =
+static const gcry_mac_spec_t * const mac_list_algo401[] =
   {
 #if USE_AES
     &_gcry_mac_type_spec_gmac_aes,
@@ -345,7 +345,7 @@ static gcry_mac_spec_t * const mac_list_algo401[] =
   };
 
 /* Poly1305-MAC implementations start with index 501 (enum gcry_mac_algos) */
-static gcry_mac_spec_t * const mac_list_algo501[] =
+static const gcry_mac_spec_t * const mac_list_algo501[] =
   {
     &_gcry_mac_type_spec_poly1305mac,
 #if USE_AES
@@ -382,27 +382,16 @@ static gcry_mac_spec_t * const mac_list_algo501[] =
 gcry_err_code_t
 _gcry_mac_init (void)
 {
-  if (fips_mode())
-    {
-      /* disable algorithms that are disallowed in fips */
-      int idx;
-      gcry_mac_spec_t *spec;
-
-      for (idx = 0; (spec = mac_list[idx]); idx++)
-        if (!spec->flags.fips)
-          spec->flags.disabled = 1;
-    }
-
   return 0;
 }
 
 
 /* Return the spec structure for the MAC algorithm ALGO.  For an
    unknown algorithm NULL is returned.  */
-static gcry_mac_spec_t *
+static const gcry_mac_spec_t *
 spec_from_algo (int algo)
 {
-  gcry_mac_spec_t *spec = NULL;
+  const gcry_mac_spec_t *spec = NULL;
 
   if (algo >= 101 && algo < 101 + DIM(mac_list_algo101))
     spec = mac_list_algo101[algo - 101];
@@ -412,7 +401,7 @@ spec_from_algo (int algo)
     spec = mac_list_algo401[algo - 401];
   else if (algo >= 501 && algo < 501 + DIM(mac_list_algo501))
     spec = mac_list_algo501[algo - 501];
-#ifdef USE_GOST28147
+#if USE_GOST28147
   else if (algo == GCRY_MAC_GOST28147_IMIT)
     spec = &_gcry_mac_type_spec_gost28147_imit;
 #endif
@@ -425,10 +414,10 @@ spec_from_algo (int algo)
 
 
 /* Lookup a mac's spec by its name.  */
-static gcry_mac_spec_t *
+static const gcry_mac_spec_t *
 spec_from_name (const char *name)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
   int idx;
 
   for (idx = 0; (spec = mac_list[idx]); idx++)
@@ -445,7 +434,7 @@ spec_from_name (const char *name)
 int
 _gcry_mac_map_name (const char *string)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   if (!string)
     return 0;
@@ -468,7 +457,7 @@ _gcry_mac_map_name (const char *string)
 const char *
 _gcry_mac_algo_name (int algorithm)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   spec = spec_from_algo (algorithm);
   return spec ? spec->name : "?";
@@ -478,10 +467,10 @@ _gcry_mac_algo_name (int algorithm)
 static gcry_err_code_t
 check_mac_algo (int algorithm)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   spec = spec_from_algo (algorithm);
-  if (spec && !spec->flags.disabled)
+  if (spec && !spec->flags.disabled && (spec->flags.fips || !fips_mode ()))
     return 0;
 
   return GPG_ERR_MAC_ALGO;
@@ -494,7 +483,7 @@ check_mac_algo (int algorithm)
 static gcry_err_code_t
 mac_open (gcry_mac_hd_t * hd, int algo, int secure, gcry_ctx_t ctx)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
   gcry_err_code_t err;
   gcry_mac_hd_t h;
 
@@ -502,6 +491,8 @@ mac_open (gcry_mac_hd_t * hd, int algo, int secure, gcry_ctx_t ctx)
   if (!spec)
     return GPG_ERR_MAC_ALGO;
   else if (spec->flags.disabled)
+    return GPG_ERR_MAC_ALGO;
+  else if (!spec->flags.fips && fips_mode ())
     return GPG_ERR_MAC_ALGO;
   else if (!spec->ops)
     return GPG_ERR_MAC_ALGO;
@@ -683,7 +674,7 @@ _gcry_mac_get_algo (gcry_mac_hd_t hd)
 unsigned int
 _gcry_mac_get_algo_maclen (int algo)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   spec = spec_from_algo (algo);
   if (!spec || !spec->ops || !spec->ops->get_maclen)
@@ -696,7 +687,7 @@ _gcry_mac_get_algo_maclen (int algo)
 unsigned int
 _gcry_mac_get_algo_keylen (int algo)
 {
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   spec = spec_from_algo (algo);
   if (!spec || !spec->ops || !spec->ops->get_keylen)
@@ -788,17 +779,20 @@ gpg_error_t
 _gcry_mac_selftest (int algo, int extended, selftest_report_func_t report)
 {
   gcry_err_code_t ec;
-  gcry_mac_spec_t *spec;
+  const gcry_mac_spec_t *spec;
 
   spec = spec_from_algo (algo);
-  if (spec && !spec->flags.disabled && spec->ops && spec->ops->selftest)
+  if (spec && !spec->flags.disabled
+      && (spec->flags.fips || !fips_mode ())
+      && spec->ops && spec->ops->selftest)
     ec = spec->ops->selftest (algo, extended, report);
   else
     {
       ec = GPG_ERR_MAC_ALGO;
       if (report)
         report ("mac", algo, "module",
-                spec && !spec->flags.disabled?
+                spec && !spec->flags.disabled
+                && (spec->flags.fips || !fips_mode ())?
                 "no selftest available" :
                 spec? "algorithm disabled" :
                 "algorithm not found");

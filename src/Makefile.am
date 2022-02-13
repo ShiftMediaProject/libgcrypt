@@ -33,10 +33,10 @@ nodist_include_HEADERS = gcrypt.h
 
 lib_LTLIBRARIES = libgcrypt.la
 bin_PROGRAMS = dumpsexp hmac256 mpicalc
-if USE_RANDOM_DAEMON
+if ENABLE_RANDOM_DAEMON
 sbin_PROGRAMS = gcryptrnd
 bin_PROGRAMS += getrandom
-endif USE_RANDOM_DAEMON
+endif ENABLE_RANDOM_DAEMON
 
 # Depending on the architecture some targets require libgpg-error.
 if HAVE_W32CE_SYSTEM
@@ -56,14 +56,14 @@ else
   libgcrypt_version_script_cmd =
 endif
 
-libgcrypt_la_CFLAGS = $(GPG_ERROR_CFLAGS)
+libgcrypt_la_CFLAGS = $(GPG_ERROR_CFLAGS) @DEF_HMAC_BINARY_CHECK@
 libgcrypt_la_SOURCES = \
         gcrypt-int.h g10lib.h visibility.c visibility.h types.h \
 	gcrypt-testapi.h cipher.h cipher-proto.h \
 	misc.c global.c sexp.c hwfeatures.c hwf-common.h \
 	stdmem.c stdmem.h secmem.c secmem.h \
 	mpi.h missing-string.c fips.c \
-	hmac256.c hmac256.h context.c context.h \
+	context.c context.h \
 	ec-context.h
 
 EXTRA_libgcrypt_la_SOURCES = hwf-x86.c hwf-arm.c hwf-ppc.c hwf-s390x.c
@@ -135,28 +135,38 @@ dumpsexp_LDADD = $(arch_gpg_error_libs)
 mpicalc_SOURCES = mpicalc.c
 mpicalc_CFLAGS = $(GPG_ERROR_CFLAGS)
 mpicalc_LDADD = libgcrypt.la $(GPG_ERROR_LIBS)
+EXTRA_mpicalc_DEPENDENCIES = libgcrypt.la.done
 
-hmac256_SOURCES = hmac256.c
-hmac256_CFLAGS = -DSTANDALONE $(arch_gpg_error_cflags)
+hmac256_SOURCES = hmac256.c hmac256.h
+hmac256_CFLAGS = -DSTANDALONE @DEF_HMAC_BINARY_CHECK@ \
+	$(arch_gpg_error_cflags)
 hmac256_LDADD = $(arch_gpg_error_libs)
 
-if USE_RANDOM_DAEMON
+if ENABLE_RANDOM_DAEMON
 gcryptrnd_SOURCES = gcryptrnd.c
 gcryptrnd_CFLAGS = $(GPG_ERROR_CFLAGS) $(PTH_CFLAGS)
 gcryptrnd_LDADD = libgcrypt.la $(GPG_ERROR_LIBS) $(PTH_LIBS)
 
 getrandom_SOURCES = getrandom.c
-endif USE_RANDOM_DAEMON
+endif ENABLE_RANDOM_DAEMON
 
+CLEANFILES = libgcrypt.la.done
+if USE_HMAC_BINARY_CHECK
+CLEANFILES += libgcrypt.so.hmac
+
+libgcrypt.la.done: libgcrypt.so.hmac
+	$(OBJCOPY) --update-section .rodata1=libgcrypt.so.hmac \
+	  .libs/libgcrypt.so .libs/libgcrypt.so.new
+	mv -f .libs/libgcrypt.so.new .libs/libgcrypt.so.*.*
+	@touch libgcrypt.la.done
+
+libgcrypt.so.hmac: hmac256 libgcrypt.la
+	./hmac256 --stdkey --binary  < .libs/libgcrypt.so > $@
+else !USE_HMAC_BINARY_CHECK
+libgcrypt.la.done: libgcrypt.la
+	@touch libgcrypt.la.done
+endif !USE_HMAC_BINARY_CHECK
 
 install-data-local: install-def-file
 
 uninstall-local: uninstall-def-file
-
-# FIXME: We need to figure out how to get the actual name (parsing
-# libgcrypt.la?) and how to create the hmac file already at link time
-# so that it can be used without installing libgcrypt first.
-#install-exec-hook:
-#	./hmac256 "What am I, a doctor or a moonshuttle conductor?" \
-#          < $(DESTDIR)$(libdir)/libgcrypt.so.11.5.0 \
-#          > $(DESTDIR)$(libdir)/.libgcrypt.so.11.5.0.hmac

@@ -46,6 +46,9 @@
  */
 
 #ifdef STANDALONE
+# ifndef KEY_FOR_BINARY_CHECK
+# define KEY_FOR_BINARY_CHECK "What am I, a doctor or a moonshuttle conductor?"
+# endif
 #include <stdint.h>
 #define HAVE_TYPE_U32 1
 typedef uint32_t u32;
@@ -70,6 +73,7 @@ typedef uint32_t u32;
 #ifdef STANDALONE
 #define xtrymalloc(a) malloc((a))
 #define gpg_err_set_errno(a) (errno = (a))
+#define xfree(a) free((a))
 #else
 #include "g10lib.h"
 #endif
@@ -341,7 +345,7 @@ _gcry_hmac256_new (const void *key, size_t keylen)
           tmphd = _gcry_hmac256_new (NULL, 0);
           if (!tmphd)
             {
-              free (hd);
+              xfree (hd);
               return NULL;
             }
           _gcry_hmac256_update (tmphd, key, keylen);
@@ -373,7 +377,7 @@ _gcry_hmac256_release (hmac256_context_t ctx)
       /* Note: We need to take care not to modify errno.  */
       if (ctx->use_hmac)
         my_wipememory (ctx->opad, 64);
-      free (ctx);
+      xfree (ctx);
     }
 }
 
@@ -489,7 +493,7 @@ _gcry_hmac256_file (void *result, size_t resultsize, const char *filename,
   while ( (nread = fread (buffer, 1, buffer_size, fp)))
     _gcry_hmac256_update (hd, buffer, nread);
 
-  free (buffer);
+  xfree (buffer);
 
   if (ferror (fp))
     {
@@ -706,9 +710,9 @@ main (int argc, char **argv)
         }
     }
 
-  if (argc < 1)
+  if (argc < 1 && !use_stdkey)
     {
-      fprintf (stderr, "usage: %s [--binary] [--stdkey] key [filename]\n", pgm);
+      fprintf (stderr, "usage: %s [--binary] [--stdkey|key] [filename]\n", pgm);
       exit (1);
     }
 
@@ -717,8 +721,13 @@ main (int argc, char **argv)
     setmode (fileno (stdout), O_BINARY);
 #endif
 
-  key = use_stdkey? "What am I, a doctor or a moonshuttle conductor?" : *argv;
-  argc--, argv++;
+  if (use_stdkey)
+    key = KEY_FOR_BINARY_CHECK;
+  else
+    {
+      key = *argv;
+      argc--, argv++;
+    }
   keylen = strlen (key);
   use_stdin = !argc;
 

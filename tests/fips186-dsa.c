@@ -34,6 +34,7 @@
 #define PGM "fips186-dsa"
 #include "t-common.h"
 
+static int in_fips_mode;
 
 static void
 show_sexp (const char *prefix, gcry_sexp_t a)
@@ -352,7 +353,13 @@ check_dsa_gen_186_2 (void)
       gcry_sexp_release (key_spec);
       if (err)
         {
-          fail ("error generating key %d: %s\n", tno, gpg_strerror (err));
+          if (in_fips_mode)
+            {
+              if (verbose > 1)
+                fprintf (stderr, "DSA keys are not available in FIPS mode");
+            }
+          else
+            fail ("error generating key %d: %s\n", tno, gpg_strerror (err));
           continue;
         }
 
@@ -506,7 +513,13 @@ check_dsa_gen_186_3 (void)
       gcry_sexp_release (key_spec);
       if (err)
         {
-          fail ("error generating key %d: %s\n", tno, gpg_strerror (err));
+          if (in_fips_mode)
+            {
+              if (verbose > 1)
+                fprintf (stderr, "DSA keys are not available in FIPS mode");
+            }
+          else
+            fail ("error generating key %d: %s\n", tno, gpg_strerror (err));
           continue;
         }
 
@@ -563,6 +576,9 @@ main (int argc, char **argv)
   /* No valuable keys are create, so we can speed up our RNG. */
   xgcry_control ((GCRYCTL_ENABLE_QUICK_RANDOM, 0));
 
+
+  if (gcry_fips_mode_active ())
+    in_fips_mode = 1;
 
   check_dsa_gen_186_2 ();
   check_dsa_gen_186_3 ();

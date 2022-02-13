@@ -35,7 +35,9 @@
 
 static int sign_with_pk;
 static int no_verify;
+static int no_fips;
 static int custom_data_file;
+static int in_fips_mode;
 
 
 static void
@@ -271,7 +273,17 @@ one_test (int testno, const char *sk, const char *pk,
       goto leave;
     }
 
-  if ((err = gcry_pk_sign (&s_sig, s_msg, s_sk)))
+  err = gcry_pk_sign (&s_sig, s_msg, s_sk);
+  if (in_fips_mode)
+    {
+      if (!err)
+        fail ("gcry_pk_sign is not expected to work in FIPS mode for test %d",
+              testno);
+      if (verbose > 1)
+        info ("not executed in FIPS mode\n");
+      goto leave;
+    }
+  if (err)
     fail ("gcry_pk_sign failed for test %d: %s", testno, gpg_strerror (err));
   if (debug)
     show_sexp ("sig=", s_sig);
@@ -463,6 +475,11 @@ main (int argc, char **argv)
               argc--; argv++;
             }
         }
+      else if (!strcmp (*argv, "--no-fips"))
+        {
+          no_fips = 1;
+          argc--; argv++;
+        }
       else if (!strncmp (*argv, "--", 2))
         die ("unknown option '%s'", *argv);
 
@@ -478,12 +495,16 @@ main (int argc, char **argv)
     die ("version mismatch\n");
   if (debug)
     xgcry_control ((GCRYCTL_SET_DEBUG_FLAGS, 1u , 0));
+  if (no_fips)
+    {
+      xgcry_control ((GCRYCTL_NO_FIPS_MODE, 0));
+      xgcry_control ((GCRYCTL_FIPS_MODE_P, 0));
+    }
   xgcry_control ((GCRYCTL_ENABLE_QUICK_RANDOM, 0));
   xgcry_control ((GCRYCTL_INITIALIZATION_FINISHED, 0));
 
-  /* Ed25519 isn't supported in fips mode */
-  if (gcry_fips_mode_active())
-    return 77;
+  if (gcry_fips_mode_active ())
+    in_fips_mode = 1;
 
   start_timer ();
   check_ed25519 (fname);

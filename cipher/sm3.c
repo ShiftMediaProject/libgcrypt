@@ -47,10 +47,75 @@
 #include "hash-common.h"
 
 
+/* USE_AVX_BMI2 indicates whether to compile with Intel AVX/BMI2 code. */
+#undef USE_AVX_BMI2
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_AVX) && \
+    defined(HAVE_GCC_INLINE_ASM_BMI2) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_AVX_BMI2 1
+#endif
+
+/* USE_AARCH64_SIMD indicates whether to enable ARMv8 SIMD assembly
+ * code. */
+#undef USE_AARCH64_SIMD
+#ifdef ENABLE_NEON_SUPPORT
+# if defined(__AARCH64EL__) \
+       && defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) \
+       && defined(HAVE_GCC_INLINE_ASM_AARCH64_NEON)
+#  define USE_AARCH64_SIMD 1
+# endif
+#endif
+
+
 typedef struct {
   gcry_md_block_ctx_t bctx;
-  u32  h0,h1,h2,h3,h4,h5,h6,h7;
+  u32 h[8];
 } SM3_CONTEXT;
+
+
+/* AMD64 assembly implementations use SystemV ABI, ABI conversion and additional
+ * stack to store XMM6-XMM15 needed on Win64. */
+#undef ASM_FUNC_ABI
+#undef ASM_EXTRA_STACK
+#if defined(USE_AVX_BMI2)
+# ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+#  define ASM_FUNC_ABI __attribute__((sysv_abi))
+#  define ASM_EXTRA_STACK (10 * 16 + 4 * sizeof(void *))
+# else
+#  define ASM_FUNC_ABI
+#  define ASM_EXTRA_STACK 0
+# endif
+#endif
+
+
+#ifdef USE_AVX_BMI2
+unsigned int _gcry_sm3_transform_amd64_avx_bmi2(void *state,
+                                                const void *input_data,
+                                                size_t num_blks) ASM_FUNC_ABI;
+
+static unsigned int
+do_sm3_transform_amd64_avx_bmi2(void *context, const unsigned char *data,
+                                size_t nblks)
+{
+  SM3_CONTEXT *hd = context;
+  unsigned int nburn = _gcry_sm3_transform_amd64_avx_bmi2 (hd->h, data, nblks);
+  nburn += nburn ? ASM_EXTRA_STACK : 0;
+  return nburn;
+}
+#endif /* USE_AVX_BMI2 */
+
+#ifdef USE_AARCH64_SIMD
+unsigned int _gcry_sm3_transform_aarch64(void *state, const void *input_data,
+                                         size_t num_blks);
+
+static unsigned int
+do_sm3_transform_aarch64(void *context, const unsigned char *data, size_t nblks)
+{
+  SM3_CONTEXT *hd = context;
+  return _gcry_sm3_transform_aarch64 (hd->h, data, nblks);
+}
+#endif /* USE_AARCH64_SIMD */
 
 
 static unsigned int
@@ -65,20 +130,29 @@ sm3_init (void *context, unsigned int flags)
 
   (void)flags;
 
-  hd->h0 = 0x7380166f;
-  hd->h1 = 0x4914b2b9;
-  hd->h2 = 0x172442d7;
-  hd->h3 = 0xda8a0600;
-  hd->h4 = 0xa96f30bc;
-  hd->h5 = 0x163138aa;
-  hd->h6 = 0xe38dee4d;
-  hd->h7 = 0xb0fb0e4e;
+  hd->h[0] = 0x7380166f;
+  hd->h[1] = 0x4914b2b9;
+  hd->h[2] = 0x172442d7;
+  hd->h[3] = 0xda8a0600;
+  hd->h[4] = 0xa96f30bc;
+  hd->h[5] = 0x163138aa;
+  hd->h[6] = 0xe38dee4d;
+  hd->h[7] = 0xb0fb0e4e;
 
   hd->bctx.nblocks = 0;
   hd->bctx.nblocks_high = 0;
   hd->bctx.count = 0;
   hd->bctx.blocksize_shift = _gcry_ctz(64);
   hd->bctx.bwrite = transform;
+
+#ifdef USE_AVX_BMI2
+  if ((features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2))
+    hd->bctx.bwrite = do_sm3_transform_amd64_avx_bmi2;
+#endif
+#ifdef USE_AARCH64_SIMD
+  if (features & HWF_ARM_NEON)
+    hd->bctx.bwrite = do_sm3_transform_aarch64;
+#endif
 
   (void)features;
 }
@@ -146,14 +220,14 @@ transform_blk (void *ctx, const unsigned char *data)
   u32 a,b,c,d,e,f,g,h,ss1,ss2;
   u32 w[16];
 
-  a = hd->h0;
-  b = hd->h1;
-  c = hd->h2;
-  d = hd->h3;
-  e = hd->h4;
-  f = hd->h5;
-  g = hd->h6;
-  h = hd->h7;
+  a = hd->h[0];
+  b = hd->h[1];
+  c = hd->h[2];
+  d = hd->h[3];
+  e = hd->h[4];
+  f = hd->h[5];
+  g = hd->h[6];
+  h = hd->h[7];
 
   R1(a, b, c, d, e, f, g, h, K[0], I(0), I(4));
   R1(d, a, b, c, h, e, f, g, K[1], I(1), I(5));
@@ -223,14 +297,14 @@ transform_blk (void *ctx, const unsigned char *data)
   R2(c, d, a, b, g, h, e, f, K[62], W1(62), W2(66));
   R2(b, c, d, a, f, g, h, e, K[63], W1(63), W2(67));
 
-  hd->h0 ^= a;
-  hd->h1 ^= b;
-  hd->h2 ^= c;
-  hd->h3 ^= d;
-  hd->h4 ^= e;
-  hd->h5 ^= f;
-  hd->h6 ^= g;
-  hd->h7 ^= h;
+  hd->h[0] ^= a;
+  hd->h[1] ^= b;
+  hd->h[2] ^= c;
+  hd->h[3] ^= d;
+  hd->h[4] ^= e;
+  hd->h[5] ^= f;
+  hd->h[6] ^= g;
+  hd->h[7] ^= h;
 
   return /*burn_stack*/ 26*4+32;
 }
@@ -313,7 +387,7 @@ sm3_final(void *context)
     }
 
   p = hd->bctx.buf;
-#define X(a) do { buf_put_be32(p, hd->h##a); p += 4; } while(0)
+#define X(a) do { buf_put_be32(p, hd->h[a]); p += 4; } while(0)
   X(0);
   X(1);
   X(2);
@@ -338,25 +412,15 @@ sm3_read (void *context)
 }
 
 
-/* Shortcut functions which puts the hash value of the supplied buffer
+/* Shortcut functions which puts the hash value of the supplied buffer iov
  * into outbuf which must have a size of 32 bytes.  */
-void
-_gcry_sm3_hash_buffer (void *outbuf, const void *buffer, size_t length)
+static void
+_gcry_sm3_hash_buffers (void *outbuf, size_t nbytes,
+			const gcry_buffer_t *iov, int iovcnt)
 {
   SM3_CONTEXT hd;
 
-  sm3_init (&hd, 0);
-  _gcry_md_block_write (&hd, buffer, length);
-  sm3_final (&hd);
-  memcpy (outbuf, hd.bctx.buf, 32);
-}
-
-
-/* Variant of the above shortcut function using multiple buffers.  */
-void
-_gcry_sm3_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt)
-{
-  SM3_CONTEXT hd;
+  (void)nbytes;
 
   sm3_init (&hd, 0);
   for (;iovcnt > 0; iov++, iovcnt--)
@@ -449,12 +513,12 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
   return ec;
 }
 
-static byte asn_sm3[] = /* Object ID is 1.2.156.10197.401 */
+static const byte asn_sm3[] = /* Object ID is 1.2.156.10197.401 */
   { 0x30, 0x2F, 0x30, 0x0B, 0x06, 0x07, 0x2A, 0x81,
     0x1C, 0xCF, 0x55, 0x83, 0x11, 0x05, 0x00, 0x04,
     0x20 };
 
-static gcry_md_oid_spec_t oid_spec_sm3[] =
+static const gcry_md_oid_spec_t oid_spec_sm3[] =
   {
     /* China Electronics Standardization Instutute,
        OID White paper (2015), Table 6 */
@@ -462,12 +526,12 @@ static gcry_md_oid_spec_t oid_spec_sm3[] =
     { NULL },
   };
 
-gcry_md_spec_t _gcry_digest_spec_sm3 =
+const gcry_md_spec_t _gcry_digest_spec_sm3 =
   {
     GCRY_MD_SM3, {0, 0},
     "SM3", asn_sm3, DIM (asn_sm3), oid_spec_sm3, 32,
     sm3_init, _gcry_md_block_write, sm3_final, sm3_read, NULL,
-    _gcry_sm3_hash_buffer, _gcry_sm3_hash_buffers,
+    _gcry_sm3_hash_buffers,
     sizeof (SM3_CONTEXT),
     run_selftests
   };

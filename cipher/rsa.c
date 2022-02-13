@@ -220,14 +220,6 @@ generate_std (RSA_secret_key *sk, unsigned int nbits, unsigned long use_e,
   gcry_mpi_t f;
   gcry_random_level_t random_level;
 
-  if (fips_mode ())
-    {
-      if (nbits < 1024)
-        return GPG_ERR_INV_VALUE;
-      if (transient_key)
-        return GPG_ERR_INV_VALUE;
-    }
-
   /* The random quality depends on the transient_key flag.  */
   random_level = transient_key ? GCRY_STRONG_RANDOM : GCRY_VERY_STRONG_RANDOM;
 
@@ -356,6 +348,17 @@ generate_std (RSA_secret_key *sk, unsigned int nbits, unsigned long use_e,
 }
 
 
+/* Check the RSA key length is acceptable for key generation or usage */
+static gpg_err_code_t
+rsa_check_keysize (unsigned int nbits)
+{
+  if (fips_mode() && nbits < 2048)
+    return GPG_ERR_INV_VALUE;
+
+  return GPG_ERR_NO_ERROR;
+}
+
+
 /****************
  * Generate a key pair with a key of size NBITS.
  * USE_E = 0 let Libcgrypt decide what exponent to use.
@@ -385,12 +388,16 @@ generate_fips (RSA_secret_key *sk, unsigned int nbits, unsigned long use_e,
   unsigned int pbits = nbits/2;
   unsigned int i;
   int pqswitch;
-  gpg_err_code_t ec = GPG_ERR_NO_PRIME;
+  gpg_err_code_t ec;
 
-  if (nbits < 1024 || (nbits & 0x1FF))
+  if (nbits <= 1024 || (nbits & 0x1FF))
     return GPG_ERR_INV_VALUE;
-  if (_gcry_enforced_fips_mode() && nbits != 2048 && nbits != 3072)
-      return GPG_ERR_INV_VALUE;
+  ec = rsa_check_keysize (nbits);
+  if (ec)
+    return ec;
+
+  /* Set default error code.  */
+  ec = GPG_ERR_NO_PRIME;
 
   /* The random quality depends on the transient_key flag.  */
   random_level = transient_key ? GCRY_STRONG_RANDOM : GCRY_VERY_STRONG_RANDOM;
@@ -588,7 +595,7 @@ generate_fips (RSA_secret_key *sk, unsigned int nbits, unsigned long use_e,
       mpi_invm (u, p, q );
     }
 
-  ec = 0;
+  ec = 0; /* Success.  */
 
   if (DBG_CIPHER)
     {
@@ -696,7 +703,9 @@ generate_x931 (RSA_secret_key *sk, unsigned int nbits, unsigned long e_value,
 
   *swapped = 0;
 
-  if (e_value == 1)   /* Alias for a secure value. */
+  if (e_value == 0)        /* 65537 is the libgcrypt's selection. */
+    e_value = 65537;
+  else if (e_value == 1)   /* Alias for a secure value. */
     e_value = 65537;
 
   /* Point 1 of section 4.1:  k = 1024 + 256s with S >= 0  */
@@ -1282,9 +1291,13 @@ rsa_encrypt (gcry_sexp_t *r_ciph, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   gcry_mpi_t data = NULL;
   RSA_public_key pk = {NULL, NULL};
   gcry_mpi_t ciph = NULL;
+  unsigned int nbits = rsa_get_nbits (keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_ENCRYPT,
-                                   rsa_get_nbits (keyparms));
+  rc = rsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_ENCRYPT, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_data_to_mpi (s_data, &data, &ctx);
@@ -1354,9 +1367,13 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   gcry_mpi_t plain = NULL;
   unsigned char *unpad = NULL;
   size_t unpadlen = 0;
+  unsigned int nbits = rsa_get_nbits (keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_DECRYPT,
-                                   rsa_get_nbits (keyparms));
+  rc = rsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_DECRYPT, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_preparse_encval (s_data, rsa_names, &l1, &ctx);
@@ -1399,7 +1416,7 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   mpi_fdiv_r (data, data, sk.n);
 
   /* Allocate MPI for the plaintext.  */
-  plain = mpi_snew (ctx.nbits);
+  plain = mpi_snew (nbits);
 
   /* We use blinding by default to mitigate timing attacks which can
      be practically mounted over the network as shown by Brumley and
@@ -1407,7 +1424,7 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   if ((ctx.flags & PUBKEY_FLAG_NO_BLINDING))
     secret (plain, data, &sk);
   else
-    secret_blinded (plain, data, &sk, ctx.nbits);
+    secret_blinded (plain, data, &sk, nbits);
 
   if (DBG_CIPHER)
     log_printmpi ("rsa_decrypt  res", plain);
@@ -1416,7 +1433,7 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   switch (ctx.encoding)
     {
     case PUBKEY_ENC_PKCS1:
-      rc = _gcry_rsa_pkcs1_decode_for_enc (&unpad, &unpadlen, ctx.nbits, plain);
+      rc = _gcry_rsa_pkcs1_decode_for_enc (&unpad, &unpadlen, nbits, plain);
       mpi_free (plain);
       plain = NULL;
       if (!rc)
@@ -1425,7 +1442,7 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
 
     case PUBKEY_ENC_OAEP:
       rc = _gcry_rsa_oaep_decode (&unpad, &unpadlen,
-                                  ctx.nbits, ctx.hash_algo,
+                                  nbits, ctx.hash_algo,
                                   plain, ctx.label, ctx.labellen);
       mpi_free (plain);
       plain = NULL;
@@ -1470,9 +1487,13 @@ rsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   RSA_public_key pk;
   gcry_mpi_t sig = NULL;
   gcry_mpi_t result = NULL;
+  unsigned int nbits = rsa_get_nbits (keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_SIGN,
-                                   rsa_get_nbits (keyparms));
+  rc = rsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_SIGN, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_data_to_mpi (s_data, &data, &ctx);
@@ -1510,7 +1531,7 @@ rsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   if ((ctx.flags & PUBKEY_FLAG_NO_BLINDING))
     secret (sig, data, &sk);
   else
-    secret_blinded (sig, data, &sk, ctx.nbits);
+    secret_blinded (sig, data, &sk, nbits);
   if (DBG_CIPHER)
     log_printmpi ("rsa_sign    res", sig);
 
@@ -1572,9 +1593,13 @@ rsa_verify (gcry_sexp_t s_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   gcry_mpi_t data = NULL;
   RSA_public_key pk = { NULL, NULL };
   gcry_mpi_t result = NULL;
+  unsigned int nbits = rsa_get_nbits (keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY,
-                                   rsa_get_nbits (keyparms));
+  rc = rsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_data_to_mpi (s_data, &data, &ctx);
@@ -1582,7 +1607,7 @@ rsa_verify (gcry_sexp_t s_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
     goto leave;
   if (DBG_CIPHER)
     log_printmpi ("rsa_verify data", data);
-  if (mpi_is_opaque (data))
+  if (ctx.encoding != PUBKEY_ENC_PSS && mpi_is_opaque (data))
     {
       rc = GPG_ERR_INV_DATA;
       goto leave;
@@ -1884,7 +1909,7 @@ selftest_encr_2048 (gcry_sexp_t pkey, gcry_sexp_t skey)
   ciphertext = extract_a_from_sexp (encr);
   if (!ciphertext)
     {
-      errtxt = "gcry_pk_decrypt returned garbage";
+      errtxt = "gcry_pk_encrypt returned garbage";
       goto leave;
     }
 

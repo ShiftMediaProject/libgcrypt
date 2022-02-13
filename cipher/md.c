@@ -31,7 +31,7 @@
 
 /* This is the list of the digest implementations included in
    libgcrypt.  */
-static gcry_md_spec_t * const digest_list[] =
+static const gcry_md_spec_t * const digest_list[] =
   {
 #if USE_CRC
      &_gcry_digest_spec_crc32,
@@ -104,7 +104,7 @@ static gcry_md_spec_t * const digest_list[] =
   };
 
 /* Digest implementations starting with index 0 (enum gcry_md_algos) */
-static gcry_md_spec_t * const digest_list_algo0[] =
+static const gcry_md_spec_t * const digest_list_algo0[] =
   {
     NULL, /* GCRY_MD_NONE */
 #if USE_MD5
@@ -154,7 +154,7 @@ static gcry_md_spec_t * const digest_list_algo0[] =
   };
 
 /* Digest implementations starting with index 301 (enum gcry_md_algos) */
-static gcry_md_spec_t * const digest_list_algo301[] =
+static const gcry_md_spec_t * const digest_list_algo301[] =
   {
 #if USE_MD4
     &_gcry_digest_spec_md4,
@@ -250,7 +250,7 @@ static gcry_md_spec_t * const digest_list_algo301[] =
 
 typedef struct gcry_md_list
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   struct gcry_md_list *next;
   size_t actual_struct_size;     /* Allocated size of this structure. */
   PROPERLY_ALIGNED_TYPE context[1];
@@ -261,14 +261,14 @@ typedef struct gcry_md_list
 struct gcry_md_context
 {
   int  magic;
-  size_t actual_handle_size;     /* Allocated size of this handle. */
-  FILE  *debug;
   struct {
     unsigned int secure:1;
     unsigned int finalized:1;
     unsigned int bugemu1:1;
     unsigned int hmac:1;
   } flags;
+  size_t actual_handle_size;     /* Allocated size of this handle. */
+  FILE  *debug;
   GcryDigestEntry *list;
 };
 
@@ -296,10 +296,10 @@ map_algo (int algo)
 
 /* Return the spec structure for the hash algorithm ALGO.  For an
    unknown algorithm NULL is returned.  */
-static gcry_md_spec_t *
+static const gcry_md_spec_t *
 spec_from_algo (int algo)
 {
-  gcry_md_spec_t *spec = NULL;
+  const gcry_md_spec_t *spec = NULL;
 
   algo = map_algo (algo);
 
@@ -316,10 +316,10 @@ spec_from_algo (int algo)
 
 
 /* Lookup a hash's spec by its name.  */
-static gcry_md_spec_t *
+static const gcry_md_spec_t *
 spec_from_name (const char *name)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   int idx;
 
   for (idx=0; (spec = digest_list[idx]); idx++)
@@ -333,11 +333,11 @@ spec_from_name (const char *name)
 
 
 /* Lookup a hash's spec by its OID.  */
-static gcry_md_spec_t *
+static const gcry_md_spec_t *
 spec_from_oid (const char *oid)
 {
-  gcry_md_spec_t *spec;
-  gcry_md_oid_spec_t *oid_specs;
+  const gcry_md_spec_t *spec;
+  const gcry_md_oid_spec_t *oid_specs;
   int idx, j;
 
   for (idx=0; (spec = digest_list[idx]); idx++)
@@ -355,10 +355,10 @@ spec_from_oid (const char *oid)
 }
 
 
-static gcry_md_spec_t *
+static const gcry_md_spec_t *
 search_oid (const char *oid, gcry_md_oid_spec_t *oid_spec)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   int i;
 
   if (!oid)
@@ -389,7 +389,7 @@ search_oid (const char *oid, gcry_md_oid_spec_t *oid_spec)
 int
 _gcry_md_map_name (const char *string)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   if (!string)
     return 0;
@@ -419,7 +419,7 @@ _gcry_md_map_name (const char *string)
 const char *
 _gcry_md_algo_name (int algorithm)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   spec = spec_from_algo (algorithm);
   return spec ? spec->name : "?";
@@ -429,10 +429,10 @@ _gcry_md_algo_name (int algorithm)
 static gcry_err_code_t
 check_digest_algo (int algorithm)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   spec = spec_from_algo (algorithm);
-  if (spec && !spec->flags.disabled)
+  if (spec && !spec->flags.disabled && (spec->flags.fips || !fips_mode ()))
     return 0;
 
   return GPG_ERR_DIGEST_ALGO;
@@ -452,7 +452,6 @@ md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
   int secure = !!(flags & GCRY_MD_FLAG_SECURE);
   int hmac =   !!(flags & GCRY_MD_FLAG_HMAC);
   int bufsize = secure ? 512 : 1024;
-  struct gcry_md_context *ctx;
   gcry_md_hd_t hd;
   size_t n;
 
@@ -470,7 +469,7 @@ md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
    *
    * We have to make sure that private is well aligned.
    */
-  n = sizeof (struct gcry_md_handle) + bufsize;
+  n = offsetof (struct gcry_md_handle, buf) + bufsize;
   n = ((n + sizeof (PROPERLY_ALIGNED_TYPE) - 1)
        / sizeof (PROPERLY_ALIGNED_TYPE)) * sizeof (PROPERLY_ALIGNED_TYPE);
 
@@ -485,13 +484,16 @@ md_open (gcry_md_hd_t *h, int algo, unsigned int flags)
 
   if (! err)
     {
-      hd->ctx = ctx = (void *) ((char *) hd + n);
+      struct gcry_md_context *ctx;
+
+      ctx = (void *) (hd->buf - offsetof (struct gcry_md_handle, buf) + n);
       /* Setup the globally visible data (bctl in the diagram).*/
-      hd->bufsize = n - sizeof (struct gcry_md_handle) + 1;
+      hd->ctx = ctx;
+      hd->bufsize = n - offsetof (struct gcry_md_handle, buf);
       hd->bufpos = 0;
 
       /* Initialize the private data. */
-      memset (hd->ctx, 0, sizeof *hd->ctx);
+      wipememory2 (ctx, 0, sizeof *ctx);
       ctx->magic = secure ? CTX_MAGIC_SECURE : CTX_MAGIC_NORMAL;
       ctx->actual_handle_size = n + sizeof (struct gcry_md_context);
       ctx->flags.secure = secure;
@@ -546,7 +548,7 @@ static gcry_err_code_t
 md_enable (gcry_md_hd_t hd, int algorithm)
 {
   struct gcry_md_context *h = hd->ctx;
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   GcryDigestEntry *entry;
   gcry_err_code_t err = 0;
 
@@ -561,17 +563,12 @@ md_enable (gcry_md_hd_t hd, int algorithm)
       err = GPG_ERR_DIGEST_ALGO;
     }
 
+  if (!err && spec->flags.disabled)
+    err = GPG_ERR_DIGEST_ALGO;
 
-  if (!err && algorithm == GCRY_MD_MD5 && fips_mode ())
-    {
-      _gcry_inactivate_fips_mode ("MD5 used");
-      if (_gcry_enforced_fips_mode () )
-        {
-          /* We should never get to here because we do not register
-             MD5 in enforced fips mode. But better throw an error.  */
-          err = GPG_ERR_DIGEST_ALGO;
-        }
-    }
+  /* Any non-FIPS algorithm should go this way */
+  if (!err && !spec->flags.fips && fips_mode ())
+    err = GPG_ERR_DIGEST_ALGO;
 
   if (!err && h->flags.hmac && spec->read == NULL)
     {
@@ -644,7 +641,7 @@ md_copy (gcry_md_hd_t ahd, gcry_md_hd_t *b_hd)
 
   bhd->ctx = b = (void *) ((char *) bhd + n);
   /* No need to copy the buffer due to the write above. */
-  gcry_assert (ahd->bufsize == (n - sizeof (struct gcry_md_handle) + 1));
+  gcry_assert (ahd->bufsize == (n - offsetof (struct gcry_md_handle, buf)));
   bhd->bufsize = ahd->bufsize;
   bhd->bufpos = 0;
   gcry_assert (! ahd->bufpos);
@@ -905,6 +902,9 @@ static gcry_err_code_t
 prepare_macpads (gcry_md_hd_t a, const unsigned char *key, size_t keylen)
 {
   GcryDigestEntry *r;
+
+  if (fips_mode () && keylen < 14)
+    return GPG_ERR_INV_VALUE;
 
   if (!a->ctx->list)
     return GPG_ERR_DIGEST_ALGO; /* Might happen if no algo is enabled.  */
@@ -1185,7 +1185,7 @@ void
 _gcry_md_hash_buffer (int algo, void *digest,
                       const void *buffer, size_t length)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   spec = spec_from_algo (algo);
   if (!spec)
@@ -1194,22 +1194,7 @@ _gcry_md_hash_buffer (int algo, void *digest,
       return;
     }
 
-  if (algo == GCRY_MD_MD5 && fips_mode ())
-    {
-      _gcry_inactivate_fips_mode ("MD5 used");
-      if (_gcry_enforced_fips_mode () )
-        {
-          /* We should never get to here because we do not register
-             MD5 in enforced fips mode.  */
-          _gcry_fips_noreturn ();
-        }
-    }
-
-  if (spec->hash_buffer != NULL)
-    {
-      spec->hash_buffer (digest, buffer, length);
-    }
-  else if (spec->hash_buffers != NULL)
+  if (spec->hash_buffers != NULL)
     {
       gcry_buffer_t iov;
 
@@ -1218,7 +1203,11 @@ _gcry_md_hash_buffer (int algo, void *digest,
       iov.off = 0;
       iov.len = length;
 
-      spec->hash_buffers (digest, &iov, 1);
+      if (spec->flags.disabled || (!spec->flags.fips && fips_mode ()))
+        log_bug ("gcry_md_hash_buffer failed for algo %d: %s",
+                algo, gpg_strerror (gcry_error (GPG_ERR_DIGEST_ALGO)));
+
+      spec->hash_buffers (digest, spec->mdlen, &iov, 1);
     }
   else
     {
@@ -1251,13 +1240,17 @@ _gcry_md_hash_buffer (int algo, void *digest,
    used as the key.
 
    On success 0 is returned and resulting hash or HMAC is stored at
-   DIGEST which must have been provided by the caller with an
-   appropriate length.  */
+   DIGEST. DIGESTLEN may be given as -1, in which case DIGEST must
+   have been provided by the caller with an appropriate length.
+   DIGESTLEN may also be the appropriate length or, in case of XOF
+   algorithms, DIGESTLEN indicates number bytes to extract from XOF
+   to DIGEST.  */
 gpg_err_code_t
-_gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
-                       const gcry_buffer_t *iov, int iovcnt)
+_gcry_md_hash_buffers_extract (int algo, unsigned int flags, void *digest,
+			       int digestlen, const gcry_buffer_t *iov,
+			       int iovcnt)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   int hmac;
 
   if (!iov || iovcnt < 0)
@@ -1276,20 +1269,17 @@ _gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
       return GPG_ERR_DIGEST_ALGO;
     }
 
-  if (algo == GCRY_MD_MD5 && fips_mode ())
-    {
-      _gcry_inactivate_fips_mode ("MD5 used");
-      if (_gcry_enforced_fips_mode () )
-        {
-          /* We should never get to here because we do not register
-             MD5 in enforced fips mode.  */
-          _gcry_fips_noreturn ();
-        }
-    }
+  if (spec->mdlen > 0 && digestlen != -1 && digestlen != spec->mdlen)
+    return GPG_ERR_DIGEST_ALGO;
+  if (spec->mdlen == 0 && digestlen == -1)
+    return GPG_ERR_DIGEST_ALGO;
 
   if (!hmac && spec->hash_buffers)
     {
-      spec->hash_buffers (digest, iov, iovcnt);
+      if (spec->flags.disabled || (!spec->flags.fips && fips_mode ()))
+        return GPG_ERR_DIGEST_ALGO;
+
+      spec->hash_buffers (digest, digestlen, iov, iovcnt);
     }
   else
     {
@@ -1297,13 +1287,6 @@ _gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
          normal functions.  */
       gcry_md_hd_t h;
       gpg_err_code_t rc;
-      int dlen;
-
-      /* Detect SHAKE128 like algorithms which we can't use because
-       * our API does not allow for a variable length digest.  */
-      dlen = md_digest_length (algo);
-      if (!dlen)
-        return GPG_ERR_DIGEST_ALGO;
 
       rc = md_open (&h, algo, (hmac? GCRY_MD_FLAG_HMAC:0));
       if (rc)
@@ -1324,11 +1307,36 @@ _gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
       for (;iovcnt; iov++, iovcnt--)
         md_write (h, (const char*)iov[0].data + iov[0].off, iov[0].len);
       md_final (h);
-      memcpy (digest, md_read (h, algo), dlen);
+      if (spec->mdlen > 0)
+	memcpy (digest, md_read (h, algo), spec->mdlen);
+      else if (digestlen > 0)
+	md_extract (h, algo, digest, digestlen);
       md_close (h);
     }
 
   return 0;
+}
+
+
+/* Shortcut function to hash multiple buffers with a given algo.  In
+   contrast to gcry_md_hash_buffer, this function returns an error on
+   invalid arguments or on other problems; disabled algorithms are
+   _not_ ignored but flagged as an error.
+
+   The data to sign is taken from the array IOV which has IOVCNT items.
+
+   The only supported flag in FLAGS is GCRY_MD_FLAG_HMAC which turns
+   this function into a HMAC function; the first item in IOV is then
+   used as the key.
+
+   On success 0 is returned and resulting hash or HMAC is stored at
+   DIGEST which must have been provided by the caller with an
+   appropriate length.  */
+gpg_err_code_t
+_gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
+		       const gcry_buffer_t *iov, int iovcnt)
+{
+  return _gcry_md_hash_buffers_extract(algo, flags, digest, -1, iov, iovcnt);
 }
 
 
@@ -1359,7 +1367,7 @@ _gcry_md_get_algo (gcry_md_hd_t hd)
 static int
 md_digest_length (int algorithm)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   spec = spec_from_algo (algorithm);
   return spec? spec->mdlen : 0;
@@ -1382,7 +1390,7 @@ _gcry_md_get_algo_dlen (int algorithm)
 static const byte *
 md_asn_oid (int algorithm, size_t *asnlen, size_t *mdlen)
 {
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
   const byte *asnoid = NULL;
 
   spec = spec_from_algo (algorithm);
@@ -1574,17 +1582,6 @@ _gcry_md_info (gcry_md_hd_t h, int cmd, void *buffer, size_t *nbytes)
 gcry_err_code_t
 _gcry_md_init (void)
 {
-  if (fips_mode())
-    {
-      /* disable algorithms that are disallowed in fips */
-      int idx;
-      gcry_md_spec_t *spec;
-
-      for (idx = 0; (spec = digest_list[idx]); idx++)
-        if (!spec->flags.fips)
-          spec->flags.disabled = 1;
-    }
-
   return 0;
 }
 
@@ -1619,10 +1616,12 @@ gpg_error_t
 _gcry_md_selftest (int algo, int extended, selftest_report_func_t report)
 {
   gcry_err_code_t ec = 0;
-  gcry_md_spec_t *spec;
+  const gcry_md_spec_t *spec;
 
   spec = spec_from_algo (algo);
-  if (spec && !spec->flags.disabled && spec->selftest)
+  if (spec && !spec->flags.disabled
+      && (spec->flags.fips || !fips_mode ())
+      && spec->selftest)
     ec = spec->selftest (algo, extended, report);
   else
     {
@@ -1630,7 +1629,8 @@ _gcry_md_selftest (int algo, int extended, selftest_report_func_t report)
         /* */                       : GPG_ERR_NOT_IMPLEMENTED;
       if (report)
         report ("digest", algo, "module",
-                (spec && !spec->flags.disabled)?
+                spec && !spec->flags.disabled
+                && (spec->flags.fips || !fips_mode ())?
                 "no selftest available" :
                 spec? "algorithm disabled" : "algorithm not found");
     }

@@ -20,7 +20,7 @@
 # Location of the released tarball archives.  This is prefixed by
 # the variable RELEASE_ARCHIVE in ~/.gnupg-autogen.rc.  For example:
 # RELEASE_ARCHIVE=wk@somehost:archive/tarballs
-RELEASE_ARCHIVE_SUFFIX  = libgcrypt/v1.9
+RELEASE_ARCHIVE_SUFFIX  = libgcrypt/v1.10
 # The variable RELEASE_SIGNING_KEY in ~/.gnupg-autogen.rc is used
 # to specify the key for signing.  For example:
 # RELEASE_SIGNKEY=D8692123C4065DEA5E0F3AB5249B39D24F25E3B6
@@ -124,7 +124,7 @@ release:
 
 sign-release:
 	 +(set -e; \
-	  cd dist; \
+	  test $$(pwd | sed 's,.*/,,') = dist || cd dist; \
 	  x=$$(grep '^RELEASE_ARCHIVE=' $$HOME/.gnupg-autogen.rc|cut -d= -f2);\
           if [ -z "$$x" ]; then \
              echo "error: RELEASE_ARCHIVE missing in ~/.gnupg-autogen.rc">&2; \

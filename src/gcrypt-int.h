@@ -113,7 +113,18 @@ unsigned int _gcry_ecc_get_algo_keylen (int algo);
 gpg_error_t _gcry_ecc_mul_point (int algo, unsigned char *result,
                                  const unsigned char *scalar,
                                  const unsigned char *point);
-
+gcry_err_code_t _gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl,
+                                  gcry_md_hd_t hd, gcry_sexp_t s_skey,
+                                  gcry_ctx_t ctx);
+gcry_err_code_t _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl,
+                                    gcry_md_hd_t hd, gcry_sexp_t s_pkey,
+                                    gcry_ctx_t ctx);
+gpg_err_code_t _gcry_pk_random_override_new (gcry_ctx_t *r_ctx,
+                                             const unsigned char *p,
+                                             size_t len);
+gpg_err_code_t _gcry_pk_get_random_override (gcry_ctx_t ctx,
+                                             const unsigned char **r_p,
+                                             size_t *r_len);
 
 gpg_err_code_t _gcry_md_open (gcry_md_hd_t *h, int algo, unsigned int flags);
 void _gcry_md_close (gcry_md_hd_t hd);
@@ -128,6 +139,10 @@ gpg_err_code_t _gcry_md_extract (gcry_md_hd_t hd, int algo, void *buffer,
                                  size_t length);
 void _gcry_md_hash_buffer (int algo, void *digest,
                            const void *buffer, size_t length);
+gpg_err_code_t _gcry_md_hash_buffers_extract (int algo, unsigned int flags,
+                                              void *digest, int digestlen,
+                                              const gcry_buffer_t *iov,
+                                              int iovcnt);
 gpg_err_code_t _gcry_md_hash_buffers (int algo, unsigned int flags,
                                       void *digest,
                                       const gcry_buffer_t *iov, int iovcnt);
@@ -191,6 +206,18 @@ gpg_err_code_t _gcry_kdf_derive (const void *passphrase, size_t passphraselen,
                                  const void *salt, size_t saltlen,
                                  unsigned long iterations,
                                  size_t keysize, void *keybuffer);
+
+gpg_err_code_t _gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
+                               const unsigned long *param,
+                               unsigned int paramlen,
+                               const void *passphrase, size_t passphraselen,
+                               const void *salt, size_t saltlen,
+                               const void *key, size_t keylen,
+                               const void *ad, size_t adlen);
+gcry_error_t _gcry_kdf_compute (gcry_kdf_hd_t h,
+                                const struct gcry_kdf_thread_ops *ops);
+gpg_err_code_t _gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result);
+void _gcry_kdf_close (gcry_kdf_hd_t h);
 
 
 gpg_err_code_t _gcry_prime_generate (gcry_mpi_t *prime,

@@ -87,11 +87,12 @@ gpg_err_code_t _gcry_ecc_mont_encodepoint (gcry_mpi_t x, unsigned int nbits,
 /*-- ecc.c --*/
 
 /*-- ecc-ecdsa.c --*/
-gpg_err_code_t _gcry_ecc_ecdsa_sign (gcry_mpi_t input, mpi_ec_t ec,
+gpg_err_code_t _gcry_ecc_ecdsa_sign (gcry_mpi_t input, gcry_mpi_t k, mpi_ec_t ec,
                                      gcry_mpi_t r, gcry_mpi_t s,
                                      int flags, int hashalgo);
 gpg_err_code_t _gcry_ecc_ecdsa_verify (gcry_mpi_t input, mpi_ec_t ec,
-                                       gcry_mpi_t r, gcry_mpi_t s);
+                                       gcry_mpi_t r, gcry_mpi_t s,
+                                       int flags, int hashalgo);
 
 /*-- ecc-eddsa.c --*/
 gpg_err_code_t _gcry_ecc_eddsa_recover_x (gcry_mpi_t x, gcry_mpi_t y, int sign,

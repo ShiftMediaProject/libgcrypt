@@ -53,13 +53,14 @@ libcipher_la_SOURCES = \
 	cipher-ocb.c \
 	cipher-xts.c \
 	cipher-eax.c \
+	cipher-siv.c \
+	cipher-gcm-siv.c \
 	cipher-selftest.c cipher-selftest.h \
 	pubkey.c pubkey-internal.h pubkey-util.c \
 	md.c \
 	mac.c mac-internal.h \
 	mac-hmac.c mac-cmac.c mac-gmac.c mac-poly1305.c \
 	poly1305.c poly1305-internal.h \
-	poly1305-s390x.S \
 	kdf.c kdf-internal.h \
 	bithelp.h  \
 	bufhelp.h  \
@@ -97,6 +98,7 @@ EXTRA_libcipher_la_SOURCES = \
 	gostr3411-94.c \
 	md4.c \
 	md5.c \
+	poly1305-s390x.S \
 	rijndael.c rijndael-internal.h rijndael-tables.h   \
 	rijndael-aesni.c rijndael-padlock.c                \
 	rijndael-amd64.S rijndael-arm.S                    \
@@ -105,6 +107,7 @@ EXTRA_libcipher_la_SOURCES = \
 	rijndael-armv8-ce.c rijndael-armv8-aarch32-ce.S    \
 	rijndael-armv8-aarch64-ce.S rijndael-aarch64.S     \
 	rijndael-ppc.c rijndael-ppc9le.c                   \
+	rijndael-p10le.c rijndael-gcm-p10le.s             \
 	rijndael-ppc-common.h rijndael-ppc-functions.h     \
 	rijndael-s390x.c                                   \
 	rmd160.c \
@@ -126,7 +129,7 @@ EXTRA_libcipher_la_SOURCES = \
 	sha512-avx2-bmi2-amd64.S \
 	sha512-armv7-neon.S sha512-arm.S \
 	sha512-ppc.c sha512-ssse3-i386.c \
-	sm3.c \
+	sm3.c sm3-avx-bmi2-amd64.S sm3-aarch64.S \
 	keccak.c keccak_permute_32.h keccak_permute_64.h keccak-armv7-neon.S \
 	stribog.c \
 	tiger.c \
@@ -146,7 +149,7 @@ gost-sb.h: gost-s-box
 
 gost-s-box: gost-s-box.c
 	$(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) \
-	    $(CPPFLAGS_FOR_BUILD)-o $@ $(srcdir)/gost-s-box.c
+	    $(CPPFLAGS_FOR_BUILD) -o $@ $(srcdir)/gost-s-box.c
 
 
 if ENABLE_O_FLAG_MUNGING
@@ -234,6 +237,12 @@ rijndael-ppc9le.o: $(srcdir)/rijndael-ppc9le.c Makefile
 	`echo $(COMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
 
 rijndael-ppc9le.lo: $(srcdir)/rijndael-ppc9le.c Makefile
+	`echo $(LTCOMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
+
+rijndael-p10le.o: $(srcdir)/rijndael-p10le.c Makefile
+	`echo $(COMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
+
+rijndael-p10le.lo: $(srcdir)/rijndael-p10le.c Makefile
 	`echo $(LTCOMPILE) $(ppc_vcrypto_cflags) -c $< | $(instrumentation_munging) `
 
 sha256-ppc.o: $(srcdir)/sha256-ppc.c Makefile

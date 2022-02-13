@@ -133,15 +133,27 @@ static gpg_err_code_t generate (DSA_secret_key *sk,
                                 int transient_key,
                                 dsa_domain_t *domain,
                                 gcry_mpi_t **ret_factors);
-static gpg_err_code_t sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input,
+static gpg_err_code_t sign (gcry_mpi_t r, gcry_mpi_t s,
+                            gcry_mpi_t input, gcry_mpi_t k,
                             DSA_secret_key *skey, int flags, int hashalgo);
 static gpg_err_code_t verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input,
-                   DSA_public_key *pkey);
+                              DSA_public_key *pkey, int flags, int hashalgo);
 static unsigned int dsa_get_nbits (gcry_sexp_t parms);
 
 
 static void (*progress_cb) (void *,const char *, int, int, int );
 static void *progress_cb_data;
+
+
+/* Check the DSA key length is acceptable for key generation or usage */
+static gpg_err_code_t
+dsa_check_keysize (unsigned int nbits)
+{
+  if (fips_mode () && nbits < 2048)
+    return GPG_ERR_INV_VALUE;
+
+  return 0;
+}
 
 
 void
@@ -182,15 +194,15 @@ test_keys (DSA_secret_key *sk, unsigned int qbits)
   _gcry_mpi_randomize (data, qbits, GCRY_WEAK_RANDOM);
 
   /* Sign DATA using the secret key.  */
-  sign (sig_a, sig_b, data, sk, 0, 0);
+  sign (sig_a, sig_b, data, NULL, sk, 0, 0);
 
   /* Verify the signature using the public key.  */
-  if ( verify (sig_a, sig_b, data, &pk) )
+  if ( verify (sig_a, sig_b, data, &pk, 0, 0) )
     goto leave; /* Signature does not match.  */
 
   /* Modify the data and check that the signing fails.  */
   mpi_add_ui (data, data, 1);
-  if ( !verify (sig_a, sig_b, data, &pk) )
+  if ( !verify (sig_a, sig_b, data, &pk, 0, 0) )
     goto leave; /* Signature matches but should not.  */
 
   result = 0; /* The test succeeded.  */
@@ -245,14 +257,6 @@ generate (DSA_secret_key *sk, unsigned int nbits, unsigned int qbits,
     return GPG_ERR_INV_VALUE;
   if (nbits < 2*qbits || nbits > 15360)
     return GPG_ERR_INV_VALUE;
-
-  if (fips_mode ())
-    {
-      if (nbits < 1024)
-        return GPG_ERR_INV_VALUE;
-      if (transient_key)
-        return GPG_ERR_INV_VALUE;
-    }
 
   if (domain->p && domain->q && domain->g)
     {
@@ -426,6 +430,10 @@ generate_fips186 (DSA_secret_key *sk, unsigned int nbits, unsigned int qbits,
   else
     return GPG_ERR_INV_VALUE;
 
+  ec = dsa_check_keysize (nbits);
+  if (ec)
+    return ec;
+
   if (domain->p && domain->q && domain->g)
     {
       /* Domain parameters are given; use them.  */
@@ -588,13 +596,16 @@ check_secret_key( DSA_secret_key *sk )
    internally converted to a plain MPI.  FLAGS and HASHALGO may both
    be 0 for standard operation mode.
 
+   The random value, K_SUPPLIED, may be supplied externally.  If not,
+   it is generated internally.
+
    The return value is 0 on success or an error code.  Note that for
    backward compatibility the function will not return any error if
    FLAGS and HASHALGO are both 0 and INPUT is a plain MPI.
  */
 static gpg_err_code_t
-sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_secret_key *skey,
-      int flags, int hashalgo)
+sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, gcry_mpi_t k_supplied,
+      DSA_secret_key *skey, int flags, int hashalgo)
 {
   gpg_err_code_t rc;
   gcry_mpi_t hash;
@@ -604,17 +615,31 @@ sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_secret_key *skey,
   const void *abuf;
   unsigned int abits, qbits;
   int extraloops = 0;
+  gcry_mpi_t hash_computed_internally = NULL;
 
   qbits = mpi_get_nbits (skey->q);
+
+  if ((flags & PUBKEY_FLAG_PREHASH))
+    {
+      rc = _gcry_dsa_compute_hash (&hash_computed_internally, input, hashalgo);
+      if (rc)
+        return rc;
+      input = hash_computed_internally;
+    }
 
   /* Convert the INPUT into an MPI.  */
   rc = _gcry_dsa_normalize_hash (input, &hash, qbits);
   if (rc)
-    return rc;
+    {
+      mpi_free (hash_computed_internally);
+      return rc;
+    }
 
  again:
+  if (k_supplied)
+    k = k_supplied;
   /* Create the K value.  */
-  if ((flags & PUBKEY_FLAG_RFC6979) && hashalgo)
+  else if ((flags & PUBKEY_FLAG_RFC6979) && hashalgo)
     {
       /* Use Pornin's method for deterministic DSA.  If this flag is
          set, it is expected that HASH is an opaque MPI with the to be
@@ -653,12 +678,19 @@ sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_secret_key *skey,
   mpi_add( tmp, tmp, hash );
   mpi_mulm( s , kinv, tmp, skey->q );
 
-  mpi_free(k);
+  if (!k_supplied)
+    mpi_free(k);
   mpi_free(kinv);
   mpi_free(tmp);
 
   if (!mpi_cmp_ui (r, 0))
     {
+      if (k_supplied)
+        {
+          rc = GPG_ERR_INV_VALUE;
+          goto leave;
+        }
+
       /* This is a highly unlikely code path.  */
       extraloops++;
       goto again;
@@ -669,6 +701,7 @@ sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_secret_key *skey,
  leave:
   if (hash != input)
     mpi_free (hash);
+  mpi_free (hash_computed_internally);
 
   return rc;
 }
@@ -678,7 +711,8 @@ sign (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_secret_key *skey,
    Returns true if the signature composed from R and S is valid.
  */
 static gpg_err_code_t
-verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_public_key *pkey )
+verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_public_key *pkey,
+        int flags, int hashalgo)
 {
   gpg_err_code_t rc = 0;
   gcry_mpi_t w, u1, u2, v;
@@ -686,6 +720,7 @@ verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_public_key *pkey )
   gcry_mpi_t ex[3];
   gcry_mpi_t hash;
   unsigned int nbits;
+  gcry_mpi_t hash_computed_internally = NULL;
 
   if( !(mpi_cmp_ui( r, 0 ) > 0 && mpi_cmp( r, pkey->q ) < 0) )
     return GPG_ERR_BAD_SIGNATURE; /* Assertion	0 < r < n  failed.  */
@@ -693,9 +728,19 @@ verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_public_key *pkey )
     return GPG_ERR_BAD_SIGNATURE; /* Assertion	0 < s < n  failed.  */
 
   nbits = mpi_get_nbits (pkey->q);
+  if ((flags & PUBKEY_FLAG_PREHASH))
+    {
+      rc = _gcry_dsa_compute_hash (&hash_computed_internally, input, hashalgo);
+      if (rc)
+        return rc;
+      input = hash_computed_internally;
+    }
   rc = _gcry_dsa_normalize_hash (input, &hash, nbits);
   if (rc)
-    return rc;
+    {
+      mpi_free (hash_computed_internally);
+      return rc;
+    }
 
   w  = mpi_alloc( mpi_get_nlimbs(pkey->q) );
   u1 = mpi_alloc( mpi_get_nlimbs(pkey->q) );
@@ -737,6 +782,7 @@ verify (gcry_mpi_t r, gcry_mpi_t s, gcry_mpi_t input, DSA_public_key *pkey )
   mpi_free(v);
   if (hash != input)
     mpi_free (hash);
+  mpi_free (hash_computed_internally);
 
   return rc;
 }
@@ -1031,12 +1077,17 @@ dsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   gcry_err_code_t rc;
   struct pk_encoding_ctx ctx;
   gcry_mpi_t data = NULL;
+  gcry_mpi_t k = NULL;
   DSA_secret_key sk = {NULL, NULL, NULL, NULL, NULL};
   gcry_mpi_t sig_r = NULL;
   gcry_mpi_t sig_s = NULL;
+  unsigned int nbits = dsa_get_nbits (keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_SIGN,
-                                   dsa_get_nbits (keyparms));
+  rc = dsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_SIGN, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_data_to_mpi (s_data, &data, &ctx);
@@ -1044,6 +1095,11 @@ dsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
     goto leave;
   if (DBG_CIPHER)
     log_mpidump ("dsa_sign   data", data);
+
+  if (ctx.label)
+    rc = _gcry_mpi_scan (&k, GCRYMPI_FMT_USG, ctx.label, ctx.labellen, NULL);
+  if (rc)
+    goto leave;
 
   /* Extract the key.  */
   rc = _gcry_sexp_extract_param (keyparms, NULL, "pqgyx",
@@ -1062,7 +1118,7 @@ dsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
 
   sig_r = mpi_new (0);
   sig_s = mpi_new (0);
-  rc = sign (sig_r, sig_s, data, &sk, ctx.flags, ctx.hash_algo);
+  rc = sign (sig_r, sig_s, data, k, &sk, ctx.flags, ctx.hash_algo);
   if (rc)
     goto leave;
   if (DBG_CIPHER)
@@ -1081,6 +1137,7 @@ dsa_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_data, gcry_sexp_t keyparms)
   _gcry_mpi_release (sk.y);
   _gcry_mpi_release (sk.x);
   _gcry_mpi_release (data);
+  _gcry_mpi_release (k);
   _gcry_pk_util_free_encoding_ctx (&ctx);
   if (DBG_CIPHER)
     log_debug ("dsa_sign      => %s\n", gpg_strerror (rc));
@@ -1098,9 +1155,13 @@ dsa_verify (gcry_sexp_t s_sig, gcry_sexp_t s_data, gcry_sexp_t s_keyparms)
   gcry_mpi_t sig_s = NULL;
   gcry_mpi_t data = NULL;
   DSA_public_key pk = { NULL, NULL, NULL, NULL };
+  unsigned int nbits = dsa_get_nbits (s_keyparms);
 
-  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY,
-                                   dsa_get_nbits (s_keyparms));
+  rc = dsa_check_keysize (nbits);
+  if (rc)
+    return rc;
+
+  _gcry_pk_util_init_encoding_ctx (&ctx, PUBKEY_OP_VERIFY, nbits);
 
   /* Extract the data.  */
   rc = _gcry_pk_util_data_to_mpi (s_data, &data, &ctx);
@@ -1136,7 +1197,7 @@ dsa_verify (gcry_sexp_t s_sig, gcry_sexp_t s_data, gcry_sexp_t s_keyparms)
     }
 
   /* Verify the signature.  */
-  rc = verify (sig_r, sig_s, data, &pk);
+  rc = verify (sig_r, sig_s, data, &pk, ctx.flags, ctx.hash_algo);
 
  leave:
   _gcry_mpi_release (pk.p);
@@ -1195,8 +1256,9 @@ selftest_sign (gcry_sexp_t pkey, gcry_sexp_t skey)
 {
   /* Sample data from RFC 6979 section A.2.2, hash is of message "sample" */
   static const char sample_data[] =
-    "(data (flags rfc6979)"
-    " (hash sha256 #af2bdbe1aa9b6ec1e2ade1d694f41fc71a831d0268e9891562113d8a62add1bf#))";
+    "(data (flags rfc6979 prehash)"
+    " (hash-algo sha256)"
+    " (value 6:sample))";
   static const char sample_data_bad[] =
     "(data (flags rfc6979)"
     " (hash sha256 #bf2bdbe1aa9b6ec1e2ade1d694f41fc71a831d0268e9891562113d8a62add1bf#))";
@@ -1379,7 +1441,7 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 
 gcry_pk_spec_t _gcry_pubkey_spec_dsa =
   {
-    GCRY_PK_DSA, { 0, 1 },
+    GCRY_PK_DSA, { 0, 0 },
     GCRY_PK_USAGE_SIGN,
     "DSA", dsa_names,
     "pqgy", "pqgyx", "", "rs", "pqgy",

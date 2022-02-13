@@ -20,7 +20,7 @@
 
 # (Process this file with autoconf to produce a configure script.)
 AC_REVISION($Revision$)
-AC_PREREQ([2.60])
+AC_PREREQ([2.69])
 min_automake_version="1.14"
 
 # To build a release you need to create a tag with the version number
@@ -30,8 +30,8 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define([mym4_package],[libgcrypt])
 m4_define([mym4_major], [1])
-m4_define([mym4_minor], [9])
-m4_define([mym4_micro], [4])
+m4_define([mym4_minor], [10])
+m4_define([mym4_micro], [0])
 
 # Below is m4 magic to extract and compute the git revision number,
 # the decimalized short revision number, a beta version string and a
@@ -55,9 +55,9 @@ AC_INIT([mym4_package],[mym4_version],[https://bugs.gnupg.org])
 #   (Interfaces removed:    CURRENT++, AGE=0, REVISION=0)
 #   (Interfaces added:      CURRENT++, AGE++, REVISION=0)
 #   (No interfaces changed:                   REVISION++)
-LIBGCRYPT_LT_CURRENT=23
-LIBGCRYPT_LT_AGE=3
-LIBGCRYPT_LT_REVISION=4
+LIBGCRYPT_LT_CURRENT=24
+LIBGCRYPT_LT_AGE=4
+LIBGCRYPT_LT_REVISION=0
 ################################################
 
 AC_SUBST(LIBGCRYPT_LT_CURRENT)
@@ -77,7 +77,7 @@ NEED_GPG_ERROR_VERSION=1.27
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_SRCDIR([src/libgcrypt.vers])
 AM_INIT_AUTOMAKE([serial-tests dist-bzip2])
-AC_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_LIBOBJ_DIR([compat])
 AC_CANONICAL_HOST
@@ -230,7 +230,7 @@ available_kdfs="s2k pkdf2 scrypt"
 enabled_kdfs=""
 
 # Definitions for random modules.
-available_random_modules="linux egd unix"
+available_random_modules="getentropy linux egd unix"
 auto_random_modules="$available_random_modules"
 
 # Supported thread backends.
@@ -527,15 +527,11 @@ AC_DEFINE_UNQUOTED(EGD_SOCKET_NAME, "$egd_socket_name",
 AC_MSG_CHECKING([whether the experimental random daemon is requested])
 AC_ARG_ENABLE([random-daemon],
               AS_HELP_STRING([--enable-random-daemon],
-                             [Build and support the experimental gcryptrnd]),
-              [use_random_daemon=$enableval],
-              [use_random_daemon=no])
-AC_MSG_RESULT($use_random_daemon)
-if test x$use_random_daemon = xyes ; then
-    AC_DEFINE(USE_RANDOM_DAEMON,1,
-              [Define to support the experimental random daemon])
-fi
-AM_CONDITIONAL(USE_RANDOM_DAEMON, test x$use_random_daemon = xyes)
+                             [Build the experimental gcryptrnd]),
+              [enable_random_daemon=$enableval],
+              [enable_random_daemon=no])
+AC_MSG_RESULT($enable_random_daemon)
+AM_CONDITIONAL(ENABLE_RANDOM_DAEMON, test x$enable_random_daemon = xyes)
 
 
 # Implementation of --disable-asm.
@@ -546,6 +542,9 @@ AC_ARG_ENABLE([asm],
               [try_asm_modules=$enableval],
               [try_asm_modules=yes])
 AC_MSG_RESULT($try_asm_modules)
+if test "$try_asm_modules" != yes ; then
+    AC_DEFINE(ASM_DISABLED,1,[Defined if --disable-asm was used to configure])
+fi
 
 # Implementation of the --enable-m-guard switch.
 AC_MSG_CHECKING([whether memory guard is requested])
@@ -591,14 +590,29 @@ AC_MSG_CHECKING([whether a HMAC binary check is requested])
 AC_ARG_ENABLE(hmac-binary-check,
               AS_HELP_STRING([--enable-hmac-binary-check],
                              [Enable library integrity check]),
-              [use_hmac_binary_check=$enableval],
+              [use_hmac_binary_check="$enableval"],
               [use_hmac_binary_check=no])
 AC_MSG_RESULT($use_hmac_binary_check)
-if test "$use_hmac_binary_check" = yes ; then
+if test "$use_hmac_binary_check" = no ; then
+    DEF_HMAC_BINARY_CHECK=''
+else
     AC_DEFINE(ENABLE_HMAC_BINARY_CHECK,1,
               [Define to support an HMAC based integrity check])
+    AC_CHECK_TOOL(OBJCOPY, [objcopy])
+    if test "$use_hmac_binary_check" != yes ; then
+        DEF_HMAC_BINARY_CHECK=-DKEY_FOR_BINARY_CHECK="'\"$use_hmac_binary_check\"'"
+    fi
 fi
+AM_CONDITIONAL(USE_HMAC_BINARY_CHECK, test "x$use_hmac_binary_check" != xno)
+AC_SUBST(DEF_HMAC_BINARY_CHECK)
 
+# Implementation of the --with-fips-module-version.
+AC_ARG_WITH(fips-module-version,
+            AS_HELP_STRING([--with-fips-module-version=VERSION],
+                           [Specify the FIPS module version for the build]),
+            fips_module_version="$withval", fips_module_version="" )
+AC_DEFINE_UNQUOTED(FIPS_MODULE_VERSION, "$fips_module_version",
+                   [Define FIPS module version for certification])
 
 # Implementation of the --disable-jent-support switch.
 AC_MSG_CHECKING([whether jitter entropy support is requested])
@@ -782,7 +796,7 @@ AC_ARG_WITH(pth-prefix,
 if test x$pth_config_prefix != x ; then
    PTH_CONFIG="$pth_config_prefix/bin/pth-config"
 fi
-if test "$use_random_daemon" = "yes"; then
+if test "$enable_random_daemon" = "yes"; then
   AC_PATH_PROG(PTH_CONFIG, pth-config, no)
   if test "$PTH_CONFIG" = "no"; then
     AC_MSG_WARN([[
@@ -830,13 +844,7 @@ AC_SEARCH_LIBS(setsockopt, [nsl])
 #### Checks for header files. ####
 ##################################
 
-AC_HEADER_STDC
-AC_CHECK_HEADERS(unistd.h sys/select.h sys/msg.h sys/auxv.h)
-INSERT_SYS_SELECT_H=
-if test x"$ac_cv_header_sys_select_h" = xyes; then
-  INSERT_SYS_SELECT_H=" include <sys/select.h>"
-fi
-AC_SUBST(INSERT_SYS_SELECT_H)
+AC_CHECK_HEADERS(unistd.h sys/auxv.h sys/random.h)
 
 
 ##########################################
@@ -852,21 +860,6 @@ AC_TYPE_PID_T
 AC_CHECK_TYPES([byte, ushort, u16, u32, u64])
 
 gl_TYPE_SOCKLEN_T
-case "${host}" in
-  *-*-mingw32*)
-    # socklen_t may or may not be defined depending on what headers
-    # are included.  To be safe we use int as this is the actual type.
-    FALLBACK_SOCKLEN_T="typedef int gcry_socklen_t;"
-    ;;
-  *)
-    if test ".$gl_cv_socklen_t_equiv" = "."; then
-      FALLBACK_SOCKLEN_T="typedef socklen_t gcry_socklen_t;"
-    else
-      FALLBACK_SOCKLEN_T="typedef ${gl_cv_socklen_t_equiv} gcry_socklen_t;"
-    fi
-esac
-AC_SUBST(FALLBACK_SOCKLEN_T)
-
 
 #
 # Check for __builtin_bswap32 intrinsic.
@@ -2208,7 +2201,7 @@ AC_REPLACE_FUNCS([getpid clock])
 # Check whether it is necessary to link against libdl.
 #
 DL_LIBS=""
-if test "$use_hmac_binary_check" = yes ; then
+if test "$use_hmac_binary_check" != no ; then
   _gcry_save_libs="$LIBS"
   LIBS=""
   AC_SEARCH_LIBS(dlopen, c dl,,,)
@@ -2266,7 +2259,9 @@ fi
 if test "$random" = "default"; then
 
     # Select default value.
-    if test "$ac_cv_have_dev_random" = yes; then
+    if test "$ac_cv_func_getentropy" = yes; then
+        random_modules="getentropy"
+    elif test "$ac_cv_have_dev_random" = yes; then
         # Try Linuxish random device.
         random_modules="linux"
     else
@@ -2501,7 +2496,7 @@ if test "$found" = "1"; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS arcfour-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS arcfour-amd64.lo"
       ;;
    esac
 fi
@@ -2514,11 +2509,11 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS blowfish-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS blowfish-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS blowfish-arm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS blowfish-arm.lo"
       ;;
    esac
 fi
@@ -2531,11 +2526,11 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS cast5-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS cast5-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS cast5-arm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS cast5-arm.lo"
       ;;
    esac
 fi
@@ -2548,7 +2543,7 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS des-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS des-amd64.lo"
       ;;
    esac
 fi
@@ -2561,61 +2556,68 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-amd64.lo"
 
          # Build with the SSSE3 implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ssse3-amd64-asm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ssse3-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ssse3-amd64-asm.lo"
 
          # Build with the VAES/AVX2 implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-vaes.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-vaes-avx2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-vaes.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-vaes-avx2-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-arm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-arm.lo"
 
          # Build with the ARMv8/AArch32 CE implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-ce.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-aarch32-ce.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-armv8-ce.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-armv8-aarch32-ce.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-aarch64.lo"
 
          # Build with the ARMv8/AArch64 CE implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-ce.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-armv8-aarch64-ce.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-armv8-ce.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-armv8-aarch64-ce.lo"
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ppc.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ppc9le.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ppc9le.lo"
+
+         if test "$gcry_cv_gcc_inline_asm_ppc_altivec" = "yes" &&
+            test "$gcry_cv_gcc_inline_asm_ppc_arch_3_00" = "yes" ; then
+            # Build with AES-GCM bulk implementation for P10
+            GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-gcm-p10le.lo"
+            GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-p10le.lo"
+         fi
       ;;
       powerpc64-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ppc.lo"
       ;;
       powerpc-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-ppc.lo"
       ;;
       s390x-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-s390x.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-s390x.lo"
       ;;
    esac
 
    case "$mpi_cpu_arch" in
      x86)
          # Build with the AES-NI implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-aesni.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-aesni.lo"
 
          # Build with the Padlock implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS rijndael-padlock.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-padlock.lo"
       ;;
    esac
 fi
@@ -2628,20 +2630,20 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS twofish-amd64.lo"
 
          if test x"$avx2support" = xyes ; then
             # Build with the AVX2 implementation
-            GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-avx2-amd64.lo"
+            GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS twofish-avx2-amd64.lo"
          fi
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-arm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS twofish-arm.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS twofish-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS twofish-aarch64.lo"
       ;;
    esac
 fi
@@ -2654,18 +2656,18 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the SSE2 implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS serpent-sse2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-sse2-amd64.lo"
       ;;
    esac
 
    if test x"$avx2support" = xyes ; then
       # Build with the AVX2 implementation
-      GCRYPT_CIPHERS="$GCRYPT_CIPHERS serpent-avx2-amd64.lo"
+      GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-avx2-amd64.lo"
    fi
 
    if test x"$neonsupport" = xyes ; then
       # Build with the NEON implementation
-      GCRYPT_CIPHERS="$GCRYPT_CIPHERS serpent-armv7-neon.lo"
+      GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-armv7-neon.lo"
    fi
 fi
 
@@ -2689,28 +2691,28 @@ if test "$found" = "1" ; then
    case "${host}" in
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-arm.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-arm.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-aarch64.lo"
       ;;
    esac
 
    if test x"$avxsupport" = xyes ; then
       if test x"$aesnisupport" = xyes ; then
         # Build with the AES-NI/AVX implementation
-        GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-aesni-avx-amd64.lo"
+        GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-aesni-avx-amd64.lo"
       fi
    fi
 
    if test x"$avx2support" = xyes ; then
       if test x"$aesnisupport" = xyes ; then
         # Build with the AES-NI/AVX2 implementation
-        GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-aesni-avx2-amd64.lo"
+        GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-aesni-avx2-amd64.lo"
 
         # Build with the VAES/AVX2 implementation
-        GCRYPT_CIPHERS="$GCRYPT_CIPHERS camellia-vaes-avx2-amd64.lo"
+        GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-vaes-avx2-amd64.lo"
       fi
    fi
 fi
@@ -2729,13 +2731,13 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS salsa20-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS salsa20-amd64.lo"
       ;;
    esac
 
    if test x"$neonsupport" = xyes ; then
      # Build with the NEON implementation
-     GCRYPT_CIPHERS="$GCRYPT_CIPHERS salsa20-armv7-neon.lo"
+     GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS salsa20-armv7-neon.lo"
    fi
 fi
 
@@ -2753,34 +2755,34 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-amd64-ssse3.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-amd64-avx2.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-amd64-ssse3.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-amd64-avx2.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-aarch64.lo"
       ;;
       powerpc64le-*-*)
          # Build with the ppc8 vector implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-ppc.lo"
       ;;
       powerpc64-*-*)
          # Build with the ppc8 vector implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-ppc.lo"
       ;;
       powerpc-*-*)
          # Build with the ppc8 vector implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-ppc.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-ppc.lo"
       ;;
       s390x-*-*)
          # Build with the s390x/zSeries vector implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-s390x.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-s390x.lo"
       ;;
    esac
 
    if test x"$neonsupport" = xyes ; then
      # Build with the NEON implementation
-     GCRYPT_CIPHERS="$GCRYPT_CIPHERS chacha20-armv7-neon.lo"
+     GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-armv7-neon.lo"
    fi
 fi
 
@@ -2792,8 +2794,8 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sm4-aesni-avx-amd64.lo"
-         GCRYPT_CIPHERS="$GCRYPT_CIPHERS sm4-aesni-avx2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-aesni-avx-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-aesni-avx2-amd64.lo"
       ;;
    esac
 fi
@@ -2833,21 +2835,21 @@ if test "$found" = "1" ; then
    case "${host}" in
       i?86-*-* | x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-intel-pclmul.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-intel-pclmul.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-armv8-ce.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-armv8-aarch64-ce.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-armv8-ce.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-armv8-aarch64-ce.lo"
       ;;
       powerpc64le-*-*)
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-ppc.lo"
       ;;
       powerpc64-*-*)
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-ppc.lo"
       ;;
       powerpc-*-*)
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS crc-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS crc-ppc.lo"
       ;;
    esac
 fi
@@ -2900,37 +2902,37 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ssse3-amd64.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-avx-amd64.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-avx2-bmi2-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-ssse3-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-avx-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-avx2-bmi2-amd64.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-armv8-aarch32-ce.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-armv8-aarch32-ce.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-armv8-aarch64-ce.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-armv8-aarch64-ce.lo"
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-ppc.lo"
       ;;
       powerpc64-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-ppc.lo"
       ;;
       powerpc-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-ppc.lo"
    esac
 
    case "$mpi_cpu_arch" in
      x86)
        # Build with the SHAEXT implementation
-       GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha256-intel-shaext.lo"
+       GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha256-intel-shaext.lo"
      ;;
    esac
 fi
@@ -2943,36 +2945,36 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ssse3-amd64.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-avx-amd64.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-avx2-bmi2-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ssse3-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-avx-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-avx2-bmi2-amd64.lo"
       ;;
       i?86-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ssse3-i386.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ssse3-i386.lo"
       ;;
       arm*-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-arm.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-arm.lo"
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ppc.lo"
       ;;
       powerpc64-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ppc.lo"
       ;;
       powerpc-*-*)
          # Big-Endian.
          # Build with the crypto extension implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-ppc.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ppc.lo"
    esac
 
    if test x"$neonsupport" = xyes ; then
      # Build with the NEON implementation
-     GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha512-armv7-neon.lo"
+     GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-armv7-neon.lo"
    fi
 fi
 
@@ -2990,7 +2992,7 @@ if test "$found" = "1" ; then
 
    if test x"$neonsupport" = xyes ; then
      # Build with the NEON implementation
-     GCRYPT_DIGESTS="$GCRYPT_DIGESTS keccak-armv7-neon.lo"
+     GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS keccak-armv7-neon.lo"
    fi
 fi
 
@@ -3008,7 +3010,7 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS whirlpool-sse2-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS whirlpool-sse2-amd64.lo"
       ;;
    esac
 fi
@@ -3021,9 +3023,26 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS blake2b-amd64-avx2.lo"
-         GCRYPT_DIGESTS="$GCRYPT_DIGESTS blake2s-amd64-avx.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2b-amd64-avx2.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2s-amd64-avx.lo"
       ;;
+   esac
+fi
+
+LIST_MEMBER(sm3, $enabled_digests)
+if test "$found" = "1" ; then
+   GCRYPT_DIGESTS="$GCRYPT_DIGESTS sm3.lo"
+   AC_DEFINE(USE_SM3, 1, [Defined if this module should be included])
+
+   case "${host}" in
+     x86_64-*-*)
+        # Build with the assembly implementation
+        GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sm3-avx-bmi2-amd64.lo"
+     ;;
+     aarch64-*-*)
+        # Build with the assembly implementation
+        GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sm3-aarch64.lo"
+     ;;
    esac
 fi
 
@@ -3035,51 +3054,52 @@ AC_DEFINE(USE_SHA1, 1,   [Defined if this module should be included])
 case "${host}" in
   x86_64-*-*)
     # Build with the assembly implementation
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-ssse3-amd64.lo"
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-avx-amd64.lo"
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-avx-bmi2-amd64.lo"
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-avx2-bmi2-amd64.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-ssse3-amd64.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-avx-amd64.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-avx-bmi2-amd64.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-avx2-bmi2-amd64.lo"
   ;;
   arm*-*-*)
     # Build with the assembly implementation
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv7-neon.lo"
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv8-aarch32-ce.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-armv7-neon.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-armv8-aarch32-ce.lo"
   ;;
   aarch64-*-*)
     # Build with the assembly implementation
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-armv8-aarch64-ce.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-armv8-aarch64-ce.lo"
   ;;
 esac
 
 case "$mpi_cpu_arch" in
   x86)
     # Build with the SHAEXT implementation
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS sha1-intel-shaext.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha1-intel-shaext.lo"
   ;;
 esac
 
 # Arch specific GCM implementations
 case "${host}" in
   i?86-*-* | x86_64-*-*)
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-intel-pclmul.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS cipher-gcm-intel-pclmul.lo"
   ;;
   arm*-*-*)
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv7-neon.lo"
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv8-aarch32-ce.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS cipher-gcm-armv7-neon.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS cipher-gcm-armv8-aarch32-ce.lo"
   ;;
   aarch64-*-*)
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-armv8-aarch64-ce.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS cipher-gcm-armv8-aarch64-ce.lo"
   ;;
   powerpc64le-*-* | powerpc64-*-* | powerpc-*-*)
-    GCRYPT_DIGESTS="$GCRYPT_DIGESTS cipher-gcm-ppc.lo"
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS cipher-gcm-ppc.lo"
   ;;
 esac
 
-LIST_MEMBER(sm3, $enabled_digests)
-if test "$found" = "1" ; then
-   GCRYPT_DIGESTS="$GCRYPT_DIGESTS sm3.lo"
-   AC_DEFINE(USE_SM3, 1, [Defined if this module should be included])
-fi
+# Arch specific MAC implementations
+case "${host}" in
+  s390x-*-*)
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS poly1305-s390x.lo"
+  ;;
+esac
 
 LIST_MEMBER(scrypt, $enabled_kdfs)
 if test "$found" = "1" ; then
@@ -3087,10 +3107,16 @@ if test "$found" = "1" ; then
    AC_DEFINE(USE_SCRYPT, 1, [Defined if this module should be included])
 fi
 
+LIST_MEMBER(getentropy, $random_modules)
+if test "$found" = "1" ; then
+   GCRYPT_RANDOM="$GCRYPT_RANDOM rndgetentropy.lo"
+   AC_DEFINE(USE_RNDGETENTROPY, 1, [Defined if the getentropy RNG should be used.])
+fi
+
 LIST_MEMBER(linux, $random_modules)
 if test "$found" = "1" ; then
-   GCRYPT_RANDOM="$GCRYPT_RANDOM rndlinux.lo"
-   AC_DEFINE(USE_RNDLINUX, 1, [Defined if the /dev/random RNG should be used.])
+   GCRYPT_RANDOM="$GCRYPT_RANDOM rndoldlinux.lo"
+   AC_DEFINE(USE_RNDOLDLINUX, 1, [Defined if the /dev/random RNG should be used.])
 fi
 
 LIST_MEMBER(unix, $random_modules)
@@ -3117,6 +3143,12 @@ if test "$found" = "1" ; then
    GCRYPT_RANDOM="$GCRYPT_RANDOM rndw32ce.lo"
    AC_DEFINE(USE_RNDW32CE, 1,
              [Defined if the WindowsCE specific RNG should be used.])
+fi
+
+if test "$try_asm_modules" = yes ; then
+  # Build with assembly implementations
+  GCRYPT_CIPHERS="$GCRYPT_CIPHERS $GCRYPT_ASM_CIPHERS"
+  GCRYPT_DIGESTS="$GCRYPT_DIGESTS $GCRYPT_ASM_DIGESTS"
 fi
 
 AC_SUBST([GCRYPT_CIPHERS])
@@ -3266,6 +3298,7 @@ GCRY_MSG_WRAP([Enabled pubkey algorithms:],[$enabled_pubkey_ciphers])
 GCRY_MSG_SHOW([Random number generator:  ],[$random])
 GCRY_MSG_SHOW([Try using jitter entropy: ],[$jentsupport])
 GCRY_MSG_SHOW([Using linux capabilities: ],[$use_capabilities])
+GCRY_MSG_SHOW([FIPS module version:      ],[$fips_module_version])
 GCRY_MSG_SHOW([Try using Padlock crypto: ],[$padlocksupport])
 GCRY_MSG_SHOW([Try using AES-NI crypto:  ],[$aesnisupport])
 GCRY_MSG_SHOW([Try using Intel SHAEXT:   ],[$shaextsupport])

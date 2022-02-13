@@ -197,7 +197,7 @@ _gcry_mpi_resize (gcry_mpi_t a, unsigned nlimbs)
   if (a->d)
     {
       a->d = xrealloc (a->d, nlimbs * sizeof (mpi_limb_t));
-      for (i=a->alloced; i < nlimbs; i++)
+      for (i=a->nlimbs; i < nlimbs; i++)
         a->d[i] = 0;
     }
   else
@@ -366,10 +366,13 @@ _gcry_mpi_copy (gcry_mpi_t a)
     gcry_mpi_t b;
 
     if( a && (a->flags & 4) ) {
-        void *p = _gcry_is_secure(a->d)? xmalloc_secure ((a->sign+7)/8)
-                                       : xmalloc ((a->sign+7)/8);
-        if (a->d)
-          memcpy( p, a->d, (a->sign+7)/8 );
+        void *p = NULL;
+        if (a->sign) {
+            p = _gcry_is_secure(a->d)? xmalloc_secure ((a->sign+7)/8)
+                                     : xmalloc ((a->sign+7)/8);
+            if (a->d)
+                memcpy( p, a->d, (a->sign+7)/8 );
+        }
         b = mpi_set_opaque( NULL, p, a->sign );
         b->flags = a->flags;
         b->flags &= ~(16|32); /* Reset the immutable and constant flags.  */

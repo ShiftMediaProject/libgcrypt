@@ -114,33 +114,9 @@ gcry_err_code_t _gcry_cipher_cmac_check_tag
 gcry_err_code_t _gcry_cipher_cmac_set_subkeys
 /*           */ (gcry_cipher_hd_t c);
 
-/*-- rmd160.c --*/
-void _gcry_rmd160_hash_buffer (void *outbuf,
-                               const void *buffer, size_t length);
-
 /*-- sha1.c --*/
 void _gcry_sha1_hash_buffer (void *outbuf,
                              const void *buffer, size_t length);
-void _gcry_sha1_hash_buffers (void *outbuf,
-                              const gcry_buffer_t *iov, int iovcnt);
-
-/*-- sha256.c --*/
-void _gcry_sha256_hash_buffer (void *outbuf,
-                               const void *buffer, size_t length);
-void _gcry_sha256_hash_buffers (void *outbuf,
-                                const gcry_buffer_t *iov, int iovcnt);
-
-/*-- sha512.c --*/
-void _gcry_sha512_hash_buffer (void *outbuf,
-                               const void *buffer, size_t length);
-void _gcry_sha512_hash_buffers (void *outbuf,
-                                const gcry_buffer_t *iov, int iovcnt);
-
-/*-- sm3.c --*/
-void _gcry_sm3_hash_buffer (void *outbuf,
-                            const void *buffer, size_t length);
-void _gcry_sm3_hash_buffers (void *outbuf,
-                             const gcry_buffer_t *iov, int iovcnt);
 
 /*-- blake2.c --*/
 gcry_err_code_t _gcry_blake2_init_with_key(void *ctx, unsigned int flags,
@@ -195,43 +171,43 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_chacha20;
 extern gcry_cipher_spec_t _gcry_cipher_spec_sm4;
 
 /* Declarations for the digest specifications.  */
-extern gcry_md_spec_t _gcry_digest_spec_crc32;
-extern gcry_md_spec_t _gcry_digest_spec_crc32_rfc1510;
-extern gcry_md_spec_t _gcry_digest_spec_crc24_rfc2440;
-extern gcry_md_spec_t _gcry_digest_spec_gost3411_94;
-extern gcry_md_spec_t _gcry_digest_spec_gost3411_cp;
-extern gcry_md_spec_t _gcry_digest_spec_stribog_256;
-extern gcry_md_spec_t _gcry_digest_spec_stribog_512;
-extern gcry_md_spec_t _gcry_digest_spec_md2;
-extern gcry_md_spec_t _gcry_digest_spec_md4;
-extern gcry_md_spec_t _gcry_digest_spec_md5;
-extern gcry_md_spec_t _gcry_digest_spec_rmd160;
-extern gcry_md_spec_t _gcry_digest_spec_sha1;
-extern gcry_md_spec_t _gcry_digest_spec_sha224;
-extern gcry_md_spec_t _gcry_digest_spec_sha256;
-extern gcry_md_spec_t _gcry_digest_spec_sha384;
-extern gcry_md_spec_t _gcry_digest_spec_sha512;
-extern gcry_md_spec_t _gcry_digest_spec_sha512_224;
-extern gcry_md_spec_t _gcry_digest_spec_sha512_256;
-extern gcry_md_spec_t _gcry_digest_spec_sha3_224;
-extern gcry_md_spec_t _gcry_digest_spec_sha3_256;
-extern gcry_md_spec_t _gcry_digest_spec_sha3_512;
-extern gcry_md_spec_t _gcry_digest_spec_sha3_384;
-extern gcry_md_spec_t _gcry_digest_spec_shake128;
-extern gcry_md_spec_t _gcry_digest_spec_shake256;
-extern gcry_md_spec_t _gcry_digest_spec_tiger;
-extern gcry_md_spec_t _gcry_digest_spec_tiger1;
-extern gcry_md_spec_t _gcry_digest_spec_tiger2;
-extern gcry_md_spec_t _gcry_digest_spec_whirlpool;
-extern gcry_md_spec_t _gcry_digest_spec_blake2b_512;
-extern gcry_md_spec_t _gcry_digest_spec_blake2b_384;
-extern gcry_md_spec_t _gcry_digest_spec_blake2b_256;
-extern gcry_md_spec_t _gcry_digest_spec_blake2b_160;
-extern gcry_md_spec_t _gcry_digest_spec_blake2s_256;
-extern gcry_md_spec_t _gcry_digest_spec_blake2s_224;
-extern gcry_md_spec_t _gcry_digest_spec_blake2s_160;
-extern gcry_md_spec_t _gcry_digest_spec_blake2s_128;
-extern gcry_md_spec_t _gcry_digest_spec_sm3;
+extern const gcry_md_spec_t _gcry_digest_spec_crc32;
+extern const gcry_md_spec_t _gcry_digest_spec_crc32_rfc1510;
+extern const gcry_md_spec_t _gcry_digest_spec_crc24_rfc2440;
+extern const gcry_md_spec_t _gcry_digest_spec_gost3411_94;
+extern const gcry_md_spec_t _gcry_digest_spec_gost3411_cp;
+extern const gcry_md_spec_t _gcry_digest_spec_stribog_256;
+extern const gcry_md_spec_t _gcry_digest_spec_stribog_512;
+extern const gcry_md_spec_t _gcry_digest_spec_md2;
+extern const gcry_md_spec_t _gcry_digest_spec_md4;
+extern const gcry_md_spec_t _gcry_digest_spec_md5;
+extern const gcry_md_spec_t _gcry_digest_spec_rmd160;
+extern const gcry_md_spec_t _gcry_digest_spec_sha1;
+extern const gcry_md_spec_t _gcry_digest_spec_sha224;
+extern const gcry_md_spec_t _gcry_digest_spec_sha256;
+extern const gcry_md_spec_t _gcry_digest_spec_sha384;
+extern const gcry_md_spec_t _gcry_digest_spec_sha512;
+extern const gcry_md_spec_t _gcry_digest_spec_sha512_224;
+extern const gcry_md_spec_t _gcry_digest_spec_sha512_256;
+extern const gcry_md_spec_t _gcry_digest_spec_sha3_224;
+extern const gcry_md_spec_t _gcry_digest_spec_sha3_256;
+extern const gcry_md_spec_t _gcry_digest_spec_sha3_512;
+extern const gcry_md_spec_t _gcry_digest_spec_sha3_384;
+extern const gcry_md_spec_t _gcry_digest_spec_shake128;
+extern const gcry_md_spec_t _gcry_digest_spec_shake256;
+extern const gcry_md_spec_t _gcry_digest_spec_tiger;
+extern const gcry_md_spec_t _gcry_digest_spec_tiger1;
+extern const gcry_md_spec_t _gcry_digest_spec_tiger2;
+extern const gcry_md_spec_t _gcry_digest_spec_whirlpool;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2b_512;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2b_384;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2b_256;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2b_160;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2s_256;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2s_224;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2s_160;
+extern const gcry_md_spec_t _gcry_digest_spec_blake2s_128;
+extern const gcry_md_spec_t _gcry_digest_spec_sm3;
 
 /* Declarations for the pubkey cipher specifications.  */
 extern gcry_pk_spec_t _gcry_pubkey_spec_rsa;

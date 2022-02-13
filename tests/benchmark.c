@@ -943,6 +943,10 @@ cipher_bench ( const char *algoname )
           && algo != GCRY_CIPHER_CHACHA20)
         continue;
 
+      /* GCM is not available in FIPS mode */
+      if (in_fips_mode && modes[modeidx].mode == GCRY_CIPHER_MODE_GCM)
+        continue;
+
       if (modes[modeidx].req_blocksize > 0
           && blklen != modes[modeidx].req_blocksize)
         {
@@ -1152,7 +1156,7 @@ rsa_bench (int iterations, int print_header, int no_blinding)
       printf ("RSA %3d bit    ", nbits);
       fflush (stdout);
 
-      if (in_fips_mode && !(nbits == 2048 || nbits == 3072))
+      if (in_fips_mode && nbits < 2048)
         {
           puts ("[skipped in fips mode]");
           continue;
@@ -1315,6 +1319,12 @@ elg_bench (int iterations, int print_header)
       printf ("ELG %d bit             -", p_sizes[i]);
       fflush (stdout);
 
+      if (in_fips_mode)
+        {
+          puts ("[skipped in fips mode]");
+          goto next;
+        }
+
       start_timer ();
       for (j=0; j < iterations; j++)
         {
@@ -1350,6 +1360,7 @@ elg_bench (int iterations, int print_header)
       printf ("   %s  %s\n", elapsed_time (1), timerbuf1);
       fflush (stdout);
 
+    next:
       gcry_sexp_release (plain);
       plain = NULL;
       gcry_sexp_release (enc);
@@ -1423,6 +1434,12 @@ dsa_bench (int iterations, int print_header)
       printf ("DSA %d/%d             -", p_sizes[i], q_sizes[i]);
       fflush (stdout);
 
+      if (in_fips_mode)
+        {
+          puts ("[skipped in fips mode]");
+          goto next;
+        }
+
       start_timer ();
       for (j=0; j < iterations; j++)
         {
@@ -1456,6 +1473,7 @@ dsa_bench (int iterations, int print_header)
       printf ("     %s\n", elapsed_time (1));
       fflush (stdout);
 
+    next:
       gcry_sexp_release (sig);
       gcry_sexp_release (data);
       sig = NULL;
@@ -1475,7 +1493,7 @@ ecc_bench (int iterations, int print_header)
 {
 #if USE_ECC
   gpg_error_t err;
-  const char *p_sizes[] = { "192", "224", "256", "384", "521", "Ed25519",
+  const char *p_sizes[] = { "192", "224", "256", "384", "521", "Ed25519", "Ed448",
               "gost256", "gost512" };
   int testno;
 
@@ -1492,20 +1510,29 @@ ecc_bench (int iterations, int print_header)
       int count;
       int p_size;
       int is_ed25519;
+      int is_ed448;
       int is_gost;
 
       is_ed25519 = !strcmp (p_sizes[testno], "Ed25519");
+      is_ed448 = !strcmp (p_sizes[testno], "Ed448");
       is_gost = !strncmp (p_sizes[testno], "gost", 4);
 
       /* Only P-{224,256,384,521} are allowed in fips mode */
       if (gcry_fips_mode_active()
-          && (is_ed25519 || is_gost || !strcmp (p_sizes[testno], "192")))
+          && (is_ed25519 || is_ed448 || is_gost
+              || !strcmp (p_sizes[testno], "192")))
          continue;
 
       if (is_ed25519)
         {
           p_size = 256;
           printf ("EdDSA Ed25519 ");
+          fflush (stdout);
+        }
+      else if (is_ed448)
+        {
+          p_size = 448;
+          printf ("EdDSA Ed448   ");
           fflush (stdout);
         }
       else if (is_gost)
@@ -1524,6 +1551,10 @@ ecc_bench (int iterations, int print_header)
       if (is_ed25519)
         err = gcry_sexp_build (&key_spec, NULL,
                                "(genkey (ecdsa (curve \"Ed25519\")"
+                               "(flags eddsa)))");
+      else if (is_ed448)
+        err = gcry_sexp_build (&key_spec, NULL,
+                               "(genkey (ecdsa (curve \"Ed448\")"
                                "(flags eddsa)))");
       else if (is_gost)
         err = gcry_sexp_build (&key_spec, NULL,
@@ -1561,6 +1592,10 @@ ecc_bench (int iterations, int print_header)
       if (is_ed25519)
         err = gcry_sexp_build (&data, NULL,
                                "(data (flags eddsa)(hash-algo sha512)"
+                               " (value %m))", x);
+      else if (is_ed448)
+        err = gcry_sexp_build (&data, NULL,
+                               "(data (flags eddsa)(hash-algo shake256)"
                                " (value %m))", x);
       else if (is_gost)
         err = gcry_sexp_build (&data, NULL, "(data (flags gost) (value %m))", x);
@@ -1731,7 +1766,6 @@ main( int argc, char **argv )
 {
   int last_argc = -1;
   int no_blinding = 0;
-  int use_random_daemon = 0;
   int use_secmem = 0;
   int pk_count = 100;
 
@@ -1775,11 +1809,6 @@ main( int argc, char **argv )
         {
           verbose += 2;
           debug++;
-          argc--; argv++;
-        }
-      else if (!strcmp (*argv, "--use-random-daemon"))
-        {
-          use_random_daemon = 1;
           argc--; argv++;
         }
       else if (!strcmp (*argv, "--use-secmem"))
@@ -1912,9 +1941,6 @@ main( int argc, char **argv )
     in_fips_mode = 1;
   else if (!use_secmem)
     xgcry_control ((GCRYCTL_DISABLE_SECMEM, 0));
-
-  if (use_random_daemon)
-    xgcry_control ((GCRYCTL_USE_RANDOM_DAEMON, 1));
 
   if (with_progress)
     gcry_set_progress_handler (progress_cb, NULL);

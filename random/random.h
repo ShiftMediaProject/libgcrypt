@@ -35,8 +35,6 @@ void _gcry_random_dump_stats(void);
 void _gcry_secure_random_alloc(void);
 void _gcry_enable_quick_random_gen (void);
 int  _gcry_random_is_faked(void);
-void _gcry_set_random_daemon_socket (const char *socketname);
-int  _gcry_use_random_daemon (int onoff);
 void _gcry_set_random_seed_file (const char *name);
 void _gcry_update_random_seed_file (void);
 
@@ -67,13 +65,5 @@ gpg_error_t _gcry_rndegd_set_socket_name (const char *name);
 /*-- rndjent.c --*/
 unsigned int _gcry_rndjent_get_version (int *r_active);
 
-
-/*-- random-daemon.c (only used from random.c) --*/
-#ifdef USE_RANDOM_DAEMON
-void _gcry_daemon_initialize_basics (void);
-int _gcry_daemon_randomize (const char *socketname,
-                            void *buffer, size_t length,
-                            enum gcry_random_level level);
-#endif /*USE_RANDOM_DAEMON*/
 
 #endif /*G10_RANDOM_H*/

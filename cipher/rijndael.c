@@ -86,6 +86,9 @@ extern void _gcry_aes_aesni_cbc_enc (void *context, unsigned char *iv,
 extern void _gcry_aes_aesni_ctr_enc (void *context, unsigned char *ctr,
                                      void *outbuf_arg, const void *inbuf_arg,
                                      size_t nblocks);
+extern void _gcry_aes_aesni_ctr32le_enc (void *context, unsigned char *ctr,
+					 void *outbuf_arg,
+					 const void *inbuf_arg, size_t nblocks);
 extern void _gcry_aes_aesni_cfb_dec (void *context, unsigned char *iv,
                                      void *outbuf_arg, const void *inbuf_arg,
                                      size_t nblocks);
@@ -114,6 +117,9 @@ extern void _gcry_aes_vaes_cbc_dec (void *context, unsigned char *iv,
 extern void _gcry_aes_vaes_ctr_enc (void *context, unsigned char *ctr,
 				    void *outbuf_arg, const void *inbuf_arg,
 				    size_t nblocks);
+extern void _gcry_aes_vaes_ctr32le_enc (void *context, unsigned char *ctr,
+					void *outbuf_arg, const void *inbuf_arg,
+					size_t nblocks);
 extern size_t _gcry_aes_vaes_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 					const void *inbuf_arg, size_t nblocks,
 					int encrypt);
@@ -203,6 +209,10 @@ extern void _gcry_aes_armv8_ce_cbc_enc (void *context, unsigned char *iv,
 extern void _gcry_aes_armv8_ce_ctr_enc (void *context, unsigned char *ctr,
                                         void *outbuf_arg, const void *inbuf_arg,
                                         size_t nblocks);
+extern void _gcry_aes_armv8_ce_ctr32le_enc (void *context, unsigned char *ctr,
+                                            void *outbuf_arg,
+                                            const void *inbuf_arg,
+                                            size_t nblocks);
 extern void _gcry_aes_armv8_ce_cfb_dec (void *context, unsigned char *iv,
                                         void *outbuf_arg, const void *inbuf_arg,
                                         size_t nblocks);
@@ -295,6 +305,10 @@ extern void _gcry_aes_ppc9le_xts_crypt (void *context, unsigned char *tweak,
 					void *outbuf_arg,
 					const void *inbuf_arg,
 					size_t nblocks, int encrypt);
+
+extern size_t _gcry_aes_p10le_gcm_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
+					 const void *inbuf_arg,
+					 size_t nblocks, int encrypt);
 #endif /*USE_PPC_CRYPTO_WITH_PPC9LE*/
 
 #ifdef USE_S390X_CRYPTO
@@ -497,6 +511,7 @@ do_setkey (RIJNDAEL_context *ctx, const byte *key, const unsigned keylen,
       bulk_ops->cbc_enc = _gcry_aes_aesni_cbc_enc;
       bulk_ops->cbc_dec = _gcry_aes_aesni_cbc_dec;
       bulk_ops->ctr_enc = _gcry_aes_aesni_ctr_enc;
+      bulk_ops->ctr32le_enc = _gcry_aes_aesni_ctr32le_enc;
       bulk_ops->ocb_crypt = _gcry_aes_aesni_ocb_crypt;
       bulk_ops->ocb_auth = _gcry_aes_aesni_ocb_auth;
       bulk_ops->xts_crypt = _gcry_aes_aesni_xts_crypt;
@@ -509,6 +524,7 @@ do_setkey (RIJNDAEL_context *ctx, const byte *key, const unsigned keylen,
 	  bulk_ops->cfb_dec = _gcry_aes_vaes_cfb_dec;
 	  bulk_ops->cbc_dec = _gcry_aes_vaes_cbc_dec;
 	  bulk_ops->ctr_enc = _gcry_aes_vaes_ctr_enc;
+	  bulk_ops->ctr32le_enc = _gcry_aes_vaes_ctr32le_enc;
 	  bulk_ops->ocb_crypt = _gcry_aes_vaes_ocb_crypt;
 	  bulk_ops->xts_crypt = _gcry_aes_vaes_xts_crypt;
 	}
@@ -516,7 +532,7 @@ do_setkey (RIJNDAEL_context *ctx, const byte *key, const unsigned keylen,
     }
 #endif
 #ifdef USE_PADLOCK
-  else if (hwfeatures & HWF_PADLOCK_AES && keylen == 128/8)
+  else if ((hwfeatures & HWF_PADLOCK_AES) && keylen == 128/8)
     {
       ctx->encrypt_fn = _gcry_aes_padlock_encrypt;
       ctx->decrypt_fn = _gcry_aes_padlock_decrypt;
@@ -562,6 +578,7 @@ do_setkey (RIJNDAEL_context *ctx, const byte *key, const unsigned keylen,
       bulk_ops->cbc_enc = _gcry_aes_armv8_ce_cbc_enc;
       bulk_ops->cbc_dec = _gcry_aes_armv8_ce_cbc_dec;
       bulk_ops->ctr_enc = _gcry_aes_armv8_ce_ctr_enc;
+      bulk_ops->ctr32le_enc = _gcry_aes_armv8_ce_ctr32le_enc;
       bulk_ops->ocb_crypt = _gcry_aes_armv8_ce_ocb_crypt;
       bulk_ops->ocb_auth = _gcry_aes_armv8_ce_ocb_auth;
       bulk_ops->xts_crypt = _gcry_aes_armv8_ce_xts_crypt;
@@ -586,6 +603,8 @@ do_setkey (RIJNDAEL_context *ctx, const byte *key, const unsigned keylen,
       bulk_ops->ocb_crypt = _gcry_aes_ppc9le_ocb_crypt;
       bulk_ops->ocb_auth = _gcry_aes_ppc9le_ocb_auth;
       bulk_ops->xts_crypt = _gcry_aes_ppc9le_xts_crypt;
+      if (hwfeatures & HWF_PPC_ARCH_3_10)  /* for P10 */
+        bulk_ops->gcm_crypt = _gcry_aes_p10le_gcm_crypt;
     }
 #endif
 #ifdef USE_PPC_CRYPTO
@@ -2003,7 +2022,7 @@ static const char *rijndael_names[] =
     NULL
   };
 
-static gcry_cipher_oid_spec_t rijndael_oids[] =
+static const gcry_cipher_oid_spec_t rijndael_oids[] =
   {
     { "2.16.840.1.101.3.4.1.1", GCRY_CIPHER_MODE_ECB },
     { "2.16.840.1.101.3.4.1.2", GCRY_CIPHER_MODE_CBC },
@@ -2032,7 +2051,7 @@ static const char *rijndael192_names[] =
     NULL
   };
 
-static gcry_cipher_oid_spec_t rijndael192_oids[] =
+static const gcry_cipher_oid_spec_t rijndael192_oids[] =
   {
     { "2.16.840.1.101.3.4.1.21", GCRY_CIPHER_MODE_ECB },
     { "2.16.840.1.101.3.4.1.22", GCRY_CIPHER_MODE_CBC },
@@ -2061,7 +2080,7 @@ static const char *rijndael256_names[] =
     NULL
   };
 
-static gcry_cipher_oid_spec_t rijndael256_oids[] =
+static const gcry_cipher_oid_spec_t rijndael256_oids[] =
   {
     { "2.16.840.1.101.3.4.1.41", GCRY_CIPHER_MODE_ECB },
     { "2.16.840.1.101.3.4.1.42", GCRY_CIPHER_MODE_CBC },

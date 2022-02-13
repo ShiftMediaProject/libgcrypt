@@ -29,27 +29,47 @@
 #define PGM "pubkey"
 #include "t-common.h"
 
+static int in_fips_mode;
 
 /* Sample RSA keys, taken from basic.c.  */
 
 static const char sample_private_key_1[] =
 "(private-key\n"
 " (openpgp-rsa\n"
-"  (n #00e0ce96f90b6c9e02f3922beada93fe50a875eac6bcc18bb9a9cf2e84965caa"
-      "2d1ff95a7f542465c6c0c19d276e4526ce048868a7a914fd343cc3a87dd74291"
-      "ffc565506d5bbb25cbac6a0e2dd1f8bcaab0d4a29c2f37c950f363484bf269f7"
-      "891440464baf79827e03a36e70b814938eebdc63e964247be75dc58b014b7ea251#)\n"
+"  (n #009F56231A3D82E3E7D613D59D53E9AB921BEF9F08A782AED0B6E46ADBC853EC"
+"      7C71C422435A3CD8FA0DB9EFD55CD3295BADC4E8E2E2B94E15AE82866AB8ADE8"
+"      7E469FAE76DC3577DE87F1F419C4EB41123DFAF8D16922D5EDBAD6E9076D5A1C"
+"      958106F0AE5E2E9193C6B49124C64C2A241C4075D4AF16299EB87A6585BAE917"
+"      DEF27FCDD165764D069BC18D16527B29DAAB549F7BBED4A7C6A842D203ED6613"
+"      6E2411744E432CD26D940132F25874483DCAEECDFD95744819CBCF1EA810681C"
+"      42907EBCB1C7EAFBE75C87EC32C5413EA10476545D3FC7B2ADB1B66B7F200918"
+"      664B0E5261C2895AA28B0DE321E921B3F877172CCCAB81F43EF98002916156F6"
+"      CB#)\n"
 "  (e #010001#)\n"
-"  (d #046129F2489D71579BE0A75FE029BD6CDB574EBF57EA8A5B0FDA942CAB943B11"
-      "7D7BB95E5D28875E0F9FC5FCC06A72F6D502464DABDED78EF6B716177B83D5BD"
-      "C543DC5D3FED932E59F5897E92E6F58A0F33424106A3B6FA2CBF877510E4AC21"
-      "C3EE47851E97D12996222AC3566D4CCB0B83D164074ABF7DE655FC2446DA1781#)\n"
-"  (p #00e861b700e17e8afe6837e7512e35b6ca11d0ae47d8b85161c67baf64377213"
-      "fe52d772f2035b3ca830af41d8a4120e1c1c70d12cc22f00d28d31dd48a8d424f1#)\n"
-"  (q #00f7a7ca5367c661f8e62df34f0d05c10c88e5492348dd7bddc942c9a8f369f9"
-      "35a07785d2db805215ed786e4285df1658eed3ce84f469b81b50d358407b4ad361#)\n"
-"  (u #304559a9ead56d2309d203811a641bb1a09626bc8eb36fffa23c968ec5bd891e"
-      "ebbafc73ae666e01ba7c8990bae06cc2bbe10b75e69fcacb353a6473079d8e9b#)\n"
+"  (d #07EF82500C403899934FE993AC5A36F14FF2DF38CF1EF315F205EE4C83EDAA19"
+"      8890FC23DE9AA933CAFB37B6A8A8DBA675411958337287310D3FF2F1DDC0CB93"
+"      7E70F57F75F833C021852B631D2B9A520E4431A03C5C3FCB5742DCD841D9FB12"
+"      771AA1620DCEC3F1583426066ED9DC3F7028C5B59202C88FDF20396E2FA0EC4F"
+"      5A22D9008F3043673931BC14A5046D6327398327900867E39CC61B2D1AFE2F48"
+"      EC8E1E3861C68D257D7425F4E6F99ABD77D61F10CA100EFC14389071831B33DD"
+"      69CC8EABEF860D1DC2AAA84ABEAE5DFC91BC124DAF0F4C8EF5BBEA436751DE84"
+"      3A8063E827A024466F44C28614F93B0732A100D4A0D86D532FE1E22C7725E401"
+"      #)\n"
+"  (p #00C29D438F115825779631CD665A5739367F3E128ADC29766483A46CA80897E0"
+"      79B32881860B8F9A6A04C2614A904F6F2578DAE13EA67CD60AE3D0AA00A1FF9B"
+"      441485E44B2DC3D0B60260FBFE073B5AC72FAF67964DE15C8212C389D20DB9CF"
+"      54AF6AEF5C4196EAA56495DD30CF709F499D5AB30CA35E086C2A1589D6283F17"
+"      83#)\n"
+"  (q #00D1984135231CB243FE959C0CBEF551EDD986AD7BEDF71EDF447BE3DA27AF46"
+"      79C974A6FA69E4D52FE796650623DE70622862713932AA2FD9F2EC856EAEAA77"
+"      88B4EA6084DC81C902F014829B18EA8B2666EC41586818E0589E18876065F97E"
+"      8D22CE2DA53A05951EC132DCEF41E70A9C35F4ACC268FFAC2ADF54FA1DA110B9"
+"      19#)\n"
+"  (u #67CF0FD7635205DD80FA814EE9E9C267C17376BF3209FB5D1BC42890D2822A04"
+"      479DAF4D5B6ED69D0F8D1AF94164D07F8CD52ECEFE880641FA0F41DDAB1785E4"
+"      A37A32F997A516480B4CD4F6482B9466A1765093ED95023CA32D5EDC1E34CEE9"
+"      AF595BC51FE43C4BF810FA225AF697FB473B83815966188A4312C048B885E3F7"
+"      #)\n"
 " )\n"
 ")\n";
 
@@ -57,15 +77,25 @@ static const char sample_private_key_1[] =
 static const char sample_private_key_1_1[] =
 "(private-key\n"
 " (openpgp-rsa\n"
-"  (n #00e0ce96f90b6c9e02f3922beada93fe50a875eac6bcc18bb9a9cf2e84965caa"
-      "2d1ff95a7f542465c6c0c19d276e4526ce048868a7a914fd343cc3a87dd74291"
-      "ffc565506d5bbb25cbac6a0e2dd1f8bcaab0d4a29c2f37c950f363484bf269f7"
-      "891440464baf79827e03a36e70b814938eebdc63e964247be75dc58b014b7ea251#)\n"
+"  (n #009F56231A3D82E3E7D613D59D53E9AB921BEF9F08A782AED0B6E46ADBC853EC"
+"      7C71C422435A3CD8FA0DB9EFD55CD3295BADC4E8E2E2B94E15AE82866AB8ADE8"
+"      7E469FAE76DC3577DE87F1F419C4EB41123DFAF8D16922D5EDBAD6E9076D5A1C"
+"      958106F0AE5E2E9193C6B49124C64C2A241C4075D4AF16299EB87A6585BAE917"
+"      DEF27FCDD165764D069BC18D16527B29DAAB549F7BBED4A7C6A842D203ED6613"
+"      6E2411744E432CD26D940132F25874483DCAEECDFD95744819CBCF1EA810681C"
+"      42907EBCB1C7EAFBE75C87EC32C5413EA10476545D3FC7B2ADB1B66B7F200918"
+"      664B0E5261C2895AA28B0DE321E921B3F877172CCCAB81F43EF98002916156F6"
+"      CB#)\n"
 "  (e #010001#)\n"
-"  (d #046129F2489D71579BE0A75FE029BD6CDB574EBF57EA8A5B0FDA942CAB943B11"
-      "7D7BB95E5D28875E0F9FC5FCC06A72F6D502464DABDED78EF6B716177B83D5BD"
-      "C543DC5D3FED932E59F5897E92E6F58A0F33424106A3B6FA2CBF877510E4AC21"
-      "C3EE47851E97D12996222AC3566D4CCB0B83D164074ABF7DE655FC2446DA1781#)\n"
+"  (d #07EF82500C403899934FE993AC5A36F14FF2DF38CF1EF315F205EE4C83EDAA19"
+"      8890FC23DE9AA933CAFB37B6A8A8DBA675411958337287310D3FF2F1DDC0CB93"
+"      7E70F57F75F833C021852B631D2B9A520E4431A03C5C3FCB5742DCD841D9FB12"
+"      771AA1620DCEC3F1583426066ED9DC3F7028C5B59202C88FDF20396E2FA0EC4F"
+"      5A22D9008F3043673931BC14A5046D6327398327900867E39CC61B2D1AFE2F48"
+"      EC8E1E3861C68D257D7425F4E6F99ABD77D61F10CA100EFC14389071831B33DD"
+"      69CC8EABEF860D1DC2AAA84ABEAE5DFC91BC124DAF0F4C8EF5BBEA436751DE84"
+"      3A8063E827A024466F44C28614F93B0732A100D4A0D86D532FE1E22C7725E401"
+"      #)\n"
 " )\n"
 ")\n";
 
@@ -74,29 +104,50 @@ static const char sample_private_key_1_1[] =
 static const char sample_private_key_1_2[] =
 "(private-key\n"
 " (openpgp-rsa\n"
-"  (n #00e0ce96f90b6c9e02f3922beada93fe50a875eac6bcc18bb9a9cf2e84965caa"
-      "2d1ff95a7f542465c6c0c19d276e4526ce048868a7a914fd343cc3a87dd74291"
-      "ffc565506d5bbb25cbac6a0e2dd1f8bcaab0d4a29c2f37c950f363484bf269f7"
-      "891440464baf79827e03a36e70b814938eebdc63e964247be75dc58b014b7ea251#)\n"
+"  (n #009F56231A3D82E3E7D613D59D53E9AB921BEF9F08A782AED0B6E46ADBC853EC"
+"     7C71C422435A3CD8FA0DB9EFD55CD3295BADC4E8E2E2B94E15AE82866AB8ADE8"
+"     7E469FAE76DC3577DE87F1F419C4EB41123DFAF8D16922D5EDBAD6E9076D5A1C"
+"     958106F0AE5E2E9193C6B49124C64C2A241C4075D4AF16299EB87A6585BAE917"
+"     DEF27FCDD165764D069BC18D16527B29DAAB549F7BBED4A7C6A842D203ED6613"
+"     6E2411744E432CD26D940132F25874483DCAEECDFD95744819CBCF1EA810681C"
+"     42907EBCB1C7EAFBE75C87EC32C5413EA10476545D3FC7B2ADB1B66B7F200918"
+"     664B0E5261C2895AA28B0DE321E921B3F877172CCCAB81F43EF98002916156F6"
+"     CB#)\n"
 "  (e #010001#)\n"
-"  (d #046129F2489D71579BE0A75FE029BD6CDB574EBF57EA8A5B0FDA942CAB943B11"
-      "7D7BB95E5D28875E0F9FC5FCC06A72F6D502464DABDED78EF6B716177B83D5BD"
-      "C543DC5D3FED932E59F5897E92E6F58A0F33424106A3B6FA2CBF877510E4AC21"
-      "C3EE47851E97D12996222AC3566D4CCB0B83D164074ABF7DE655FC2446DA1781#)\n"
-"  (p #00e861b700e17e8afe6837e7512e35b6ca11d0ae47d8b85161c67baf64377213"
-      "fe52d772f2035b3ca830af41d8a4120e1c1c70d12cc22f00d28d31dd48a8d424f1#)\n"
-"  (u #304559a9ead56d2309d203811a641bb1a09626bc8eb36fffa23c968ec5bd891e"
-      "ebbafc73ae666e01ba7c8990bae06cc2bbe10b75e69fcacb353a6473079d8e9b#)\n"
+"  (d #07EF82500C403899934FE993AC5A36F14FF2DF38CF1EF315F205EE4C83EDAA19"
+"      8890FC23DE9AA933CAFB37B6A8A8DBA675411958337287310D3FF2F1DDC0CB93"
+"      7E70F57F75F833C021852B631D2B9A520E4431A03C5C3FCB5742DCD841D9FB12"
+"      771AA1620DCEC3F1583426066ED9DC3F7028C5B59202C88FDF20396E2FA0EC4F"
+"      5A22D9008F3043673931BC14A5046D6327398327900867E39CC61B2D1AFE2F48"
+"      EC8E1E3861C68D257D7425F4E6F99ABD77D61F10CA100EFC14389071831B33DD"
+"      69CC8EABEF860D1DC2AAA84ABEAE5DFC91BC124DAF0F4C8EF5BBEA436751DE84"
+"      3A8063E827A024466F44C28614F93B0732A100D4A0D86D532FE1E22C7725E401"
+"      #)\n"
+"  (p #00C29D438F115825779631CD665A5739367F3E128ADC29766483A46CA80897E0"
+"      79B32881860B8F9A6A04C2614A904F6F2578DAE13EA67CD60AE3D0AA00A1FF9B"
+"      441485E44B2DC3D0B60260FBFE073B5AC72FAF67964DE15C8212C389D20DB9CF"
+"      54AF6AEF5C4196EAA56495DD30CF709F499D5AB30CA35E086C2A1589D6283F17"
+"      83#)\n"
+"  (u #67CF0FD7635205DD80FA814EE9E9C267C17376BF3209FB5D1BC42890D2822A04"
+"      479DAF4D5B6ED69D0F8D1AF94164D07F8CD52ECEFE880641FA0F41DDAB1785E4"
+"      A37A32F997A516480B4CD4F6482B9466A1765093ED95023CA32D5EDC1E34CEE9"
+"      AF595BC51FE43C4BF810FA225AF697FB473B83815966188A4312C048B885E3F7"
+"      #)\n"
 " )\n"
 ")\n";
 
 static const char sample_public_key_1[] =
 "(public-key\n"
 " (rsa\n"
-"  (n #00e0ce96f90b6c9e02f3922beada93fe50a875eac6bcc18bb9a9cf2e84965caa"
-      "2d1ff95a7f542465c6c0c19d276e4526ce048868a7a914fd343cc3a87dd74291"
-      "ffc565506d5bbb25cbac6a0e2dd1f8bcaab0d4a29c2f37c950f363484bf269f7"
-      "891440464baf79827e03a36e70b814938eebdc63e964247be75dc58b014b7ea251#)\n"
+"  (n #009F56231A3D82E3E7D613D59D53E9AB921BEF9F08A782AED0B6E46ADBC853EC"
+"      7C71C422435A3CD8FA0DB9EFD55CD3295BADC4E8E2E2B94E15AE82866AB8ADE8"
+"      7E469FAE76DC3577DE87F1F419C4EB41123DFAF8D16922D5EDBAD6E9076D5A1C"
+"      958106F0AE5E2E9193C6B49124C64C2A241C4075D4AF16299EB87A6585BAE917"
+"      DEF27FCDD165764D069BC18D16527B29DAAB549F7BBED4A7C6A842D203ED6613"
+"      6E2411744E432CD26D940132F25874483DCAEECDFD95744819CBCF1EA810681C"
+"      42907EBCB1C7EAFBE75C87EC32C5413EA10476545D3FC7B2ADB1B66B7F200918"
+"      664B0E5261C2895AA28B0DE321E921B3F877172CCCAB81F43EF98002916156F6"
+"      CB#)\n"
 "  (e #010001#)\n"
 " )\n"
 ")\n";
@@ -409,7 +460,15 @@ get_elg_key_new (gcry_sexp_t *pkey, gcry_sexp_t *skey, int fixed_x)
   rc = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (rc)
-    die ("error generating Elgamal key: %s\n", gcry_strerror (rc));
+    {
+      if (in_fips_mode)
+        {
+          if (verbose)
+            fprintf (stderr, "The Elgamal keys are not available in FIPS modee.\n");
+          return;
+        }
+      die ("error generating Elgamal key: %s\n", gcry_strerror (rc));
+    }
 
   if (verbose > 1)
     show_sexp ("generated ELG key:\n", key);
@@ -444,7 +503,15 @@ get_dsa_key_new (gcry_sexp_t *pkey, gcry_sexp_t *skey, int transient_key)
   rc = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (rc)
-    die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    {
+      if (in_fips_mode)
+        {
+          if (verbose)
+            fprintf (stderr, "The DSA keys are not available in FIPS modee.\n");
+          return;
+        }
+      die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    }
 
   if (verbose > 1)
     show_sexp ("generated DSA key:\n", key);
@@ -476,7 +543,15 @@ get_dsa_key_fips186_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   rc = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (rc)
-    die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    {
+      if (in_fips_mode)
+        {
+          if (verbose)
+            fprintf (stderr, "The DSA keys are not available in FIPS modee.\n");
+          return;
+        }
+      die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    }
 
   if (verbose > 1)
     show_sexp ("generated DSA key (fips 186):\n", key);
@@ -504,22 +579,38 @@ get_dsa_key_with_domain_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   rc = gcry_sexp_new
     (&key_spec,
      "(genkey (dsa (transient-key)(domain"
-     "(p #d3aed1876054db831d0c1348fbb1ada72507e5fbf9a62cbd47a63aeb7859d6921"
-     "4adeb9146a6ec3f43520f0fd8e3125dd8bbc5d87405d1ac5f82073cd762a3f8d7"
-     "74322657c9da88a7d2f0e1a9ceb84a39cb40876179e6a76e400498de4bb9379b0"
-     "5f5feb7b91eb8fea97ee17a955a0a8a37587a272c4719d6feb6b54ba4ab69#)"
-     "(q #9c916d121de9a03f71fb21bc2e1c0d116f065a4f#)"
-     "(g #8157c5f68ca40b3ded11c353327ab9b8af3e186dd2e8dade98761a0996dda99ab"
-     "0250d3409063ad99efae48b10c6ab2bba3ea9a67b12b911a372a2bba260176fad"
-     "b4b93247d9712aad13aa70216c55da9858f7a298deb670a403eb1e7c91b847f1e"
-     "ccfbd14bd806fd42cf45dbb69cd6d6b43add2a78f7d16928eaa04458dea44#)"
+     "(p #a8adb6c0b4cf9588012e5deff1a871d383e0e2a85b5e8e03d814fe13a059705e"
+     "663230a377bf7323a8fa117100200bfd5adf857393b0bbd67906c081e585410e"
+     "38480ead51684dac3a38f7b64c9eb109f19739a4517cd7d5d6291e8af20a3fbf"
+     "17336c7bf80ee718ee087e322ee41047dabefbcc34d10b66b644ddb3160a28c0"
+     "639563d71993a26543eadb7718f317bf5d9577a6156561b082a10029cd44012b"
+     "18de6844509fe058ba87980792285f2750969fe89c2cd6498db3545638d5379d"
+     "125dccf64e06c1af33a6190841d223da1513333a7c9d78462abaab31b9f96d5f"
+     "34445ceb6309f2f6d2c8dde06441e87980d303ef9a1ff007e8be2f0be06cc15f#)"
+     "(q #e71f8567447f42e75f5ef85ca20fe557ab0343d37ed09edc3f6e68604d6b9dfb#)"
+     "(g #5ba24de9607b8998e66ce6c4f812a314c6935842f7ab54cd82b19fa104abfb5d"
+     "84579a623b2574b37d22ccae9b3e415e48f5c0f9bcbdff8071d63b9bb956e547"
+     "af3a8df99e5d3061979652ff96b765cb3ee493643544c75dbe5bb39834531952"
+     "a0fb4b0378b3fcbb4c8b5800a5330392a2a04e700bb6ed7e0b85795ea38b1b96"
+     "2741b3f33b9dde2f4ec1354f09e2eb78e95f037a5804b6171659f88715ce1a9b"
+     "0cc90c27f35ef2f10ff0c7c7a2bb0154d9b8ebe76a3d764aa879af372f4240de"
+     "8347937e5a90cec9f41ff2f26b8da9a94a225d1a913717d73f10397d2183f1ba"
+     "3b7b45a68f1ff1893caf69a827802f7b6a48d51da6fbefb64fd9a6c5b75c4561#)"
      ")))", 0, 1);
   if (rc)
     die ("error creating S-expression: %s\n", gcry_strerror (rc));
   rc = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (rc)
-    die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    {
+      if (in_fips_mode)
+        {
+          if (verbose)
+            fprintf (stderr, "The DSA keys are not available in FIPS modee.\n");
+          return;
+        }
+      die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    }
 
   if (verbose > 1)
     show_sexp ("generated DSA key:\n", key);
@@ -603,7 +694,15 @@ get_dsa_key_fips186_with_seed_new (gcry_sexp_t *pkey, gcry_sexp_t *skey)
   rc = gcry_pk_genkey (&key, key_spec);
   gcry_sexp_release (key_spec);
   if (rc)
-    die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    {
+      if (in_fips_mode)
+        {
+          if (verbose)
+            fprintf (stderr, "The DSA keys are not available in FIPS modee.\n");
+          return;
+        }
+      die ("error generating DSA key: %s\n", gcry_strerror (rc));
+    }
 
   if (verbose > 1)
     show_sexp ("generated DSA key (fips 186 with seed):\n", key);
@@ -629,6 +728,7 @@ check_run (void)
   gcry_sexp_t pkey, skey;
   int variant;
 
+  pkey = skey = NULL;
   for (variant=0; variant < 3; variant++)
     {
       if (verbose)
@@ -643,6 +743,7 @@ check_run (void)
       check_keys (pkey, skey, 800, variant == 2? GPG_ERR_NO_OBJ : 0);
       gcry_sexp_release (pkey);
       gcry_sexp_release (skey);
+      pkey = skey = NULL;
     }
 
   if (verbose)
@@ -651,6 +752,7 @@ check_run (void)
   check_keys (pkey, skey, 800, 0);
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Checking generated RSA key (X9.31).\n");
@@ -658,51 +760,74 @@ check_run (void)
   check_keys (pkey, skey, 800, 0);
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Checking generated Elgamal key.\n");
   get_elg_key_new (&pkey, &skey, 0);
-  check_keys (pkey, skey, 400, 0);
+  if (!in_fips_mode)
+    check_keys (pkey, skey, 400, 0);
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Checking passphrase generated Elgamal key.\n");
   get_elg_key_new (&pkey, &skey, 1);
-  check_keys (pkey, skey, 800, 0);
+  if (!in_fips_mode)
+    check_keys (pkey, skey, 800, 0);
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Generating DSA key.\n");
   get_dsa_key_new (&pkey, &skey, 0);
-  /* Fixme:  Add a check function for DSA keys.  */
+  if (!in_fips_mode)
+    {
+      /* Fixme:  Add a check function for DSA keys.  */
+      ;
+    }
+
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
-  if (!gcry_fips_mode_active ())
+  if (verbose)
+    fprintf (stderr, "Generating transient DSA key.\n");
+  get_dsa_key_new (&pkey, &skey, 1);
+  if (!in_fips_mode)
     {
-      if (verbose)
-        fprintf (stderr, "Generating transient DSA key.\n");
-      get_dsa_key_new (&pkey, &skey, 1);
       /* Fixme:  Add a check function for DSA keys.  */
-      gcry_sexp_release (pkey);
-      gcry_sexp_release (skey);
+      ;
     }
+  gcry_sexp_release (pkey);
+  gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Generating DSA key (FIPS 186).\n");
   get_dsa_key_fips186_new (&pkey, &skey);
-  /* Fixme:  Add a check function for DSA keys.  */
+  if (!in_fips_mode)
+    {
+      /* Fixme:  Add a check function for DSA keys.  */
+      ;
+    }
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   if (verbose)
     fprintf (stderr, "Generating DSA key with given domain.\n");
   get_dsa_key_with_domain_new (&pkey, &skey);
-  /* Fixme:  Add a check function for DSA keys.  */
+  if (!in_fips_mode)
+    {
+      /* Fixme:  Add a check function for DSA keys.  */
+      ;
+    }
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 
   /* We need new test vectors for get_dsa_key_fips186_with_domain_new.  */
   if (verbose)
@@ -716,9 +841,14 @@ check_run (void)
   if (verbose)
     fprintf (stderr, "Generating DSA key with given seed (FIPS 186).\n");
   get_dsa_key_fips186_with_seed_new (&pkey, &skey);
-  /* Fixme:  Add a check function for DSA keys.  */
+  if (!in_fips_mode)
+    {
+      /* Fixme:  Add a check function for DSA keys.  */
+      ;
+    }
   gcry_sexp_release (pkey);
   gcry_sexp_release (skey);
+  pkey = skey = NULL;
 }
 
 
@@ -902,7 +1032,7 @@ check_x931_derived_key (int what)
     err = _gcry_pk_util_get_nbits(key_spec, &nbits);
     if (err)
       die ("nbits not found\n");
-    if (gcry_fips_mode_active() && nbits < 2048)
+    if (in_fips_mode && nbits < 2048)
       {
         info("RSA key test with %d bits skipped in fips mode\n", nbits);
         goto leave;
@@ -1189,6 +1319,9 @@ main (int argc, char **argv)
   /* No valuable keys are create, so we can speed up our RNG. */
   xgcry_control ((GCRYCTL_ENABLE_QUICK_RANDOM, 0));
 
+  if (gcry_fips_mode_active ())
+    in_fips_mode = 1;
+
   for (i=0; i < 2; i++)
     check_run ();
 
@@ -1196,7 +1329,7 @@ main (int argc, char **argv)
     check_x931_derived_key (i);
 
   check_ecc_sample_key ();
-  if (!gcry_fips_mode_active ())
+  if (!in_fips_mode)
     check_ed25519ecdsa_sample_key ();
 
   return !!error_count;

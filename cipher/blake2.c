@@ -474,6 +474,59 @@ static gcry_err_code_t blake2b_init_ctx(void *ctx, unsigned int flags,
   return blake2b_init(c, key, keylen);
 }
 
+/* Variable-length Hash Function H'.  */
+gcry_err_code_t
+blake2b_vl_hash (const void *in, size_t inlen, size_t outputlen, void *output)
+{
+  gcry_err_code_t ec;
+  BLAKE2B_CONTEXT ctx;
+  unsigned char buf[4];
+
+  ec = blake2b_init_ctx (&ctx, 0, NULL, 0,
+                         (outputlen < 64 ? outputlen: 64)*8);
+  if (ec)
+    return ec;
+
+  buf_put_le32 (buf, outputlen);
+  blake2b_write (&ctx, buf, 4);
+  blake2b_write (&ctx, in, inlen);
+  blake2b_final (&ctx);
+
+  if (outputlen <= 64)
+    memcpy (output, ctx.buf, outputlen);
+  else
+    {
+      int r = (outputlen-1)/32;
+      unsigned int remained = outputlen - 32*r;
+      int i;
+      unsigned char d[64];
+
+      i = 0;
+      while (1)
+        {
+          memcpy (d, ctx.buf, 64);
+          memcpy ((unsigned char *)output+i*32, d, 32);
+
+          if (++i >= r)
+            break;
+
+          ec = blake2b_init_ctx (&ctx, 0, NULL, 0, 64*8);
+          if (ec)
+            return ec;
+
+          blake2b_write (&ctx, d, 64);
+          blake2b_final (&ctx);
+        }
+
+      if (remained)
+        memcpy ((unsigned char *)output+r*32, d+32, remained);
+    }
+
+  wipememory (buf, sizeof (buf));
+  wipememory (&ctx, sizeof (ctx));
+  return 0;
+}
+
 static inline void blake2s_set_lastblock(BLAKE2S_STATE *S)
 {
   S->f[0] = 0xFFFFFFFFUL;
@@ -946,20 +999,11 @@ gcry_err_code_t _gcry_blake2_init_with_key(void *ctx, unsigned int flags,
     gcry_assert (err == 0); \
   } \
   static void \
-  _gcry_blake2##bs##_##dbits##_hash_buffer(void *outbuf, \
-        const void *buffer, size_t length) \
-  { \
-    BLAKE2##BS##_CONTEXT hd; \
-    blake2##bs##_##dbits##_init (&hd, 0); \
-    blake2##bs##_write (&hd, buffer, length); \
-    blake2##bs##_final (&hd); \
-    memcpy (outbuf, blake2##bs##_read (&hd), dbits / 8); \
-  } \
-  static void \
-  _gcry_blake2##bs##_##dbits##_hash_buffers(void *outbuf, \
+  _gcry_blake2##bs##_##dbits##_hash_buffers(void *outbuf, size_t nbytes, \
         const gcry_buffer_t *iov, int iovcnt) \
   { \
     BLAKE2##BS##_CONTEXT hd; \
+    (void)nbytes; \
     blake2##bs##_##dbits##_init (&hd, 0); \
     for (;iovcnt > 0; iov++, iovcnt--) \
       blake2##bs##_write (&hd, (const char*)iov[0].data + iov[0].off, \
@@ -967,20 +1011,19 @@ gcry_err_code_t _gcry_blake2_init_with_key(void *ctx, unsigned int flags,
     blake2##bs##_final (&hd); \
     memcpy (outbuf, blake2##bs##_read (&hd), dbits / 8); \
   } \
-  static byte blake2##bs##_##dbits##_asn[] = { 0x30 }; \
-  static gcry_md_oid_spec_t oid_spec_blake2##bs##_##dbits[] = \
+  static const byte blake2##bs##_##dbits##_asn[] = { 0x30 }; \
+  static const gcry_md_oid_spec_t oid_spec_blake2##bs##_##dbits[] = \
     { \
       { " 1.3.6.1.4.1.1722.12.2." oid_branch }, \
       { NULL } \
     }; \
-  gcry_md_spec_t _gcry_digest_spec_blake2##bs##_##dbits = \
+  const gcry_md_spec_t _gcry_digest_spec_blake2##bs##_##dbits = \
     { \
       GCRY_MD_BLAKE2##BS##_##dbits, {0, 0}, \
       "BLAKE2" #BS "_" #dbits, blake2##bs##_##dbits##_asn, \
       DIM (blake2##bs##_##dbits##_asn), oid_spec_blake2##bs##_##dbits, \
       dbits / 8, blake2##bs##_##dbits##_init, blake2##bs##_write, \
       blake2##bs##_final, blake2##bs##_read, NULL, \
-      _gcry_blake2##bs##_##dbits##_hash_buffer, \
       _gcry_blake2##bs##_##dbits##_hash_buffers, \
       sizeof (BLAKE2##BS##_CONTEXT), selftests_blake2##bs \
     };
