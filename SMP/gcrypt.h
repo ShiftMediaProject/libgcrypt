@@ -33,7 +33,7 @@
 #include <sys/types.h>
 
 #if defined _WIN32 || defined __WIN32__
-#include <sys/time.h>
+#include <basetsd.h>
 # ifndef __GNUC__
   typedef SSIZE_T ssize_t;
   typedef int  pid_t;
