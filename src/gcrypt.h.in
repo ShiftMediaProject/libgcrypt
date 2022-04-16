@@ -34,6 +34,7 @@
 
 #if defined _WIN32 || defined __WIN32__
 # ifndef __GNUC__
+# include <basetsd.h>
   typedef SSIZE_T ssize_t;
   typedef int  pid_t;
 # endif /*!__GNUC__*/
