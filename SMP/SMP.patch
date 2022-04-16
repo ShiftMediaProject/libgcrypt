@@ -223,11 +223,16 @@ index 2d2b8909..eef6dc27 100644
  /*-- rndjent.c --*/
  size_t _gcry_rndjent_poll (void (*add)(const void*,
 diff --git a/random/random-csprng.c b/random/random-csprng.c
-index 85d11789..6da11933 100644
+index 85d11789..12cf6409 100644
 --- a/random/random-csprng.c
 +++ b/random/random-csprng.c
-@@ -40,7 +40,9 @@
+@@ -37,10 +37,14 @@
+ #include <stdlib.h>
+ #include <errno.h>
+ #include <string.h>
++#ifdef HAVE_SYS_TIME_H
  #include <sys/time.h>
++#endif
  #include <sys/types.h>
  #include <sys/stat.h>
 -#include <unistd.h>
@@ -237,7 +242,7 @@ index 85d11789..6da11933 100644
  #include <fcntl.h>
  #include <time.h>
  #ifdef	HAVE_GETHRTIME
-@@ -52,8 +54,21 @@
+@@ -52,8 +56,21 @@
  #ifdef HAVE_GETRUSAGE
  #include <sys/resource.h>
  #endif
@@ -260,7 +265,7 @@ index 85d11789..6da11933 100644
  #endif
  #ifdef HAVE_W32_SYSTEM
  #include <windows.h>
-@@ -1175,7 +1190,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
+@@ -1175,7 +1192,11 @@ getfnc_gather_random (void))(void (*)(const void*, size_t,
  #endif
  
  #if USE_RNDW32
@@ -272,7 +277,7 @@ index 85d11789..6da11933 100644
    return fnc;
  #endif
  
-@@ -1197,7 +1216,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
+@@ -1197,7 +1218,11 @@ getfnc_fast_random_poll (void))( void (*)(const void*, size_t,
                                   enum random_origins)
  {
  #if USE_RNDW32
@@ -285,7 +290,7 @@ index 85d11789..6da11933 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index a42b9ce8..29390047 100644
+index a42b9ce8..005534ce 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
 @@ -149,7 +149,9 @@
@@ -298,13 +303,14 @@ index a42b9ce8..29390047 100644
  #include <stdint.h>
  
  #include "g10lib.h"
-@@ -157,6 +159,13 @@
+@@ -157,6 +159,14 @@
  #include "rand-internal.h"
  #include "../cipher/bufhelp.h"
  
 +#ifdef HAVE_W32_SYSTEM
 +# include <process.h>
 +# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
++#  include <windows.h>
 +#  define getpid() GetCurrentProcessId()
 +# endif
 +#endif
@@ -312,7 +318,7 @@ index a42b9ce8..29390047 100644
  
  
  /******************************************************************
-@@ -628,12 +637,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
+@@ -628,12 +638,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
    rc = _gcry_rndunix_gather_random (drbg_read_cb, 0, len,
  				    GCRY_VERY_STRONG_RANDOM);
  #elif USE_RNDW32
@@ -360,7 +366,7 @@ index a1d17ad0..330a89a6 100644
    rc = -1;
  #endif
 diff --git a/random/random.c b/random/random.c
-index c0435d7b..d83483b1 100644
+index c0435d7b..cc8b6e26 100644
 --- a/random/random.c
 +++ b/random/random.c
 @@ -28,7 +28,9 @@
@@ -373,13 +379,14 @@ index c0435d7b..d83483b1 100644
  #ifdef HAVE_SYSLOG
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
-@@ -42,6 +44,12 @@
+@@ -42,6 +44,13 @@
  /* The name of a file used to globally configure the RNG. */
  #define RANDOM_CONF_FILE "/etc/gcrypt/random.conf"
  
 +#ifdef HAVE_W32_SYSTEM
 +# include <process.h>
 +# if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
++#  include <windows.h>
 +#  define getpid() GetCurrentProcessId()
 +# endif
 +#endif
@@ -513,10 +520,10 @@ index b3f63d20..9407306b 100644
          break; /* No more drives.  */
 diff --git a/random/rndw32uwp.cpp b/random/rndw32uwp.cpp
 new file mode 100644
-index 00000000..b7bd6b8d
+index 00000000..4741a13f
 --- /dev/null
 +++ b/random/rndw32uwp.cpp
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,57 @@
 +/* rndw32uwp - W32 entropy gatherer (UWP)
 + *
 + * This file is part of Libgcrypt.
@@ -538,6 +545,7 @@ index 00000000..b7bd6b8d
 +#include "config.h"
 +#include "types.h"
 +#include "g10lib.h"
++#include "windows.h"
 +
 +using namespace Platform;
 +using namespace Windows::Security::Cryptography;
@@ -590,7 +598,7 @@ index da9948a6..257578d0 100644
  #include "g10lib.h"
  #include "mpi.h"
 diff --git a/src/fips.c b/src/fips.c
-index 391b94f1..2647a594 100644
+index 89f8204b..a537ea42 100644
 --- a/src/fips.c
 +++ b/src/fips.c
 @@ -21,7 +21,9 @@
@@ -604,7 +612,7 @@ index 391b94f1..2647a594 100644
  #include <string.h>
  #ifdef ENABLE_HMAC_BINARY_CHECK
  # include <dlfcn.h>
-@@ -30,6 +32,12 @@
+@@ -32,6 +34,12 @@
  #ifdef HAVE_SYSLOG
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
@@ -618,14 +626,15 @@ index 391b94f1..2647a594 100644
  /* The name of the file used to force libgcrypt into fips mode. */
  #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index b1364123..cb454607 100644
+index b1364123..9fb4107c 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
-@@ -34,7 +34,7 @@
+@@ -34,7 +34,8 @@
  
  #if defined _WIN32 || defined __WIN32__
  # ifndef __GNUC__
 -  typedef long ssize_t;
++# include <basetsd.h>
 +  typedef SSIZE_T ssize_t;
    typedef int  pid_t;
  # endif /*!__GNUC__*/

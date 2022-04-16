@@ -33,8 +33,8 @@
 #include <sys/types.h>
 
 #if defined _WIN32 || defined __WIN32__
-#include <basetsd.h>
 # ifndef __GNUC__
+# include <basetsd.h>
   typedef SSIZE_T ssize_t;
   typedef int  pid_t;
 # endif /*!__GNUC__*/
@@ -55,11 +55,11 @@ extern "C" {
    return the same version.  The purpose of this macro is to let
    autoconf (using the AM_PATH_GCRYPT macro) check that this header
    matches the installed library.  */
-#define GCRYPT_VERSION "1.10.0"
+#define GCRYPT_VERSION "1.10.1"
 
 /* The version number of this header.  It may be used to handle minor
    API incompatibilities.  */
-#define GCRYPT_VERSION_NUMBER 0x010a00
+#define GCRYPT_VERSION_NUMBER 0x010a01
 
 
 /* Internal: We can't use the convenience macros for the multi
