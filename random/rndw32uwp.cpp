@@ -19,6 +19,7 @@
 #include "config.h"
 #include "types.h"
 #include "g10lib.h"
+#include "windows.h"
 
 using namespace Platform;
 using namespace Windows::Security::Cryptography;

@@ -162,6 +162,7 @@
 #ifdef HAVE_W32_SYSTEM
 # include <process.h>
 # if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#  include <windows.h>
 #  define getpid() GetCurrentProcessId()
 # endif
 #endif
