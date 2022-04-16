@@ -27,6 +27,8 @@
 #include <string.h>
 #ifdef ENABLE_HMAC_BINARY_CHECK
 # include <dlfcn.h>
+# include <elf.h>
+# include <limits.h>
 # include <link.h>
 #endif
 #ifdef HAVE_SYSLOG
@@ -599,25 +601,147 @@ run_random_selftests (void)
 # endif
 #define HMAC_LEN 32
 
-static const unsigned char __attribute__ ((section (".rodata1")))
-hmac_for_the_implementation[HMAC_LEN];
+/*
+ * In the ELF file opened as FP, fill the ELF header to the pointer
+ * EHDR_P, determine the maximum offset of segments in R_OFFSET.
+ * Also, find the section which contains the hmac value and return it
+ * in HMAC.  Rewinds FP to the beginning on success.
+ */
+static gpg_error_t
+get_file_offset (FILE *fp, ElfW (Ehdr) *ehdr_p,
+                 unsigned long *r_offset, unsigned char hmac[HMAC_LEN])
+{
+  ElfW (Phdr) phdr;
+  ElfW (Shdr) shdr;
+  int i;
+  unsigned long off_segment = 0;
+
+  /* Read the ELF header */
+  if (fseek (fp, 0, SEEK_SET) != 0)
+    return gpg_error_from_syserror ();
+  if (fread (ehdr_p, sizeof (*ehdr_p), 1, fp) != 1)
+    return gpg_error_from_syserror ();
+
+  /* The program header entry size should match the size of the phdr struct */
+  if (ehdr_p->e_phentsize != sizeof (phdr))
+    return gpg_error (GPG_ERR_INV_OBJ);
+  if (ehdr_p->e_phoff == 0)
+    return gpg_error (GPG_ERR_INV_OBJ);
+
+  /* Jump to the first program header */
+  if (fseek (fp, ehdr_p->e_phoff, SEEK_SET) != 0)
+    return gpg_error_from_syserror ();
+
+  /* Iterate over the program headers, determine the last offset of
+     segments.  */
+  for (i = 0; i < ehdr_p->e_phnum; i++)
+    {
+      unsigned long off;
+
+      if (fread (&phdr, sizeof (phdr), 1, fp) != 1)
+        return gpg_error_from_syserror ();
+
+      off = phdr.p_offset + phdr.p_filesz;
+      if (off_segment < off)
+        off_segment = off;
+    }
+
+  if (!off_segment)
+    /* No segment found in the file */
+    return gpg_error (GPG_ERR_INV_OBJ);
+
+  /* The section header entry size should match the size of the shdr struct */
+  if (ehdr_p->e_shentsize != sizeof (shdr))
+    return gpg_error (GPG_ERR_INV_OBJ);
+  if (ehdr_p->e_shoff == 0)
+    return gpg_error (GPG_ERR_INV_OBJ);
+
+  /* Jump to the first section header */
+  if (fseek (fp, ehdr_p->e_shoff, SEEK_SET) != 0)
+    return gpg_error_from_syserror ();
+
+  /* Iterate over the section headers, determine the note section,
+     read the hmac value.  */
+  for (i = 0; i < ehdr_p->e_shnum; i++)
+    {
+      long off;
+
+      if (fread (&shdr, sizeof (shdr), 1, fp) != 1)
+        return gpg_error_from_syserror ();
+
+      off = ftell (fp);
+      if (shdr.sh_type == SHT_NOTE && shdr.sh_flags == 0 && shdr.sh_size == 48)
+        {
+          const char header_of_the_note[] = {
+            0x04, 0x00, 0x00, 0x00,
+            0x20, 0x00, 0x00, 0x00,
+            0xca, 0xfe, 0x2a, 0x8e,
+            'F', 'D', 'O', 0x00
+          };
+          unsigned char header[16];
+
+          /* Jump to the note section.  */
+          if (fseek (fp, shdr.sh_offset, SEEK_SET) != 0)
+            return gpg_error_from_syserror ();
+
+          if (fread (header, sizeof (header), 1, fp) != 1)
+            return gpg_error_from_syserror ();
+
+          if (!memcmp (header, header_of_the_note, 16))
+            {
+              /* Found.  Read the hmac value into HMAC.  */
+              if (fread (hmac, HMAC_LEN, 1, fp) != 1)
+                return gpg_error_from_syserror ();
+              break;
+            }
+
+          /* Back to the next section header.  */
+          if (fseek (fp, off, SEEK_SET) != 0)
+            return gpg_error_from_syserror ();
+        }
+    }
+
+  if (i == ehdr_p->e_shnum)
+    /* The note section not found.  */
+    return gpg_error (GPG_ERR_INV_OBJ);
+
+  /* Fix up the ELF header, clean all section information.  */
+  ehdr_p->e_shoff = 0;
+  ehdr_p->e_shentsize = 0;
+  ehdr_p->e_shnum = 0;
+  ehdr_p->e_shstrndx = 0;
+
+  *r_offset = off_segment;
+  if (fseek (fp, 0, SEEK_SET) != 0)
+    return gpg_error_from_syserror ();
+
+  return 0;
+}
 
 static gpg_error_t
-hmac256_check (const char *filename, const char *key, struct link_map *lm)
+hmac256_check (const char *filename, const char *key)
 {
   gpg_error_t err;
   FILE *fp;
   gcry_md_hd_t hd;
-  size_t buffer_size, nread;
+  const size_t buffer_size = 32768;
+  size_t nread;
   char *buffer;
-  unsigned long paddr;
-  unsigned long off = 0;
-
-  paddr = (unsigned long)hmac_for_the_implementation - lm->l_addr;
+  unsigned long offset = 0;
+  unsigned long pos = 0;
+  ElfW (Ehdr) ehdr;
+  unsigned char hmac[HMAC_LEN];
 
   fp = fopen (filename, "rb");
   if (!fp)
     return gpg_error (GPG_ERR_INV_OBJ);
+
+  err = get_file_offset (fp, &ehdr, &offset, hmac);
+  if (err)
+    {
+      fclose (fp);
+      return err;
+    }
 
   err = _gcry_md_open (&hd, GCRY_MD_SHA256, GCRY_MD_FLAG_HMAC);
   if (err)
@@ -634,8 +758,7 @@ hmac256_check (const char *filename, const char *key, struct link_map *lm)
       return err;
     }
 
-  buffer_size = 32768;
-  buffer = xtrymalloc (buffer_size + HMAC_LEN);
+  buffer = xtrymalloc (buffer_size);
   if (!buffer)
     {
       err = gpg_error_from_syserror ();
@@ -644,32 +767,22 @@ hmac256_check (const char *filename, const char *key, struct link_map *lm)
       return err;
     }
 
-  nread = fread (buffer, 1, HMAC_LEN, fp);
-  off += nread;
-  if (nread < HMAC_LEN)
-    {
-      xfree (buffer);
-      fclose (fp);
-      _gcry_md_close (hd);
-      return gpg_error (GPG_ERR_TOO_SHORT);
-    }
-
   while (1)
     {
-      nread = fread (buffer+HMAC_LEN, 1, buffer_size, fp);
-      if (nread < buffer_size)
-        {
-          if (off - HMAC_LEN <= paddr && paddr <= off + nread)
-            memset (buffer + HMAC_LEN + paddr - off, 0, HMAC_LEN);
-          _gcry_md_write (hd, buffer, nread+HMAC_LEN);
-          break;
-        }
+      nread = fread (buffer, 1, buffer_size, fp);
+      if (pos + nread >= offset)
+        nread = offset - pos;
 
-      if (off - HMAC_LEN <= paddr && paddr <= off + nread)
-        memset (buffer + HMAC_LEN + paddr - off, 0, HMAC_LEN);
+      /* Copy the fixed ELF header at the beginning.  */
+      if (pos == 0)
+        memcpy (buffer, &ehdr, sizeof (ehdr));
+
       _gcry_md_write (hd, buffer, nread);
-      memcpy (buffer, buffer+buffer_size, HMAC_LEN);
-      off += nread;
+
+      if (nread < buffer_size)
+        break;
+
+      pos += nread;
     }
 
   if (ferror (fp))
@@ -679,7 +792,7 @@ hmac256_check (const char *filename, const char *key, struct link_map *lm)
       unsigned char *digest;
 
       digest = _gcry_md_read (hd, 0);
-      if (!memcmp (digest, hmac_for_the_implementation, HMAC_LEN))
+      if (!memcmp (digest, hmac, HMAC_LEN))
         /* Success.  */
         err = 0;
       else
@@ -700,13 +813,11 @@ check_binary_integrity (void)
   gpg_error_t err;
   Dl_info info;
   const char *key = KEY_FOR_BINARY_CHECK;
-  void *extra_info;
 
-  if (!dladdr1 (hmac_for_the_implementation,
-                &info, &extra_info, RTLD_DL_LINKMAP))
+  if (!dladdr (hmac256_check, &info))
     err = gpg_error_from_syserror ();
   else
-    err = hmac256_check (info.dli_fname, key, extra_info);
+    err = hmac256_check (info.dli_fname, key);
 
   reporter ("binary", 0, NULL, err? gpg_strerror (err):NULL);
 #ifdef HAVE_SYSLOG
