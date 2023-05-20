@@ -55,11 +55,12 @@ typedef struct test_spec_pubkey
 }
 test_spec_pubkey_t;
 
-#define FLAG_CRYPT  (1 << 0)
-#define FLAG_SIGN   (1 << 1)
-#define FLAG_GRIP   (1 << 2)
-#define FLAG_NOFIPS (1 << 3)
-#define FLAG_CFB8   (1 << 4)
+#define FLAG_CRYPT   (1 << 0)
+#define FLAG_SIGN    (1 << 1)
+#define FLAG_GRIP    (1 << 2)
+#define FLAG_NOFIPS  (1 << 3)
+#define FLAG_CFB8    (1 << 4)
+#define FLAG_SPECIAL (1 << 5)
 
 static int in_fips_mode;
 
@@ -7331,6 +7332,8 @@ check_ccm_cipher (void)
           if (!keylen)
             {
               fail ("cipher-ccm, gcry_cipher_get_algo_keylen failed\n");
+              gcry_cipher_close (hde);
+              gcry_cipher_close (hdd);
               return;
             }
 
@@ -7350,6 +7353,8 @@ check_ccm_cipher (void)
           if (!blklen)
             {
               fail ("cipher-ccm, gcry_cipher_get_algo_blklen failed\n");
+              gcry_cipher_close (hde);
+              gcry_cipher_close (hdd);
               return;
             }
 
@@ -8423,7 +8428,7 @@ check_ocb_cipher_checksum (int algo, int keylen)
   const size_t buflen = 128 * 16;
   unsigned char *inbuf, *outbuf;
   gpg_error_t err = 0;
-  gcry_cipher_hd_t hde, hde2, hdd;
+  gcry_cipher_hd_t hde = NULL, hde2 = NULL, hdd = NULL;
   unsigned char tag[16];
   unsigned char tag2[16];
   unsigned char tag3[16];
@@ -8436,7 +8441,7 @@ check_ocb_cipher_checksum (int algo, int keylen)
       return;
     }
   outbuf = xmalloc(buflen);
-  if (!inbuf)
+  if (!outbuf)
     {
       fail ("out-of-memory\n");
       xfree(inbuf);
@@ -8485,6 +8490,8 @@ check_ocb_cipher_checksum (int algo, int keylen)
     err = gcry_cipher_open (&hdd, algo, GCRY_CIPHER_MODE_OCB, 0);
   if (err)
     {
+      gcry_cipher_close (hde);
+      gcry_cipher_close (hde2);
       fail ("cipher-ocb, gcry_cipher_open failed (checksum, algo %d): %s\n",
             algo, gpg_strerror (err));
       goto out_free;
@@ -9118,6 +9125,7 @@ do_check_xts_cipher (int inplace)
         {
           fail ("cipher-xts, gcry_cipher_open failed (tv %d): %s\n",
                 tidx, gpg_strerror (err));
+          gcry_cipher_close (hde);
           return;
         }
 
@@ -9342,6 +9350,8 @@ check_gost28147_cipher_basic (enum gcry_cipher_algos algo)
       if (err)
         {
           fail ("gost28147, gcry_cipher_open failed: %s\n", gpg_strerror (err));
+          gcry_cipher_close (hde);
+          gcry_cipher_close (hdd);
           return;
         }
 
@@ -13635,6 +13645,12 @@ check_digests (void)
         {
           if (in_fips_mode)
             {
+              err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_MD, algos[i].md);
+              if (err == GPG_ERR_NO_ERROR)
+                {
+                  fail ("algo %d, gcry_md_test_algo failed while it should"
+                        " have worked in FIPS mode\n", algos[i].md);
+                }
               if (verbose)
                 fprintf (stderr, "  algorithm %d not available in fips mode\n",
                          algos[i].md);
@@ -15213,6 +15229,7 @@ check_mac (void)
 #endif /* USE_GOST28147 */
       { 0 },
     };
+  gcry_error_t err;
   int i;
 
   if (verbose)
@@ -15226,6 +15243,12 @@ check_mac (void)
         {
           if (in_fips_mode)
             {
+              err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_MAC, algos[i].algo);
+              if (err == GPG_ERR_NO_ERROR)
+                {
+                  fail ("algo %d, gcry_mac_test_algo failed while it should"
+                        " have worked in FIPS mode\n", algos[i].algo);
+                }
               if (verbose)
                 fprintf (stderr, "  algorithm %d not available in fips mode\n",
                          algos[i].algo);
@@ -15293,6 +15316,7 @@ check_pubkey_sign (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
     const char *data;
     int algo;
     int expected_rc;
+    int flags;
   } datas[] =
     {
       { "(data\n (flags pkcs1)\n"
@@ -15363,6 +15387,22 @@ check_pubkey_sign (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
         " (random-override #4253647587980912233445566778899019283747#))\n",
 	GCRY_PK_RSA,
 	0 },
+      { "(data\n (flags pss)\n"
+	" (hash-algo sha256)\n"
+	" (value #11223344556677889900AABBCCDDEEFF#)\n"
+	" (salt-length 2:32)\n"
+        " (random-override #42536475879809122334455667788990192837465564738291"
+                           "00122334455667#))\n",
+	GCRY_PK_RSA,
+	0 },
+      { "(data\n (flags pss)\n"
+	" (hash-algo sha256)\n"
+	" (value #11223344556677889900AABBCCDDEEFF#)\n"
+	" (salt-length 2:33)\n"
+        " (random-override #42536475879809122334455667788990192837465564738291"
+                           "0012233445566778#))\n",
+	GCRY_PK_RSA,
+	0, FLAG_NOFIPS },
       { NULL }
     };
 
@@ -15386,7 +15426,7 @@ check_pubkey_sign (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	die ("converting data failed: %s\n", gpg_strerror (rc));
 
       rc = gcry_pk_sign (&sig, hash, skey);
-      if (in_fips_mode && (flags & FLAG_NOFIPS))
+      if (in_fips_mode && (flags & FLAG_NOFIPS || datas[dataidx].flags & FLAG_NOFIPS))
         {
           if (!rc)
             fail ("gcry_pk_sign did not fail as expected in FIPS mode\n");
@@ -15558,7 +15598,7 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
     int unpadded;
     int encrypt_expected_rc;
     int decrypt_expected_rc;
-    int special;
+    int flags;
   } datas[] =
     {
       {	GCRY_PK_RSA,
@@ -15567,35 +15607,40 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	NULL,
 	0,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       {	GCRY_PK_RSA,
         "(data\n (flags pkcs1)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags pkcs1)",
 	1,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)",
 	1,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)(hash-algo sha1)",
 	1,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)(hash-algo sha1)(label \"test\")",
 	1,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
 	" (value #11223344556677889900AA#)\n"
@@ -15603,7 +15648,8 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	"(flags oaep)(hash-algo sha1)(label \"test\")",
 	1,
 	0,
-	0 },
+	0,
+	FLAG_NOFIPS },
       {	0,
         "(data\n (flags )\n" " (value #11223344556677889900AA#))\n",
 	NULL,
@@ -15642,14 +15688,14 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	"(flags oaep)",
 	1,
 	0,
-	GPG_ERR_ENCODING_PROBLEM, 1 },
+	GPG_ERR_ENCODING_PROBLEM, FLAG_SPECIAL },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags pkcs1)",
 	1,
 	0,
-	GPG_ERR_ENCODING_PROBLEM, 1 },
+	GPG_ERR_ENCODING_PROBLEM, FLAG_SPECIAL | FLAG_NOFIPS },
       {	0,
         "(data\n (flags pss)\n"
 	" (value #11223344556677889900AA#))\n",
@@ -15676,7 +15722,8 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	die ("converting data failed: %s\n", gpg_strerror (rc));
 
       rc = gcry_pk_encrypt (&ciph, data, pkey);
-      if (in_fips_mode && (flags & FLAG_NOFIPS))
+      if (in_fips_mode && ((flags & FLAG_NOFIPS) ||
+                           (datas[dataidx].flags & FLAG_NOFIPS)))
         {
           if (!rc)
             fail ("gcry_pk_encrypt did not fail as expected in FIPS mode\n");
@@ -15725,7 +15772,7 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	      ciph = list;
 	    }
 	  rc = gcry_pk_decrypt (&plain, ciph, skey);
-          if (!rc && datas[dataidx].special == 1)
+          if ((!rc || in_fips_mode) && (datas[dataidx].flags & FLAG_SPECIAL))
             {
               /* It may happen that OAEP formatted data which is
                  decrypted as pkcs#1 data returns a valid pkcs#1

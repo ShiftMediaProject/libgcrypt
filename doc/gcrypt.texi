@@ -258,18 +258,18 @@ directory in which the header file is located to the compilers include
 file search path (via the @option{-I} option).
 
 However, the path to the include file is determined at the time the
-source is configured.  To solve this problem, Libgcrypt ships with a small
-helper program @command{libgcrypt-config} that knows the path to the
-include file and other configuration options.  The options that need
-to be added to the compiler invocation at compile time are output by
-the @option{--cflags} option to @command{libgcrypt-config}.  The following
-example shows how it can be used at the command line:
+source is configured.  To solve this problem, Libgcrypt ships with
+@code{libgcrypt.pc} file, that knows about the path to the include
+file and other configuration options.  The options that need to be
+added to the compiler invocation at compile time are output by the
+@option{--cflags} option to @command{pkg-config libgcrypt}.  The
+following example shows how it can be used at the command line:
 
 @example
-gcc -c foo.c `libgcrypt-config --cflags`
+gcc -c foo.c `pkg-config --cflags libgcrypt`
 @end example
 
-Adding the output of @samp{libgcrypt-config --cflags} to the
+Adding the output of @samp{pkg-config --cflags libgcrypt} to the
 compiler's command line will ensure that the compiler can find the
 Libgcrypt header file.
 
@@ -277,21 +277,21 @@ A similar problem occurs when linking the program with the library.
 Again, the compiler has to find the library files.  For this to work,
 the path to the library files has to be added to the library search path
 (via the @option{-L} option).  For this, the option @option{--libs} to
-@command{libgcrypt-config} can be used.  For convenience, this option
+@command{pkg-config libgcrypt} can be used.  For convenience, this option
 also outputs all other options that are required to link the program
 with the Libgcrypt libraries (in particular, the @samp{-lgcrypt}
 option).  The example shows how to link @file{foo.o} with the Libgcrypt
 library to a program @command{foo}.
 
 @example
-gcc -o foo foo.o `libgcrypt-config --libs`
+gcc -o foo foo.o `pkg-config --libs libgcrypt`
 @end example
 
 Of course you can also combine both examples to a single command by
-specifying both options to @command{libgcrypt-config}:
+specifying both options to @command{pkg-config libgcrypt}:
 
 @example
-gcc -o foo foo.c `libgcrypt-config --cflags --libs`
+gcc -o foo foo.c `pkg-config --cflags --libs libgcrypt`
 @end example
 
 @node Building sources using Automake
@@ -299,9 +299,10 @@ gcc -o foo foo.c `libgcrypt-config --cflags --libs`
 
 It is much easier if you use GNU Automake instead of writing your own
 Makefiles.  If you do that, you do not have to worry about finding and
-invoking the @command{libgcrypt-config} script at all.
-Libgcrypt provides an extension to Automake that does all
-the work for you.
+invoking the @command{pkg-config} script at all.
+
+You can use @code{PKG_CHECK_MODULES} macro, or, libgcrypt also
+provides an extension to Automake that does all the work for you.
 
 @c A simple macro for optional variables.
 @macro ovar{varname}
@@ -316,20 +317,9 @@ found, execute @var{action-if-found}, otherwise do
 Additionally, the function defines @code{LIBGCRYPT_CFLAGS} to the
 flags needed for compilation of the program to find the
 @file{gcrypt.h} header file, and @code{LIBGCRYPT_LIBS} to the linker
-flags needed to link the program to the Libgcrypt library.  If the
-used helper script does not match the target type you are building for,
-a warning is printed and the string @code{libgcrypt} is appended to the
-variable @code{gpg_config_script_warn}.
+flags needed to link the program to the Libgcrypt library.
 
-This macro searches for @command{libgcrypt-config} along the PATH.  If
-you are cross-compiling, it is useful to set the environment variable
-@code{SYSROOT} to the top directory of your target.  The macro will
-then first look for the helper program in the @file{bin} directory
-below that top directory.  An absolute directory name must be used for
-@code{SYSROOT}.  Finally, if the configure command line option
-@code{--with-libgcrypt-prefix} is used, only its value is used for the top
-directory below which the helper script is expected.
-
+This macro locates for @code{libgcrypt.pc}, with cross-compile support.
 @end defmac
 
 You can use the defined Autoconf variables like this in your
@@ -986,6 +976,68 @@ Check if the given KDF is approved under the current FIPS 140-3
 certification. If the KDF is approved, this function returns
 @code{GPG_ERR_NO_ERROR}. Otherwise @code{GPG_ERR_NOT_SUPPORTED}
 is returned.
+
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_FUNCTION; Arguments: const char *
+
+Check if the given function is approved under the current FIPS 140-3
+certification. If the function is approved, this function returns
+@code{GPG_ERR_NO_ERROR} (other restrictions might still apply).
+Otherwise @code{GPG_ERR_NOT_SUPPORTED} is returned.
+
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_MAC; Arguments: enum gcry_mac_algos
+
+Check if the given MAC is approved under the current FIPS 140-3
+certification. If the MAC is approved, this function returns
+@code{GPG_ERR_NO_ERROR}. Otherwise @code{GPG_ERR_NOT_SUPPORTED}
+is returned.
+
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_MD; Arguments: enum gcry_md_algos
+
+Check if the given message digest algorithm is approved under the current
+FIPS 140-3 certification. If the algorithm is approved, this function returns
+@code{GPG_ERR_NO_ERROR}. Otherwise @code{GPG_ERR_NOT_SUPPORTED} is returned.
+
+@item GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS; Arguments: const char *
+
+Check if the given public key operation flag or s-expression object name is
+approved under the current FIPS 140-3 certification.  If the flag is
+approved, this function returns @code{GPG_ERR_NO_ERROR}.
+
+Otherwise @code{GPG_ERR_NOT_SUPPORTED} is returned.
+
+For compound s-expression objects, if the object name is allowed, the user
+is responsible to check also the internal members.  For example:
+
+@example
+  gcry_sexp_t s_sig = NULL;
+  gcry_md_hd_t hd = NULL;
+  gcry_sexp_t s_sk = NULL;
+  const char *data_tmpl = "(data(flags pss)(hash %s %b)(salt-length 1:0))";
+
+  if (err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_FUNCTION, "gcry_md_open") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_MD, GCRY_MD_SHA512) &&
+      err = gcry_md_open (&hd, GCRY_MD_SHA512, 0))
+    @{
+      printf ("gcry_md_open failed: %s", gpg_strerror (err));
+      return;
+    @}
+  gcry_md_write (hd, buffer, buflen);
+
+  /* initialize the key in s_sk */
+
+  if (err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_FUNCTION, "gcry_pk_hash_sign") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS, "data") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS, "flags") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS, "pss") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS, "hash") &&
+      err = gcry_control(GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS, "salt-length")
+      err = gcry_pk_hash_sign (&s_sig, data_tmpl, s_sk, hd, NULL))
+    @{
+      printf ("gcry_pk_hash_sign failed: %s", gpg_strerror (err));
+      return;
+    @}
+  /* ok */
+@end example
 
 @end table
 
@@ -2667,8 +2719,7 @@ achieve fastest ECC key generation.
 Force the use of the ANSI X9.31 key generation algorithm instead of
 the default algorithm. This flag is only meaningful for RSA key
 generation and usually not required.  Note that this algorithm is
-implicitly used if either @code{derive-parms} is given or Libgcrypt is
-in FIPS mode.
+implicitly used if either @code{derive-parms} is given.
 
 @item use-fips186
 @cindex FIPS 186
@@ -3278,9 +3329,9 @@ This is currently only implemented for RSA and DSA keys.  It is not
 allowed to use this together with a @code{domain} specification.  If
 given, it is used to derive the keys using the given parameters.
 
-If given for an RSA key, the X9.31 key generation algorithm is used
-even if libgcrypt is not in FIPS mode.  If given for a DSA key, the
-FIPS 186 algorithm is used even if libgcrypt is not in FIPS mode.
+If given for an RSA key, the X9.31 key generation algorithm is used.
+If given for a DSA key, the FIPS 186 algorithm is used even if
+libgcrypt is not in FIPS mode.
 
 @example
 (genkey
@@ -3308,6 +3359,38 @@ FIPS 186 algorithm is used even if libgcrypt is not in FIPS mode.
     (nbits 4:1024)
     (derive-parms
       (seed @var{seed-mpi}))))
+@end example
+
+@item test-parms @var{list}
+This is currently only implemented for RSA keys.  If given, the
+libgcrypt will not generate parameter, but tests whether the p,q is
+probably prime.  Returns key with zeroes.
+
+The FIPS key generation algorithm is used even if libgcrypt is not
+in FIPS mode.
+
+@example
+(genkey
+  (rsa
+    (nbits 4:1024)
+    (rsa-use-e 1:3)
+    (test-parms
+      (e 5:65537)
+      (p #00bbccabcee15d343944a47e492d4b1f4de79633e2
+          0cbb46f7d2d6813392a807ad048cf77528edd19f77
+          e7453f25173b9dcb70423afa2037aae147b81a33d5
+          41fc58f875eff1e852ab55e2e09a3debfbc151b3b0
+          d17fef6f74d81fca14fbae531418e211ef818592af
+          70de5cec3b92795cc3578572bf456099cd8727150e
+          523261#)
+      (q #00ca87ecf2883f4ed00a9ec65abdeba81d28edbfcc
+          34ecc563d587f166b52d42bfbe22bbc095b0b8426a
+          2f8bbc55baaa8859b42cbc376ed3067db3ef7b135b
+          63481322911ebbd7014db83aa051e0ca2dbf302b75
+          cd37f2ae8df90e134226e92f6353a284b28bb30af0
+          bbf925b345b955328379866ebac11d55bc80fe84f1
+          05d415#)
+
 @end example
 
 
@@ -5098,7 +5181,8 @@ Simple unsigned integer.
 
 @noindent
 Note that all of the above formats store the integer in big-endian
-format (MSB first).
+format (MSB first).  Leading zeroes are stripped unless they are
+required to keep a value positive.
 @end deftypefun
 
 

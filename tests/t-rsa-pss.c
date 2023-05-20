@@ -144,7 +144,10 @@ hex2buffer (const char *string, size_t *r_length)
   for (s=string; *s; s +=2 )
     {
       if (!hexdigitp (s) || !hexdigitp (s+1))
-        return NULL;           /* Invalid hex digits. */
+        {
+          xfree (buffer);
+          return NULL;           /* Invalid hex digits. */
+        }
       ((unsigned char*)buffer)[length++] = xtoi_2 (s);
     }
   *r_length = length;
@@ -337,7 +340,7 @@ one_test_sexp (const char *n, const char *e, const char *d,
     snprintf (p, 3, "%02x", out[i]);
   if (strcmp (sig_string, s))
     {
-      fail ("gcry_pkhash_sign failed: %s",
+      fail ("gcry_pk_hash_sign failed: %s",
             "wrong value returned");
       info ("  expected: '%s'", s);
       info ("       got: '%s'", sig_string);

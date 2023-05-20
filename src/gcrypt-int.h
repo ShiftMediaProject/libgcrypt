@@ -214,8 +214,8 @@ gpg_err_code_t _gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
                                const void *salt, size_t saltlen,
                                const void *key, size_t keylen,
                                const void *ad, size_t adlen);
-gcry_error_t _gcry_kdf_compute (gcry_kdf_hd_t h,
-                                const struct gcry_kdf_thread_ops *ops);
+gcry_err_code_t _gcry_kdf_compute (gcry_kdf_hd_t h,
+                                   const struct gcry_kdf_thread_ops *ops);
 gpg_err_code_t _gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result);
 void _gcry_kdf_close (gcry_kdf_hd_t h);
 
@@ -296,7 +296,7 @@ _gcry_err_code_from_errno (int err)
 static inline int
 _gcry_err_code_to_errno (gcry_err_code_t code)
 {
-  return gpg_err_code_from_errno (code);
+  return gpg_err_code_to_errno (code);
 }
 
 /* Return an error value with the error source SOURCE and the system

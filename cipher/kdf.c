@@ -160,6 +160,21 @@ _gcry_kdf_pkdf2 (const void *passphrase, size_t passphraselen,
     return GPG_ERR_INV_VALUE;
 #endif
 
+  /* FIPS requires minimum passphrase length, see FIPS 140-3 IG D.N */
+  if (fips_mode () && passphraselen < 8)
+    return GPG_ERR_INV_VALUE;
+
+  /* FIPS requires minimum salt length of 128 b (SP 800-132 sec. 5.1, p.6) */
+  if (fips_mode () && saltlen < 16)
+    return GPG_ERR_INV_VALUE;
+
+  /* FIPS requires minimum iterations bound (SP 800-132 sec 5.2, p.6) */
+  if (fips_mode () && iterations < 1000)
+    return GPG_ERR_INV_VALUE;
+
+  /* Check minimum key size */
+  if (fips_mode () && dklen < 14)
+    return GPG_ERR_INV_VALUE;
 
   /* Step 2 */
   l = ((dklen - 1)/ hlen) + 1;
@@ -843,6 +858,9 @@ argon2_open (gcry_kdf_hd_t *hd, int subalgo,
         parallelism = (unsigned int)param[3];
     }
 
+  if (parallelism == 0)
+    return GPG_ERR_INV_VALUE;
+
   n = offsetof (struct argon2_context, out) + taglen;
   a = xtrymalloc (n);
   if (!a)
@@ -1020,17 +1038,25 @@ check_one (int algo, int hash_algo,
 {
   unsigned char key[512]; /* hardcoded to avoid allocation */
   size_t keysize = expectlen;
-
-  /* Skip test with shoter passphrase in FIPS mode.  */
-  if (fips_mode () && passphraselen < 14)
-    return NULL;
+  int rv;
 
   if (keysize > sizeof(key))
     return "invalid tests data";
 
-  if (_gcry_kdf_derive (passphrase, passphraselen, algo,
-                        hash_algo, salt, saltlen, iterations,
-                        keysize, key))
+  rv = _gcry_kdf_derive (passphrase, passphraselen, algo,
+                         hash_algo, salt, saltlen, iterations,
+                         keysize, key);
+  /* In fips mode we have special requirements for the input and
+   * output parameters */
+  if (fips_mode ())
+    {
+      if (rv && (passphraselen < 8 || saltlen < 16 ||
+                 iterations < 1000 || expectlen < 14))
+        return NULL;
+      else if (rv)
+        return "gcry_kdf_derive unexpectedly failed in FIPS Mode";
+    }
+  else if (rv)
     return "gcry_kdf_derive failed";
 
   if (memcmp (key, expect, expectlen))

@@ -911,6 +911,14 @@ check_pbkdf2 (void)
       "password", 8,
       "salt", 4,
       GCRY_MD_SHA1,
+      1,
+      10, /* too short dklen for FIPS */
+      "\x0c\x60\xc8\x0f\x96\x1f\x0e\x71\xf3\xa9"
+    },
+    {
+      "password", 8,
+      "salt", 4,
+      GCRY_MD_SHA1,
       2,
       20,
       "\xea\x6c\x01\x4d\xc7\x2d\x6f\x8c\xcd\x1e"
@@ -1105,7 +1113,7 @@ check_pbkdf2 (void)
                              GCRY_KDF_PBKDF2, tv[tvidx].hashalgo,
                              tv[tvidx].salt, tv[tvidx].saltlen,
                              tv[tvidx].c, tv[tvidx].dklen, outbuf);
-      if (in_fips_mode && tvidx > 6)
+      if (in_fips_mode && tvidx > 7)
         {
           if (!err)
             fail ("pbkdf2 test %d unexpectedly passed in FIPS mode: %s\n",
@@ -1114,7 +1122,7 @@ check_pbkdf2 (void)
         }
       if (err)
         {
-          if (in_fips_mode && tv[tvidx].plen < 14)
+          if (in_fips_mode && (tv[tvidx].plen < 14 || tv[tvidx].dklen < 14))
             {
               if (verbose)
                 fprintf (stderr,
@@ -1490,6 +1498,64 @@ check_argon2 (void)
 }
 
 
+static void
+check_fips_indicators (void)
+{
+  enum gcry_kdf_algos fips_kdf_algos[] = {
+    GCRY_KDF_PBKDF2,
+  };
+  enum gcry_kdf_algos kdf_algos[] = {
+    GCRY_KDF_SIMPLE_S2K,
+    GCRY_KDF_SALTED_S2K,
+    GCRY_KDF_ITERSALTED_S2K,
+    GCRY_KDF_PBKDF1,
+    GCRY_KDF_PBKDF2,
+    GCRY_KDF_SCRYPT,
+    GCRY_KDF_ARGON2
+  };
+  size_t i, j;
+
+  for (i = 0; i < sizeof(kdf_algos) / sizeof(*kdf_algos); i++)
+    {
+      int is_fips_kdf_algo = 0;
+      gcry_error_t err = gcry_control (GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, kdf_algos[i]);
+
+      if (verbose)
+        fprintf (stderr, "checking FIPS indicator for KDF %d: %s\n",
+                 kdf_algos[i], gcry_strerror (err));
+
+      for (j = 0; j < sizeof(fips_kdf_algos) / sizeof(*fips_kdf_algos); j++)
+        {
+          if (kdf_algos[i] == fips_kdf_algos[j])
+            {
+              is_fips_kdf_algo = 1;
+              break;
+            }
+        }
+
+      switch (err & GPG_ERR_CODE_MASK)
+        {
+          case GPG_ERR_NO_ERROR:
+            if (!is_fips_kdf_algo)
+              fail ("KDF algorithm %d is marked as approved by"
+                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but only PBKDF2 should"
+                    " be marked as approved.", kdf_algos[i]);
+            break;
+          case GPG_ERR_NOT_SUPPORTED:
+            if (is_fips_kdf_algo)
+              fail ("KDF algorithm %d is marked as not approved by"
+                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but it should be"
+                    " approved", kdf_algos[i]);
+            break;
+          default:
+            fail ("Unexpected error '%s' (%d) returned by"
+                  " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF for KDF algorithm %d",
+                  gcry_strerror (err), err, kdf_algos[i]);
+        }
+    }
+}
+
+
 int
 main (int argc, char **argv)
 {
@@ -1567,6 +1633,8 @@ main (int argc, char **argv)
       check_pbkdf2 ();
       check_scrypt ();
       check_argon2 ();
+      if (in_fips_mode)
+        check_fips_indicators();
     }
 
   return error_count ? 1 : 0;

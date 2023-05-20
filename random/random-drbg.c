@@ -198,11 +198,9 @@
 #define DRBG_HASHSHA1		((u32)1<<4)
 #define DRBG_HASHSHA224		((u32)1<<5)
 #define DRBG_HASHSHA256		((u32)1<<6)
-#define DRBG_HASHSHA384		((u32)1<<7)
 #define DRBG_HASHSHA512		((u32)1<<8)
 #define DRBG_HASH_MASK		(DRBG_HASHSHA1 | DRBG_HASHSHA224 \
-				 | DRBG_HASHSHA256 | DRBG_HASHSHA384 \
-				 | DRBG_HASHSHA512)
+				 | DRBG_HASHSHA256 | DRBG_HASHSHA512)
 /* type modifiers (A.3)*/
 #define DRBG_HMAC		((u32)1<<12)
 #define DRBG_SYM128		((u32)1<<13)
@@ -221,23 +219,18 @@
 #define DRBG_NOPR_CTRAES256 (DRBG_CTRAES | DRBG_SYM256)
 #define DRBG_PR_HASHSHA1     (DRBG_PREDICTION_RESIST | DRBG_HASHSHA1)
 #define DRBG_PR_HASHSHA256   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA256)
-#define DRBG_PR_HASHSHA384   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA384)
 #define DRBG_PR_HASHSHA512   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA512)
 #define DRBG_NOPR_HASHSHA1   (DRBG_HASHSHA1)
 #define DRBG_NOPR_HASHSHA256 (DRBG_HASHSHA256)
-#define DRBG_NOPR_HASHSHA384 (DRBG_HASHSHA384)
 #define DRBG_NOPR_HASHSHA512 (DRBG_HASHSHA512)
 #define DRBG_PR_HMACSHA1     (DRBG_PREDICTION_RESIST | DRBG_HASHSHA1 \
                               | DRBG_HMAC)
 #define DRBG_PR_HMACSHA256   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA256 \
                               | DRBG_HMAC)
-#define DRBG_PR_HMACSHA384   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA384 \
-                              | DRBG_HMAC)
 #define DRBG_PR_HMACSHA512   (DRBG_PREDICTION_RESIST | DRBG_HASHSHA512 \
                               | DRBG_HMAC)
 #define DRBG_NOPR_HMACSHA1   (DRBG_HASHSHA1 | DRBG_HMAC)
 #define DRBG_NOPR_HMACSHA256 (DRBG_HASHSHA256 | DRBG_HMAC)
-#define DRBG_NOPR_HMACSHA384 (DRBG_HASHSHA384 | DRBG_HMAC)
 #define DRBG_NOPR_HMACSHA512 (DRBG_HASHSHA512 | DRBG_HMAC)
 
 
@@ -351,6 +344,9 @@ enum drbg_prefixes
  * Global variables
  ***************************************************************/
 
+/* The instance of the DRBG, to be refereed by drbg_state.  */
+static struct drbg_state_s drbg_instance;
+
 /* Global state variable holding the current instance of the DRBG.  */
 static drbg_state_t drbg_state;
 
@@ -366,12 +362,10 @@ static const struct drbg_core_s drbg_cores[] = {
   /* Hash DRBGs */
   {DRBG_HASHSHA1, 55, 20, GCRY_MD_SHA1},
   {DRBG_HASHSHA256, 55, 32, GCRY_MD_SHA256},
-  {DRBG_HASHSHA384, 111, 48, GCRY_MD_SHA384},
   {DRBG_HASHSHA512, 111, 64, GCRY_MD_SHA512},
   /* HMAC DRBGs */
   {DRBG_HASHSHA1   | DRBG_HMAC, 20, 20, GCRY_MD_SHA1},
   {DRBG_HASHSHA256 | DRBG_HMAC, 32, 32, GCRY_MD_SHA256},
-  {DRBG_HASHSHA384 | DRBG_HMAC, 48, 48, GCRY_MD_SHA384},
   {DRBG_HASHSHA512 | DRBG_HMAC, 64, 64, GCRY_MD_SHA512},
   /* block ciphers */
   {DRBG_CTRAES | DRBG_SYM128, 32, 16, GCRY_CIPHER_AES128},
@@ -550,7 +544,7 @@ drbg_sec_strength (u32 flags)
   else if (flags & DRBG_SYM192)
     return 24;
   else if ((flags & DRBG_SYM256) || (flags & DRBG_HASHSHA256) ||
-	   (flags & DRBG_HASHSHA384) || (flags & DRBG_HASHSHA512))
+	   (flags & DRBG_HASHSHA512))
     return 32;
   else
     return 32;
@@ -1797,9 +1791,7 @@ _drbg_init_internal (u32 flags, drbg_string_t *pers)
     }
   else
     {
-      drbg_state = xtrycalloc_secure (1, sizeof *drbg_state);
-      if (!drbg_state)
-	return gpg_err_code_from_syserror ();
+      drbg_state = &drbg_instance;
     }
   if (flags & DRBG_PREDICTION_RESIST)
     pr = 1;
@@ -1893,7 +1885,6 @@ _gcry_rngdrbg_close_fds (void)
   if (drbg_state)
     {
       drbg_uninstantiate (drbg_state);
-      xfree (drbg_state);
       drbg_state = NULL;
     }
   drbg_unlock ();
@@ -1954,6 +1945,9 @@ _gcry_rngdrbg_randomize (void *buffer, size_t length,
    * key, either a re-init or a reseed is sufficient for a fork */
   if (drbg_state->seed_init_pid != getpid ())
     {
+      /* Update the PID recorded.  */
+      drbg_state->seed_init_pid = getpid ();
+
       /* We are in a child of us. Perform a reseeding. */
       if (drbg_reseed (drbg_state, NULL))
 	{

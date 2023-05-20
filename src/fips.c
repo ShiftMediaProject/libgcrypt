@@ -373,12 +373,63 @@ _gcry_fips_indicator_cipher (va_list arg_ptr)
         case GCRY_CIPHER_MODE_OFB:
         case GCRY_CIPHER_MODE_CTR:
         case GCRY_CIPHER_MODE_CCM:
-        case GCRY_CIPHER_MODE_GCM:
         case GCRY_CIPHER_MODE_XTS:
+        case GCRY_CIPHER_MODE_AESWRAP:
           return GPG_ERR_NO_ERROR;
         default:
           return GPG_ERR_NOT_SUPPORTED;
         }
+    default:
+      return GPG_ERR_NOT_SUPPORTED;
+    }
+}
+
+int
+_gcry_fips_indicator_mac (va_list arg_ptr)
+{
+  enum gcry_mac_algos alg = va_arg (arg_ptr, enum gcry_mac_algos);
+
+  switch (alg)
+    {
+    case GCRY_MAC_CMAC_AES:
+    case GCRY_MAC_HMAC_SHA1:
+    case GCRY_MAC_HMAC_SHA224:
+    case GCRY_MAC_HMAC_SHA256:
+    case GCRY_MAC_HMAC_SHA384:
+    case GCRY_MAC_HMAC_SHA512:
+    case GCRY_MAC_HMAC_SHA512_224:
+    case GCRY_MAC_HMAC_SHA512_256:
+    case GCRY_MAC_HMAC_SHA3_224:
+    case GCRY_MAC_HMAC_SHA3_256:
+    case GCRY_MAC_HMAC_SHA3_384:
+    case GCRY_MAC_HMAC_SHA3_512:
+      return GPG_ERR_NO_ERROR;
+    default:
+      return GPG_ERR_NOT_SUPPORTED;
+    }
+}
+
+int
+_gcry_fips_indicator_md (va_list arg_ptr)
+{
+  enum gcry_md_algos alg = va_arg (arg_ptr, enum gcry_md_algos);
+
+  switch (alg)
+    {
+    case GCRY_MD_SHA1:
+    case GCRY_MD_SHA224:
+    case GCRY_MD_SHA256:
+    case GCRY_MD_SHA384:
+    case GCRY_MD_SHA512:
+    case GCRY_MD_SHA512_224:
+    case GCRY_MD_SHA512_256:
+    case GCRY_MD_SHA3_224:
+    case GCRY_MD_SHA3_256:
+    case GCRY_MD_SHA3_384:
+    case GCRY_MD_SHA3_512:
+    case GCRY_MD_SHAKE128:
+    case GCRY_MD_SHAKE256:
+      return GPG_ERR_NO_ERROR;
     default:
       return GPG_ERR_NOT_SUPPORTED;
     }
@@ -396,6 +447,69 @@ _gcry_fips_indicator_kdf (va_list arg_ptr)
     default:
       return GPG_ERR_NOT_SUPPORTED;
     }
+}
+
+int
+_gcry_fips_indicator_function (va_list arg_ptr)
+{
+  const char *function = va_arg (arg_ptr, const char *);
+
+  if (strcmp (function, "gcry_pk_sign") == 0 ||
+      strcmp (function, "gcry_pk_verify") == 0 ||
+      strcmp (function, "gcry_pk_encrypt") == 0 ||
+      strcmp (function, "gcry_pk_decrypt") == 0 ||
+      strcmp (function, "gcry_pk_random_override_new") == 0)
+    return GPG_ERR_NOT_SUPPORTED;
+
+  return GPG_ERR_NO_ERROR;
+}
+
+/* Note: the array should be sorted.  */
+static const char *valid_string_in_sexp[] = {
+  "curve",
+  "d",
+  "data",
+  "e",
+  "ecdsa",
+  "flags",
+  "genkey",
+  "hash",
+  "n",
+  "nbits",
+  "pkcs1",
+  "private-key",
+  "pss",
+  "public-key",
+  "q",
+  "r",
+  "raw",
+  "rsa",
+  "rsa-use-e",
+  "s",
+  "salt-length",
+  "sig-val",
+  "value"
+};
+
+static int
+compare_string (const void *v1, const void *v2)
+{
+  const char * const *p_str1 = v1;
+  const char * const *p_str2 = v2;
+
+  return strcmp (*p_str1, *p_str2);
+}
+
+int
+_gcry_fips_indicator_pk_flags (va_list arg_ptr)
+{
+  const char *flag = va_arg (arg_ptr, const char *);
+
+  if (bsearch (&flag, valid_string_in_sexp, DIM (valid_string_in_sexp),
+               sizeof (char *), compare_string))
+    return GPG_ERR_NO_ERROR;
+
+  return GPG_ERR_NOT_SUPPORTED;
 }
 
 
@@ -670,6 +784,8 @@ get_file_offset (FILE *fp, ElfW (Ehdr) *ehdr_p,
         return gpg_error_from_syserror ();
 
       off = ftell (fp);
+      if (off < 0)
+        return gpg_error_from_syserror ();
       if (shdr.sh_type == SHT_NOTE && shdr.sh_flags == 0 && shdr.sh_size == 48)
         {
           const char header_of_the_note[] = {
