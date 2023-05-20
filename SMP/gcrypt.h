@@ -1,6 +1,6 @@
 /* gcrypt.h -  GNU Cryptographic Library Interface              -*- c -*-
- * Copyright (C) 2012-2022 g10 Code GmbH
- * Copyright (C) 2013-2022 Jussi Kivilinna
+ * Copyright (C) 2012-2023 g10 Code GmbH
+ * Copyright (C) 2013-2023 Jussi Kivilinna
  * Copyright (C) 1998-2018 Free Software Foundation, Inc.
  *
  * This file is part of Libgcrypt.
@@ -55,11 +55,11 @@ extern "C" {
    return the same version.  The purpose of this macro is to let
    autoconf (using the AM_PATH_GCRYPT macro) check that this header
    matches the installed library.  */
-#define GCRYPT_VERSION "1.10.1"
+#define GCRYPT_VERSION "1.10.2"
 
 /* The version number of this header.  It may be used to handle minor
    API incompatibilities.  */
-#define GCRYPT_VERSION_NUMBER 0x010a01
+#define GCRYPT_VERSION_NUMBER 0x010a02
 
 
 /* Internal: We can't use the convenience macros for the multi
@@ -331,7 +331,11 @@ enum gcry_ctl_cmds
     GCRYCTL_SET_DECRYPTION_TAG = 80,
     GCRYCTL_FIPS_SERVICE_INDICATOR_CIPHER = 81,
     GCRYCTL_FIPS_SERVICE_INDICATOR_KDF = 82,
-    GCRYCTL_NO_FIPS_MODE = 83
+    GCRYCTL_NO_FIPS_MODE = 83,
+    GCRYCTL_FIPS_SERVICE_INDICATOR_FUNCTION = 84,
+    GCRYCTL_FIPS_SERVICE_INDICATOR_MAC = 85,
+    GCRYCTL_FIPS_SERVICE_INDICATOR_MD = 86,
+    GCRYCTL_FIPS_SERVICE_INDICATOR_PK_FLAGS = 87
   };
 
 /* Perform various operations defined by CMD. */
@@ -1077,7 +1081,8 @@ gcry_error_t gcry_cipher_checktag (gcry_cipher_hd_t hd, const void *intag,
    cipher handle H. */
 #define gcry_cipher_sync(h)  gcry_cipher_ctl( (h), GCRYCTL_CFB_SYNC, NULL, 0)
 
-/* Enable or disable CTS in future calls to gcry_encrypt(). CBC mode only. */
+/* Enable or disable CTS in future calls to gcry_cipher_encrypt().
+ * CBC mode only. */
 #define gcry_cipher_cts(h,on)  gcry_cipher_ctl( (h), GCRYCTL_SET_CBC_CTS, \
                                                                    NULL, on )
 

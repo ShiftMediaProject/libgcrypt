@@ -40,7 +40,7 @@ index c8a1097a..4b2eccf3 100644
  #  endif
  # endif
 diff --git a/cipher/cipher-poly1305.c b/cipher/cipher-poly1305.c
-index bb475236..f01b858f 100644
+index 9abd8b0c..3d136b88 100644
 --- a/cipher/cipher-poly1305.c
 +++ b/cipher/cipher-poly1305.c
 @@ -71,7 +71,7 @@ poly1305_fill_bytecounts (gcry_cipher_hd_t c)
@@ -190,7 +190,7 @@ index c24921ee..b59726d6 100644
    mpi_ptr_t wp;
  
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index 39cdd0c2..02cb2c3c 100644
+index c299534c..446dd62c 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
 @@ -98,7 +98,7 @@ MA 02111-1307, USA. */
@@ -290,7 +290,7 @@ index 85d11789..12cf6409 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index a42b9ce8..005534ce 100644
+index af49a5a5..028e3000 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
 @@ -149,7 +149,9 @@
@@ -318,7 +318,7 @@ index a42b9ce8..005534ce 100644
  
  
  /******************************************************************
-@@ -628,12 +638,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
+@@ -622,12 +632,16 @@ drbg_get_entropy (drbg_state_t drbg, unsigned char *buffer,
    rc = _gcry_rndunix_gather_random (drbg_read_cb, 0, len,
  				    GCRY_VERY_STRONG_RANDOM);
  #elif USE_RNDW32
@@ -394,7 +394,7 @@ index c0435d7b..cc8b6e26 100644
  /* If not NULL a progress function called from certain places and the
     opaque value passed along.  Registered by
 diff --git a/random/rndgetentropy.c b/random/rndgetentropy.c
-index 7580873e..a4cf456a 100644
+index 513da0b9..ffa15717 100644
 --- a/random/rndgetentropy.c
 +++ b/random/rndgetentropy.c
 @@ -25,7 +25,9 @@
@@ -408,7 +408,7 @@ index 7580873e..a4cf456a 100644
  #include <sys/random.h>
  #endif
 diff --git a/random/rndjent.c b/random/rndjent.c
-index 14d23794..e8850eec 100644
+index 0468c7cb..09413425 100644
 --- a/random/rndjent.c
 +++ b/random/rndjent.c
 @@ -43,7 +43,9 @@
@@ -419,8 +419,8 @@ index 14d23794..e8850eec 100644
  #include <unistd.h>
 +#endif
  #include <errno.h>
- 
- #include "types.h"
+ #ifndef EOPNOTSUPP
+ # define EOPNOTSUPP ENOSYS
 diff --git a/random/rndw32.c b/random/rndw32.c
 index b3f63d20..9407306b 100644
 --- a/random/rndw32.c
@@ -598,7 +598,7 @@ index da9948a6..257578d0 100644
  #include "g10lib.h"
  #include "mpi.h"
 diff --git a/src/fips.c b/src/fips.c
-index 89f8204b..a537ea42 100644
+index 5d71b208..deab6d76 100644
 --- a/src/fips.c
 +++ b/src/fips.c
 @@ -21,7 +21,9 @@
@@ -626,7 +626,7 @@ index 89f8204b..a537ea42 100644
  /* The name of the file used to force libgcrypt into fips mode. */
  #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index b1364123..9fb4107c 100644
+index 58581daa..8d3b43c0 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
 @@ -34,7 +34,8 @@
@@ -640,7 +640,7 @@ index b1364123..9fb4107c 100644
  # endif /*!__GNUC__*/
  #endif /*_WIN32*/
 diff --git a/src/global.c b/src/global.c
-index 7cf40e4a..254283d9 100644
+index 873789cc..1ee04f78 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
