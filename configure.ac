@@ -31,7 +31,7 @@ min_automake_version="1.14"
 m4_define([mym4_package],[libgcrypt])
 m4_define([mym4_major], [1])
 m4_define([mym4_minor], [10])
-m4_define([mym4_micro], [2])
+m4_define([mym4_micro], [3])
 
 # Below is m4 magic to extract and compute the git revision number,
 # the decimalized short revision number, a beta version string and a
@@ -57,7 +57,7 @@ AC_INIT([mym4_package],[mym4_version],[https://bugs.gnupg.org])
 #   (No interfaces changed:                   REVISION++)
 LIBGCRYPT_LT_CURRENT=24
 LIBGCRYPT_LT_AGE=4
-LIBGCRYPT_LT_REVISION=2
+LIBGCRYPT_LT_REVISION=3
 ################################################
 
 AC_SUBST(LIBGCRYPT_LT_CURRENT)
@@ -768,6 +768,43 @@ AC_DEFINE_UNQUOTED(NAME_OF_DEV_RANDOM, "$NAME_OF_DEV_RANDOM",
 AC_DEFINE_UNQUOTED(NAME_OF_DEV_URANDOM, "$NAME_OF_DEV_URANDOM",
                    [defined to the name of the weaker random device])
 
+#
+# Specify how we support our local modification of libtool for Windows
+# 64-bit.  Options are:
+#
+# (1) apply: when appying patch fails, it results failure of entire build
+# (2) never: never apply the patch (no try)
+# (3) try: use patched if it goes well, use original if fails
+#
+AC_ARG_WITH([libtool-modification],
+  AS_HELP_STRING([--with-libtool-modification=apply|never|try],
+                 [how to handle libtool modification (default=never)]),
+                 build_libtool_modification=$withval,
+                 build_libtool_modification=never)
+
+#
+# Apply a patch (locally maintained one of ours) to libtool
+#
+case $host in
+  x86_64-*mingw32*)
+AC_CONFIG_COMMANDS([libtool-patch],[[
+  if test "$build_selection" = never; then
+    echo "patch not applied"
+  elif (mv -f libtool libtool.orig; \
+        sed -f $srcdir/build-aux/libtool-patch.sed libtool.orig >libtool); then
+    echo "applied successfully"
+  elif test "$build_selection" = try; then
+    mv -f libtool.orig libtool
+    echo "patch failed, thus, using original"
+  else
+    echo "patch failed"
+    as_fn_exit 1
+  fi
+]],[build_selection=$build_libtool_modification])
+  ;;
+  *)
+  ;;
+esac
 
 ###############################
 #### Checks for libraries. ####
@@ -3342,7 +3379,7 @@ fi
 
 if test "$gcry_cv_gcc_attribute_aligned" != "yes" ; then
 cat <<G10EOF
-   Please not that your compiler does not support the GCC style
+   Please note that your compiler does not support the GCC style
    aligned attribute. Using this software may evoke bus errors.
 
 G10EOF

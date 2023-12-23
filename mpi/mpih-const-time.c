@@ -22,14 +22,33 @@
 #include <stdlib.h>
 #include "mpi-internal.h"
 #include "g10lib.h"
+#include "const-time.h"
+#include "longlong.h"
 
 #define A_LIMB_1 ((mpi_limb_t)1)
 
-/* These variables are used to generate masks from conditional operation
- * flag parameters.  Use of volatile prevents compiler optimizations from
- * converting AND-masking to conditional branches.  */
-static volatile mpi_limb_t vzero = 0;
-static volatile mpi_limb_t vone = 1;
+
+/*
+ * Return 1 if X > Y and otherwise return 0.
+ */
+static inline mpi_limb_t
+mpih_ct_limb_greater_than (mpi_limb_t x, mpi_limb_t y)
+{
+  mpi_limb_t diff_hi, diff_lo;
+  sub_ddmmss (diff_hi, diff_lo, 0, y, 0, x);
+  return diff_hi >> (BITS_PER_MPI_LIMB - 1);
+}
+
+
+/*
+ * Return 1 if X < Y and otherwise return 0.
+ */
+static inline mpi_limb_t
+mpih_ct_limb_less_than (mpi_limb_t x, mpi_limb_t y)
+{
+  return mpih_ct_limb_greater_than (y, x);
+}
+
 
 /*
  *  W = U when OP_ENABLED=1
@@ -39,9 +58,10 @@ void
 _gcry_mpih_set_cond (mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize,
                      unsigned long op_enable)
 {
+  /* Note: dual mask with AND/OR used for EM leakage mitigation */
+  mpi_limb_t mask1 = ct_limb_gen_mask(op_enable);
+  mpi_limb_t mask2 = ct_limb_gen_inv_mask(op_enable);
   mpi_size_t i;
-  mpi_limb_t mask1 = vzero - op_enable;
-  mpi_limb_t mask2 = op_enable - vone;
 
   for (i = 0; i < usize; i++)
     {
@@ -58,21 +78,22 @@ mpi_limb_t
 _gcry_mpih_add_n_cond (mpi_ptr_t wp, mpi_ptr_t up, mpi_ptr_t vp,
                        mpi_size_t usize, unsigned long op_enable)
 {
+  /* Note: dual mask with AND/OR used for EM leakage mitigation */
+  mpi_limb_t mask1 = ct_limb_gen_mask(op_enable);
+  mpi_limb_t mask2 = ct_limb_gen_inv_mask(op_enable);
   mpi_size_t i;
   mpi_limb_t cy;
-  mpi_limb_t mask1 = vzero - op_enable;
-  mpi_limb_t mask2 = op_enable - vone;
 
   cy = 0;
   for (i = 0; i < usize; i++)
     {
       mpi_limb_t u = up[i];
       mpi_limb_t x = u + vp[i];
-      mpi_limb_t cy1 = x < u;
+      mpi_limb_t cy1 = mpih_ct_limb_less_than(x, u);
       mpi_limb_t cy2;
 
       x = x + cy;
-      cy2 = x < cy;
+      cy2 = mpih_ct_limb_less_than(x, cy);
       cy = cy1 | cy2;
       wp[i] = (u & mask2) | (x & mask1);
     }
@@ -89,20 +110,21 @@ mpi_limb_t
 _gcry_mpih_sub_n_cond (mpi_ptr_t wp, mpi_ptr_t up, mpi_ptr_t vp,
                        mpi_size_t usize, unsigned long op_enable)
 {
+  /* Note: dual mask with AND/OR used for EM leakage mitigation */
+  mpi_limb_t mask1 = ct_limb_gen_mask(op_enable);
+  mpi_limb_t mask2 = ct_limb_gen_inv_mask(op_enable);
   mpi_size_t i;
   mpi_limb_t cy;
-  mpi_limb_t mask1 = vzero - op_enable;
-  mpi_limb_t mask2 = op_enable - vone;
 
   cy = 0;
   for (i = 0; i < usize; i++)
     {
       mpi_limb_t u = up[i];
       mpi_limb_t x = u - vp[i];
-      mpi_limb_t cy1 = x > u;
+      mpi_limb_t cy1 = mpih_ct_limb_greater_than(x, u);
       mpi_limb_t cy2;
 
-      cy2 = x < cy;
+      cy2 = mpih_ct_limb_less_than(x, cy);
       x = x - cy;
       cy = cy1 | cy2;
       wp[i] = (u & mask2) | (x & mask1);
@@ -120,9 +142,10 @@ void
 _gcry_mpih_swap_cond (mpi_ptr_t up, mpi_ptr_t vp, mpi_size_t usize,
                       unsigned long op_enable)
 {
+  /* Note: dual mask with AND/OR used for EM leakage mitigation */
+  mpi_limb_t mask1 = ct_limb_gen_mask(op_enable);
+  mpi_limb_t mask2 = ct_limb_gen_inv_mask(op_enable);
   mpi_size_t i;
-  mpi_limb_t mask1 = vzero - op_enable;
-  mpi_limb_t mask2 = op_enable - vone;
 
   for (i = 0; i < usize; i++)
     {
@@ -142,17 +165,18 @@ void
 _gcry_mpih_abs_cond (mpi_ptr_t wp, mpi_ptr_t up, mpi_size_t usize,
                      unsigned long op_enable)
 {
-  mpi_size_t i;
-  mpi_limb_t mask1 = vzero - op_enable;
-  mpi_limb_t mask2 = op_enable - vone;
+  /* Note: dual mask with AND/OR used for EM leakage mitigation */
+  mpi_limb_t mask1 = ct_limb_gen_mask(op_enable);
+  mpi_limb_t mask2 = ct_limb_gen_inv_mask(op_enable);
   mpi_limb_t cy = op_enable;
+  mpi_size_t i;
 
   for (i = 0; i < usize; i++)
     {
       mpi_limb_t u = up[i];
       mpi_limb_t x = ~u + cy;
 
-      cy = (x < ~u);
+      cy = mpih_ct_limb_less_than(x, ~u);
       wp[i] = (u & mask2) | (x & mask1);
     }
 }
@@ -180,7 +204,7 @@ _gcry_mpih_mod (mpi_ptr_t vp, mpi_size_t vsize,
       unsigned int limbno = j / BITS_PER_MPI_LIMB;
       unsigned int bitno = j % BITS_PER_MPI_LIMB;
       mpi_limb_t limb = vp[limbno];
-      unsigned int the_bit = ((limb & (A_LIMB_1 << bitno)) ? 1 : 0);
+      unsigned int the_bit = (limb >> bitno) & 1;
       mpi_limb_t underflow;
       mpi_limb_t overflow;
 
@@ -201,7 +225,7 @@ _gcry_mpih_cmp_ui (mpi_ptr_t up, mpi_size_t usize, unsigned long v)
   mpi_size_t i;
 
   for (i = 1; i < usize; i++)
-    is_all_zero &= (up[i] == 0);
+    is_all_zero &= mpih_limb_is_zero (up[i]);
 
   if (is_all_zero)
     {
