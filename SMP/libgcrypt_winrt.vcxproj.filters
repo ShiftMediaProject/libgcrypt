@@ -180,6 +180,9 @@
     <ClInclude Include="..\mpi\ec-inline.h">
       <Filter>Header Files\mpi</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\const-time.h">
+      <Filter>Header Files\src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\context.c">
@@ -551,7 +554,6 @@
     <ClCompile Include="..\cipher\rijndael-vaes.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
-    <ClCompile Include="..\random\rndgetentropy.c" />
     <ClCompile Include="..\cipher\cipher-gcm-siv.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
@@ -566,6 +568,9 @@
     </ClCompile>
     <ClCompile Include="..\mpi\ec-nist.c">
       <Filter>Source Files\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\const-time.c">
+      <Filter>Source Files\src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -30,6 +30,7 @@
     <ClInclude Include="..\src\cipher-proto.h" />
     <ClInclude Include="..\src\cipher.h" />
     <ClInclude Include="..\src\context.h" />
+    <ClInclude Include="..\src\const-time.h" />
     <ClInclude Include="..\src\ec-context.h" />
     <ClInclude Include="..\src\g10lib.h" />
     <ClInclude Include="..\src\gcrypt-int.h" />
@@ -181,6 +182,7 @@
       <CompileAsWinRT>true</CompileAsWinRT>
     </ClCompile>
     <ClCompile Include="..\src\context.c" />
+    <ClCompile Include="..\src\const-time.c" />
     <ClCompile Include="..\src\fips.c" />
     <ClCompile Include="..\src\global.c" />
     <ClCompile Include="..\src\hmac256.c" />
