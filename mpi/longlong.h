@@ -1736,6 +1736,14 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
 #  elif defined (HAVE_BUILTIN_CLZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
 #    define count_leading_zeros(count, x) (count = __builtin_clz(x))
 #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+#  elif defined (_MSC_VER) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
+static inline int msvc_clz(unsigned int x) { unsigned int count; _BitScanReverse(&count, x); return 31 - count; }
+#    define count_leading_zeros(count, x) (count = msvc_clz(x))
+#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+#  elif defined (_MSC_VER) && (defined(_WIN64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)) && SIZEOF_UNSIGNED_LONG_LONG * 8 == W_TYPE_SIZE
+static inline int msvc_clz(unsigned long long x) { unsigned int count; _BitScanReverse64(&count, x); return 63 - count; }
+#    define count_leading_zeros(count, x) (count = msvc_clz(x))
+#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
 #  endif
 #endif
 
@@ -1745,6 +1753,12 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
 #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
 #  elif defined (HAVE_BUILTIN_CTZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
 #    define count_trailing_zeros(count, x) (count = __builtin_ctz(x))
+#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+#  elif defined (_MSC_VER) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
+#    define count_trailing_zeros(count, x) (_BitScanForward(&count, x))
+#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+#  elif defined (_MSC_VER) && (defined(_WIN64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)) && SIZEOF_UNSIGNED_LONG_LONG * 8 == W_TYPE_SIZE
+#    define count_trailing_zeros(count, x) (_BitScanForward64(&count, x))
 #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
 #  endif
 #endif
