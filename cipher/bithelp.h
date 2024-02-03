@@ -44,6 +44,8 @@ static inline u64 rol64(u64 x, int n)
    provided helpers.  */
 #ifdef HAVE_BUILTIN_BSWAP32
 # define _gcry_bswap32 __builtin_bswap32
+#elif defined(_MSC_VER)
+# define _gcry_bswap32 _byteswap_ulong
 #else
 static inline u32
 _gcry_bswap32(u32 x)
@@ -54,6 +56,8 @@ _gcry_bswap32(u32 x)
 
 #ifdef HAVE_BUILTIN_BSWAP64
 # define _gcry_bswap64 __builtin_bswap64
+#elif defined(_MSC_VER)
+# define _gcry_bswap64 _byteswap_uint64
 #else
 static inline u64
 _gcry_bswap64(u64 x)
@@ -84,6 +88,13 @@ _gcry_ctz (unsigned int x)
 {
 #if defined (HAVE_BUILTIN_CTZ)
   return x ? __builtin_ctz (x) : 8 * sizeof (x);
+#elif defined(_MSC_VER)
+  if (x) {
+    unsigned long ret;
+    _BitScanForward(&ret, x);
+    return ret;
+  }
+  return 8 * sizeof(x);
 #else
   /* See
    * http://graphics.stanford.edu/~seander/bithacks.html#ZerosOnRightModLookup
@@ -111,6 +122,13 @@ _gcry_ctz64(u64 x)
 #elif defined (HAVE_BUILTIN_CTZ) && SIZEOF_UNSIGNED_INT >= 8
 #warning hello
   return x ? __builtin_ctz (x) : 8 * sizeof (x);
+#elif defined(_MSC_VER) && defined(_WIN64)
+  if (x) {
+    unsigned long ret;
+    _BitScanForward64(&ret, x);
+    return (int)ret;
+  }
+  return 8 * sizeof(x);
 #else
   if ((x & 0xffffffff))
     return _gcry_ctz (x);
