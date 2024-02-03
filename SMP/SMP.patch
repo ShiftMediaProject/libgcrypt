@@ -13,6 +13,56 @@ index 9b361581..8aaa998b 100755
  info "Running autoconf${FORCE} ..."
  $AUTOCONF${FORCE}
  
+diff --git a/cipher/bithelp.h b/cipher/bithelp.h
+index 7793ce7c..78578768 100644
+--- a/cipher/bithelp.h
++++ b/cipher/bithelp.h
+@@ -44,6 +44,8 @@ static inline u64 rol64(u64 x, int n)
+    provided helpers.  */
+ #ifdef HAVE_BUILTIN_BSWAP32
+ # define _gcry_bswap32 __builtin_bswap32
++#elif defined(_MSC_VER)
++# define _gcry_bswap32 _byteswap_ulong
+ #else
+ static inline u32
+ _gcry_bswap32(u32 x)
+@@ -54,6 +56,8 @@ _gcry_bswap32(u32 x)
+ 
+ #ifdef HAVE_BUILTIN_BSWAP64
+ # define _gcry_bswap64 __builtin_bswap64
++#elif defined(_MSC_VER)
++# define _gcry_bswap64 _byteswap_uint64
+ #else
+ static inline u64
+ _gcry_bswap64(u64 x)
+@@ -84,6 +88,13 @@ _gcry_ctz (unsigned int x)
+ {
+ #if defined (HAVE_BUILTIN_CTZ)
+   return x ? __builtin_ctz (x) : 8 * sizeof (x);
++#elif defined(_MSC_VER)
++  if (x) {
++    unsigned long ret;
++    _BitScanForward(&ret, x);
++    return ret;
++  }
++  return 8 * sizeof(x);
+ #else
+   /* See
+    * http://graphics.stanford.edu/~seander/bithacks.html#ZerosOnRightModLookup
+@@ -111,6 +122,13 @@ _gcry_ctz64(u64 x)
+ #elif defined (HAVE_BUILTIN_CTZ) && SIZEOF_UNSIGNED_INT >= 8
+ #warning hello
+   return x ? __builtin_ctz (x) : 8 * sizeof (x);
++#elif defined(_MSC_VER) && defined(_WIN64)
++  if (x) {
++    unsigned long ret;
++    _BitScanForward64(&ret, x);
++    return (int)ret;
++  }
++  return 8 * sizeof(x);
+ #else
+   if ((x & 0xffffffff))
+     return _gcry_ctz (x);
 diff --git a/cipher/cipher-ccm.c b/cipher/cipher-ccm.c
 index dcb268d0..2ee202ac 100644
 --- a/cipher/cipher-ccm.c
@@ -190,7 +240,7 @@ index e8233ae8..c9081e9d 100644
    mpi_ptr_t wp;
  
 diff --git a/mpi/generic/mpi-asm-defs.h b/mpi/generic/mpi-asm-defs.h
-index e607806e..18d6c528 100644
+index e607806e..111859c3 100644
 --- a/mpi/generic/mpi-asm-defs.h
 +++ b/mpi/generic/mpi-asm-defs.h
 @@ -1,7 +1,7 @@
@@ -198,12 +248,12 @@ index e607806e..18d6c528 100644
   * AMD64 compiled for the x32 ABI is special and thus we can't use the
   * standard values for this ABI.  */
 -#if __GNUC__ >= 3 && defined(__x86_64__) && defined(__ILP32__)
-+#if (__GNUC__ >= 3 && defined(__x86_64__) && defined(__ILP32__)) || (defined(_MSC_VER) && (defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)))
++#if (__GNUC__ >= 3 && defined(__x86_64__) && defined(__ILP32__)) || (defined(_WIN64) || defined(_MSC_VER) && (defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)))
  #define BYTES_PER_MPI_LIMB 8
  #else
  #define BYTES_PER_MPI_LIMB  (SIZEOF_UNSIGNED_LONG)
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index c299534c..446dd62c 100644
+index c299534c..32e05ad1 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
 @@ -98,7 +98,7 @@ MA 02111-1307, USA. */
@@ -215,6 +265,34 @@ index c299534c..446dd62c 100644
  
  /* We sometimes need to clobber "cc" with gcc2, but that would not be
     understood by gcc1.	Use cpp to avoid major code duplication.  */
+@@ -1736,6 +1736,14 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
+ #  elif defined (HAVE_BUILTIN_CLZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
+ #    define count_leading_zeros(count, x) (count = __builtin_clz(x))
+ #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
++#  elif defined (_MSC_VER) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
++static inline int msvc_clz(unsigned int x) { unsigned int count; _BitScanReverse(&count, x); return 31 - count; }
++#    define count_leading_zeros(count, x) (count = msvc_clz(x))
++#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
++#  elif defined (_MSC_VER) && (defined(_WIN64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)) && SIZEOF_UNSIGNED_LONG_LONG * 8 == W_TYPE_SIZE
++static inline int msvc_clz(unsigned long long x) { unsigned int count; _BitScanReverse64(&count, x); return 63 - count; }
++#    define count_leading_zeros(count, x) (count = msvc_clz(x))
++#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+ #  endif
+ #endif
+ 
+@@ -1746,6 +1754,12 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
+ #  elif defined (HAVE_BUILTIN_CTZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
+ #    define count_trailing_zeros(count, x) (count = __builtin_ctz(x))
+ #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
++#  elif defined (_MSC_VER) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
++#    define count_trailing_zeros(count, x) (_BitScanForward(&count, x))
++#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
++#  elif defined (_MSC_VER) && (defined(_WIN64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64)) && SIZEOF_UNSIGNED_LONG_LONG * 8 == W_TYPE_SIZE
++#    define count_trailing_zeros(count, x) (_BitScanForward64(&count, x))
++#    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
+ #  endif
+ #endif
+ 
 diff --git a/random/rand-internal.h b/random/rand-internal.h
 index 2d2b8909..eef6dc27 100644
 --- a/random/rand-internal.h

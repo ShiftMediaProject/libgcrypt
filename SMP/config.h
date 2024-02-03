@@ -63,26 +63,16 @@
 /* #undef HAVE_BROKEN_MLOCK */
 
 /* Defined if compiler has '__builtin_bswap32' intrinsic */
-#define HAVE_BUILTIN_BSWAP32 1
+/* #undef HAVE_BUILTIN_BSWAP32 */
 
 /* Defined if compiler has '__builtin_bswap64' intrinsic */
-#define HAVE_BUILTIN_BSWAP64 1
+/* #undef HAVE_BUILTIN_BSWAP64 */
 
 /* Defined if compiler has '__builtin_clz' intrinsic */
-#define HAVE_BUILTIN_CLZ 1
-
-#ifdef _WIN64
-/* Defined if compiler has '__builtin_clzl' intrinsic */
-#define HAVE_BUILTIN_CLZL 1
-#endif
+/* #undef HAVE_BUILTIN_CLZ */
 
 /* Defined if compiler has '__builtin_ctz' intrinsic */
-#define HAVE_BUILTIN_CTZ 1
-
-#ifdef _WIN64
-/* Defined if compiler has '__builtin_ctzl' intrinsic */
-#define HAVE_BUILTIN_CTZL 1
-#endif
+/* #undef HAVE_BUILTIN_CTZ */
 
 /* Defined if a `byte' is typedef'd */
 /* #undef HAVE_BYTE_TYPEDEF */
@@ -594,40 +584,6 @@ implementations */
 #   if _VC_CRT_MAJOR_VERSION < 14
 #       define snprintf _snprintf
 #   endif
-#endif
-
-#define __builtin_bswap32 _byteswap_ulong
-#define __builtin_bswap64 _byteswap_uint64
-
-#include <intrin.h>
-unsigned int __inline __builtin_ctz(unsigned int value)
-{
-    unsigned long ret;
-    _BitScanForward(&ret, value);
-    return ret;
-}
-
-unsigned int __inline __builtin_clz(unsigned int value)
-{
-    unsigned long ret;
-    _BitScanReverse(&ret, value);
-    return ret;
-}
-
-#ifdef _WIN64
-unsigned int __inline __builtin_ctzl(unsigned long long value)
-{
-    unsigned long ret;
-    _BitScanForward(&ret, value);
-    return ret;
-}
-
-unsigned int __inline __builtin_clzl(unsigned long long value)
-{
-    unsigned long ret;
-    _BitScanReverse(&ret, value);
-    return ret;
-}
 #endif
 
 #endif /*_GCRYPT_CONFIG_H_INCLUDED*/
