@@ -76,8 +76,8 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
 copy .\gcrypt.h "$(OutDir)"\include\
-mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+mkdir "$(OutDir)"\licenses
+copy ..\COPYING.LIB "$(OutDir)"\licenses\libgcrypt.txt
 if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
 copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
@@ -188,8 +188,8 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
 copy .\gcrypt.h "$(OutDir)"\include\
-mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+mkdir "$(OutDir)"\licenses
+copy ..\COPYING.LIB "$(OutDir)"\licenses\libgcrypt.txt
 if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
 copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
@@ -298,8 +298,8 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
 copy .\gcrypt.h "$(OutDir)"\include\
-mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+mkdir "$(OutDir)"\licenses
+copy ..\COPYING.LIB "$(OutDir)"\licenses\libgcrypt.txt
 if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
 copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
@@ -466,8 +466,8 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
 copy .\gcrypt.h "$(OutDir)"\include\
-mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+mkdir "$(OutDir)"\licenses
+copy ..\COPYING.LIB "$(OutDir)"\licenses\libgcrypt.txt
 if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
 copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
@@ -522,8 +522,8 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
 copy .\gcrypt.h "$(OutDir)"\include\
-mkdir $(OutDir)\licenses
-copy ..\COPYING.LIB $(OutDir)\licenses\libgcrypt.txt
+mkdir "$(OutDir)"\licenses
+copy ..\COPYING.LIB "$(OutDir)"\licenses\libgcrypt.txt
 if exist "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h (
 copy "$(ProjectDir)"\..\..\prebuilt\include\gpg-error.h "$(OutDir)"\include\
 )</Command>
