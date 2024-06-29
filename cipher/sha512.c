@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -55,6 +55,14 @@
 #include "hash-common.h"
 
 
+/* Helper macro to force alignment to 64 bytes.  */
+#ifdef HAVE_GCC_ATTRIBUTE_ALIGNED
+# define ATTR_ALIGNED_64  __attribute__ ((aligned (64)))
+#else
+# define ATTR_ALIGNED_64
+#endif
+
+
 /* USE_ARM_NEON_ASM indicates whether to enable ARM NEON assembly code. */
 #undef USE_ARM_NEON_ASM
 #ifdef ENABLE_NEON_SUPPORT
@@ -70,6 +78,17 @@
 #undef USE_ARM_ASM
 #if defined(__ARMEL__) && defined(HAVE_COMPATIBLE_GCC_ARM_PLATFORM_AS)
 # define USE_ARM_ASM 1
+#endif
+
+/* USE_ARM64_SHA512 indicates whether to enable ARMv8 SHA512 extension assembly
+ * code. */
+#undef USE_ARM64_SHA512
+#ifdef ENABLE_ARM_CRYPTO_SUPPORT
+# if defined(__AARCH64EL__) \
+       && defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) \
+       && defined(HAVE_GCC_INLINE_ASM_AARCH64_SHA3_SHA512_SM3_SM4)
+#  define USE_ARM64_SHA512 1
+# endif
 #endif
 
 
@@ -101,6 +120,16 @@
     (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
      defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_AVX2 1
+#endif
+
+
+/* USE_AVX512 indicates whether to compile with Intel AVX512 code. */
+#undef USE_AVX512
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_AVX512) && \
+    defined(HAVE_INTEL_SYNTAX_PLATFORM_AS) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_AVX512 1
 #endif
 
 
@@ -148,7 +177,7 @@ typedef struct
 } SHA512_CONTEXT;
 
 
-static const u64 k[] =
+static ATTR_ALIGNED_64 const u64 k[] =
   {
     U64_C(0x428a2f98d728ae22), U64_C(0x7137449123ef65cd),
     U64_C(0xb5c0fbcfec4d3b2f), U64_C(0xe9b5dba58189dbbc),
@@ -197,7 +226,8 @@ static const u64 k[] =
  * stack to store XMM6-XMM15 needed on Win64. */
 #undef ASM_FUNC_ABI
 #undef ASM_EXTRA_STACK
-#if defined(USE_SSSE3) || defined(USE_AVX) || defined(USE_AVX2)
+#if defined(USE_SSSE3) || defined(USE_AVX) || defined(USE_AVX2) \
+    || defined(USE_AVX512)
 # ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
 #  define ASM_FUNC_ABI __attribute__((sysv_abi))
 #  define ASM_EXTRA_STACK (10 * 16 + 4 * sizeof(void *))
@@ -207,6 +237,21 @@ static const u64 k[] =
 # endif
 #endif
 
+
+#ifdef USE_ARM64_SHA512
+unsigned int _gcry_sha512_transform_armv8_ce (u64 state[8],
+                                              const unsigned char *data,
+                                              size_t num_blks,
+                                              const u64 k[]);
+
+static unsigned int
+do_sha512_transform_armv8_ce(void *ctx, const unsigned char *data,
+                             size_t nblks)
+{
+  SHA512_CONTEXT *hd = ctx;
+  return _gcry_sha512_transform_armv8_ce (hd->state.h, data, nblks, k);
+}
+#endif
 
 #ifdef USE_ARM_NEON_ASM
 unsigned int _gcry_sha512_transform_armv7_neon (SHA512_STATE *hd,
@@ -232,8 +277,10 @@ do_sha512_transform_amd64_ssse3(void *ctx, const unsigned char *data,
                                 size_t nblks)
 {
   SHA512_CONTEXT *hd = ctx;
-  return _gcry_sha512_transform_amd64_ssse3 (data, &hd->state, nblks)
-         + ASM_EXTRA_STACK;
+  unsigned int burn;
+  burn = _gcry_sha512_transform_amd64_ssse3 (data, &hd->state, nblks);
+  burn += burn > 0 ? ASM_EXTRA_STACK : 0;
+  return burn;
 }
 #endif
 
@@ -247,8 +294,10 @@ do_sha512_transform_amd64_avx(void *ctx, const unsigned char *data,
                               size_t nblks)
 {
   SHA512_CONTEXT *hd = ctx;
-  return _gcry_sha512_transform_amd64_avx (data, &hd->state, nblks)
-         + ASM_EXTRA_STACK;
+  unsigned int burn;
+  burn = _gcry_sha512_transform_amd64_avx (data, &hd->state, nblks);
+  burn += burn > 0 ? ASM_EXTRA_STACK : 0;
+  return burn;
 }
 #endif
 
@@ -262,8 +311,27 @@ do_sha512_transform_amd64_avx2(void *ctx, const unsigned char *data,
                                size_t nblks)
 {
   SHA512_CONTEXT *hd = ctx;
-  return _gcry_sha512_transform_amd64_avx2 (data, &hd->state, nblks)
-         + ASM_EXTRA_STACK;
+  unsigned int burn;
+  burn = _gcry_sha512_transform_amd64_avx2 (data, &hd->state, nblks);
+  burn += burn > 0 ? ASM_EXTRA_STACK : 0;
+  return burn;
+}
+#endif
+
+#ifdef USE_AVX512
+unsigned int _gcry_sha512_transform_amd64_avx512(const void *input_data,
+						 void *state,
+						 size_t num_blks) ASM_FUNC_ABI;
+
+static unsigned int
+do_sha512_transform_amd64_avx512(void *ctx, const unsigned char *data,
+                                 size_t nblks)
+{
+  SHA512_CONTEXT *hd = ctx;
+  unsigned int burn;
+  burn = _gcry_sha512_transform_amd64_avx512 (data, &hd->state, nblks);
+  burn += burn > 0 ? ASM_EXTRA_STACK : 0;
+  return burn;
 }
 #endif
 
@@ -381,6 +449,10 @@ sha512_init_common (SHA512_CONTEXT *ctx, unsigned int flags)
   if ((features & HWF_ARM_NEON) != 0)
     ctx->bctx.bwrite = do_sha512_transform_armv7_neon;
 #endif
+#ifdef USE_ARM64_SHA512
+  if ((features & HWF_ARM_NEON) && (features & HWF_ARM_SHA512))
+    ctx->bctx.bwrite = do_sha512_transform_armv8_ce;
+#endif
 #ifdef USE_SSSE3
   if ((features & HWF_INTEL_SSSE3) != 0)
     ctx->bctx.bwrite = do_sha512_transform_amd64_ssse3;
@@ -392,6 +464,10 @@ sha512_init_common (SHA512_CONTEXT *ctx, unsigned int flags)
 #ifdef USE_AVX2
   if ((features & HWF_INTEL_AVX2) && (features & HWF_INTEL_BMI2))
     ctx->bctx.bwrite = do_sha512_transform_amd64_avx2;
+#endif
+#ifdef USE_AVX512
+  if ((features & HWF_INTEL_AVX512) && (features & HWF_INTEL_CPU))
+    ctx->bctx.bwrite = do_sha512_transform_amd64_avx512;
 #endif
 #ifdef USE_PPC_CRYPTO
   if ((features & HWF_PPC_VCRYPTO) != 0)

@@ -16,8 +16,8 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 dnl GNU Lesser General Public License for more details.
 dnl
 dnl You should have received a copy of the GNU Lesser General Public
-dnl License along with this program; if not, write to the Free Software
-dnl Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+dnl License along with this program; if not, see <https://www.gnu.org/licenses/>.
+dnl SPDX-License-Identifier: LGPL-2.1-or-later
 
 dnl GCRY_MSG_SHOW(PREFIX,STRING)
 dnl Print a message with a prefix.
@@ -56,43 +56,6 @@ define([GCRY_MSG_WRAP],
   ])
 
 
-dnl GNUPG_CHECK_TYPEDEF(TYPE, HAVE_NAME)
-dnl Check whether a typedef exists and create a #define $2 if it exists
-dnl
-AC_DEFUN([GNUPG_CHECK_TYPEDEF],
-  [ AC_MSG_CHECKING(for $1 typedef)
-    AC_CACHE_VAL(gnupg_cv_typedef_$1,
-    [AC_TRY_COMPILE([#define _GNU_SOURCE 1
-    #include <stdlib.h>
-    #include <sys/types.h>], [
-    #undef $1
-    int a = sizeof($1);
-    ], gnupg_cv_typedef_$1=yes, gnupg_cv_typedef_$1=no )])
-    AC_MSG_RESULT($gnupg_cv_typedef_$1)
-    if test "$gnupg_cv_typedef_$1" = yes; then
-        AC_DEFINE($2,1,[Defined if a `]$1[' is typedef'd])
-    fi
-  ])
-
-
-dnl GNUPG_CHECK_GNUMAKE
-dnl
-AC_DEFUN([GNUPG_CHECK_GNUMAKE],
-  [
-    if ${MAKE-make} --version 2>/dev/null | grep '^GNU ' >/dev/null 2>&1; then
-        :
-    else
-        AC_MSG_WARN([[
-***
-*** It seems that you are not using GNU make.  Some make tools have serious
-*** flaws and you may not be able to build this software at all. Before you
-*** complain, please try GNU make:  GNU make is easy to build and available
-*** at all GNU archives.  It is always available from ftp.gnu.org:/gnu/make.
-***]])
-    fi
-  ])
-
-
 #
 # GNUPG_SYS_SYMBOL_UNDERSCORE
 # Does the compiler prefix global symbols with an underscore?
@@ -122,21 +85,21 @@ if test "$tmp_do_check" = "yes"; then
   AC_CACHE_VAL(ac_cv_sys_symbol_underscore,
   [ac_cv_sys_symbol_underscore=no
    cat > conftest.$ac_ext <<EOF
-      void nm_test_func(){}
-      int main(){nm_test_func;return 0;}
+      void nm_test_func(void){}
+      int main(void){nm_test_func();return 0;}
 EOF
   if AC_TRY_EVAL(ac_compile); then
     # Now try to grab the symbols.
-    ac_nlist=conftest.nm
-    if AC_TRY_EVAL(NM conftest.$ac_objext \| $lt_cv_sys_global_symbol_pipe \| cut -d \' \' -f 2 \> $ac_nlist) && test -s "$ac_nlist"; then
+    nlist=conftest.nm
+    if AC_TRY_EVAL(NM conftest.$ac_objext \| "$lt_cv_sys_global_symbol_pipe" \> $nlist) && test -s "$nlist"; then
       # See whether the symbols have a leading underscore.
-      if egrep '^_nm_test_func' "$ac_nlist" >/dev/null; then
+      if $GREP ' _nm_test_func$' "$nlist" >/dev/null; then
         ac_cv_sys_symbol_underscore=yes
       else
-        if egrep '^nm_test_func ' "$ac_nlist" >/dev/null; then
+        if $GREP ' nm_test_func$' "$nlist" >/dev/null; then
           :
         else
-          echo "configure: cannot find nm_test_func in $ac_nlist" >&AS_MESSAGE_LOG_FD
+          echo "configure: cannot find nm_test_func in $nlist" >&AS_MESSAGE_LOG_FD
         fi
       fi
     else
@@ -216,7 +179,7 @@ mlock(&i, 4);
 #include <sys/types.h>
 #include <fcntl.h>
 
-int main()
+int main(void)
 {
     char *pool;
     int err;
@@ -264,12 +227,6 @@ int main()
     fi
   ])
 
-# GNUPG_SYS_LIBTOOL_CYGWIN32 - find tools needed on cygwin32
-AC_DEFUN([GNUPG_SYS_LIBTOOL_CYGWIN32],
-[AC_CHECK_TOOL(DLLTOOL, dlltool, false)
-AC_CHECK_TOOL(AS, as, false)
-])
-
 dnl LIST_MEMBER()
 dnl Check whether an element ist contained in a list.  Set `found' to
 dnl `1' if the element is found in the list, to `0' otherwise.
@@ -285,108 +242,3 @@ for n in $list; do
   fi
 done
 ])
-
-
-dnl Check for socklen_t: historically on BSD it is an int, and in
-dnl POSIX 1g it is a type of its own, but some platforms use different
-dnl types for the argument to getsockopt, getpeername, etc.  So we
-dnl have to test to find something that will work.
-AC_DEFUN([TYPE_SOCKLEN_T],
-[
-   AC_CHECK_TYPE([socklen_t], ,[
-      AC_MSG_CHECKING([for socklen_t equivalent])
-      AC_CACHE_VAL([socklen_t_equiv],
-      [
-         # Systems have either "struct sockaddr *" or
-         # "void *" as the second argument to getpeername
-         socklen_t_equiv=
-         for arg2 in "struct sockaddr" void; do
-            for t in int size_t unsigned long "unsigned long"; do
-               AC_TRY_COMPILE([
-#include <sys/types.h>
-#include <sys/socket.h>
-
-int getpeername (int, $arg2 *, $t *);
-               ],[
-                  $t len;
-                  getpeername(0,0,&len);
-               ],[
-                  socklen_t_equiv="$t"
-                  break
-               ])
-            done
-         done
-
-         if test "x$socklen_t_equiv" = x; then
-            AC_MSG_ERROR([Cannot find a type to use in place of socklen_t])
-         fi
-      ])
-      AC_MSG_RESULT($socklen_t_equiv)
-      AC_DEFINE_UNQUOTED(socklen_t, $socklen_t_equiv,
-			[type to use in place of socklen_t if not defined])],
-      [#include <sys/types.h>
-#include <sys/socket.h>])
-])
-
-
-# GNUPG_PTH_VERSION_CHECK(REQUIRED)
-#
-# If the version is sufficient, HAVE_PTH will be set to yes.
-#
-# Taken form the m4 macros which come with Pth
-AC_DEFUN([GNUPG_PTH_VERSION_CHECK],
-  [
-    _pth_version=`$PTH_CONFIG --version | awk 'NR==1 {print [$]3}'`
-    _req_version="ifelse([$1],,1.2.0,$1)"
-
-    AC_MSG_CHECKING(for PTH - version >= $_req_version)
-    for _var in _pth_version _req_version; do
-        eval "_val=\"\$${_var}\""
-        _major=`echo $_val | sed 's/\([[0-9]]*\)\.\([[0-9]]*\)\([[ab.]]\)\([[0-9]]*\)/\1/'`
-        _minor=`echo $_val | sed 's/\([[0-9]]*\)\.\([[0-9]]*\)\([[ab.]]\)\([[0-9]]*\)/\2/'`
-        _rtype=`echo $_val | sed 's/\([[0-9]]*\)\.\([[0-9]]*\)\([[ab.]]\)\([[0-9]]*\)/\3/'`
-        _micro=`echo $_val | sed 's/\([[0-9]]*\)\.\([[0-9]]*\)\([[ab.]]\)\([[0-9]]*\)/\4/'`
-        case $_rtype in
-            "a" ) _rtype=0 ;;
-            "b" ) _rtype=1 ;;
-            "." ) _rtype=2 ;;
-        esac
-        _hex=`echo dummy | awk '{ printf("%d%02d%1d%02d", major, minor, rtype, micro); }' \
-              "major=$_major" "minor=$_minor" "rtype=$_rtype" "micro=$_micro"`
-        eval "${_var}_hex=\"\$_hex\""
-    done
-    have_pth=no
-    if test ".$_pth_version_hex" != .; then
-        if test ".$_req_version_hex" != .; then
-            if test $_pth_version_hex -ge $_req_version_hex; then
-                have_pth=yes
-            fi
-        fi
-    fi
-    if test $have_pth = yes; then
-       AC_MSG_RESULT(yes)
-       AC_MSG_CHECKING([whether PTH installation is sane])
-       AC_CACHE_VAL(gnupg_cv_pth_is_sane,[
-         _gnupg_pth_save_cflags=$CFLAGS
-         _gnupg_pth_save_ldflags=$LDFLAGS
-         _gnupg_pth_save_libs=$LIBS
-         CFLAGS="$CFLAGS `$PTH_CONFIG --cflags`"
-         LDFLAGS="$LDFLAGS `$PTH_CONFIG --ldflags`"
-         LIBS="$LIBS `$PTH_CONFIG --libs`"
-         AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <pth.h>
-                                         ],
-                                         [[ pth_init ();]])],
-                        gnupg_cv_pth_is_sane=yes,
-                        gnupg_cv_pth_is_sane=no)
-         CFLAGS=$_gnupg_pth_save_cflags
-         LDFLAGS=$_gnupg_pth_save_ldflags
-         LIBS=$_gnupg_pth_save_libs
-       ])
-       if test $gnupg_cv_pth_is_sane != yes; then
-          have_pth=no
-       fi
-       AC_MSG_RESULT($gnupg_cv_pth_is_sane)
-    else
-       AC_MSG_RESULT(no)
-    fi
-  ])

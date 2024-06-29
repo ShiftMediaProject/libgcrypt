@@ -25,12 +25,13 @@
 
 .cpu generic+simd+crypto
 
-.text
-
 
 /* Constants */
 
+SECTION_RODATA
+
 .align 4
+ELF(.type gcry_gcm_reduction_constant,%object;)
 gcry_gcm_reduction_constant:
 .Lrconst:
   .quad 0x87
@@ -149,34 +150,14 @@ gcry_gcm_reduction_constant:
 #define _(...) __VA_ARGS__
 #define __ _()
 
-#define CLEAR_REG(reg) movi reg.16b, #0;
-
-#define VPUSH_ABI \
-        stp d8, d9, [sp, #-16]!; \
-        CFI_ADJUST_CFA_OFFSET(16); \
-        stp d10, d11, [sp, #-16]!; \
-        CFI_ADJUST_CFA_OFFSET(16); \
-        stp d12, d13, [sp, #-16]!; \
-        CFI_ADJUST_CFA_OFFSET(16); \
-        stp d14, d15, [sp, #-16]!; \
-        CFI_ADJUST_CFA_OFFSET(16);
-
-#define VPOP_ABI \
-        ldp d14, d15, [sp], #16; \
-        CFI_ADJUST_CFA_OFFSET(-16); \
-        ldp d12, d13, [sp], #16; \
-        CFI_ADJUST_CFA_OFFSET(-16); \
-        ldp d10, d11, [sp], #16; \
-        CFI_ADJUST_CFA_OFFSET(-16); \
-        ldp d8, d9, [sp], #16; \
-        CFI_ADJUST_CFA_OFFSET(-16);
+.text
 
 /*
  * unsigned int _gcry_ghash_armv8_ce_pmull (void *gcm_key, byte *result,
  *                                          const byte *buf, size_t nblocks,
  *                                          void *gcm_table);
  */
-.align 3
+.align 4
 .globl _gcry_ghash_armv8_ce_pmull
 ELF(.type  _gcry_ghash_armv8_ce_pmull,%function;)
 _gcry_ghash_armv8_ce_pmull:
@@ -375,7 +356,7 @@ ELF(.size _gcry_ghash_armv8_ce_pmull,.-_gcry_ghash_armv8_ce_pmull;)
  *                                            const byte *buf, size_t nblocks,
  *                                            void *gcm_table);
  */
-.align 3
+.align 4
 .globl _gcry_polyval_armv8_ce_pmull
 ELF(.type  _gcry_polyval_armv8_ce_pmull,%function;)
 _gcry_polyval_armv8_ce_pmull:
@@ -601,7 +582,7 @@ ELF(.size _gcry_polyval_armv8_ce_pmull,.-_gcry_polyval_armv8_ce_pmull;)
 /*
  * void _gcry_ghash_setup_armv8_ce_pmull (void *gcm_key, void *gcm_table);
  */
-.align 3
+.align 4
 .globl _gcry_ghash_setup_armv8_ce_pmull
 ELF(.type  _gcry_ghash_setup_armv8_ce_pmull,%function;)
 _gcry_ghash_setup_armv8_ce_pmull:

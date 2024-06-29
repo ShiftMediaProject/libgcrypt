@@ -5,7 +5,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -419,10 +419,13 @@ argon2_fill_first_blocks (argon2_ctx_t a)
   iov[iov_count].len = 4 * 7;
   iov[iov_count].off = 0;
   iov_count++;
-  iov[iov_count].data = (void *)a->password;
-  iov[iov_count].len = a->passwordlen;
-  iov[iov_count].off = 0;
-  iov_count++;
+  if (a->passwordlen)
+    {
+      iov[iov_count].data = (void *)a->password;
+      iov[iov_count].len = a->passwordlen;
+      iov[iov_count].off = 0;
+      iov_count++;
+    }
 
   buf_put_le32 (buf[7], a->saltlen);
   iov[iov_count].data = buf[7];
@@ -897,32 +900,1087 @@ argon2_open (gcry_kdf_hd_t *hd, int subalgo,
   *hd = (void *)a;
   return 0;
 }
+
+typedef struct balloon_context *balloon_ctx_t;
 
+/* Per thread data for Balloon.  */
+struct balloon_thread_data {
+  balloon_ctx_t b;
+  gpg_err_code_t ec;
+  unsigned int idx;
+  unsigned char *block;
+};
+
+/* Balloon context */
+struct balloon_context {
+  int algo;
+  int prng_type;
+
+  unsigned int blklen;
+  const gcry_md_spec_t *md_spec;
+
+  const unsigned char *password;
+  size_t passwordlen;
+
+  const unsigned char *salt;
+  /* Length of salt is fixed.  */
+
+  unsigned int s_cost;
+  unsigned int t_cost;
+  unsigned int parallelism;
+
+  u64 n_blocks;
+
+  unsigned char *block;
+
+  /* In future, we may use flexible array member.  */
+  struct balloon_thread_data thread_data[1];
+};
+
+/* Maximum size of underlining digest size.  */
+#define BALLOON_BLOCK_LEN_MAX 64
+
+static gpg_err_code_t
+prng_aes_ctr_init (gcry_cipher_hd_t *hd_p, balloon_ctx_t b,
+                   gcry_buffer_t *iov, unsigned int iov_count)
+{
+  gpg_err_code_t ec;
+  gcry_cipher_hd_t hd;
+  unsigned char key[BALLOON_BLOCK_LEN_MAX];
+  int cipher_algo;
+  unsigned int keylen, blklen;
+
+  switch (b->blklen)
+    {
+    case 64:
+      cipher_algo = GCRY_CIPHER_AES256;
+      break;
+
+    case 48:
+      cipher_algo = GCRY_CIPHER_AES192;
+      break;
+
+    default:
+    case 32:
+      cipher_algo = GCRY_CIPHER_AES;
+      break;
+    }
+
+  keylen = _gcry_cipher_get_algo_keylen (cipher_algo);
+  blklen = _gcry_cipher_get_algo_blklen (cipher_algo);
+
+  b->md_spec->hash_buffers (key, b->blklen, iov, iov_count);
+  ec = _gcry_cipher_open (&hd, cipher_algo, GCRY_CIPHER_MODE_CTR, 0);
+  if (ec)
+    return ec;
+
+  ec = _gcry_cipher_setkey (hd, key, keylen);
+  if (ec)
+    {
+      _gcry_cipher_close (hd);
+      return ec;
+    }
+
+  if (cipher_algo == GCRY_CIPHER_AES
+      && b->md_spec == &_gcry_digest_spec_sha256)
+    /* Original Balloon uses zero IV.  */
+    ;
+  else
+    {
+      ec = _gcry_cipher_setiv (hd, key+keylen, blklen);
+      if (ec)
+        {
+          _gcry_cipher_close (hd);
+          return ec;
+        }
+    }
+
+  wipememory (key, BALLOON_BLOCK_LEN_MAX);
+  *hd_p = hd;
+  return ec;
+}
+
+static u64
+prng_aes_ctr_get_rand64 (gcry_cipher_hd_t hd)
+{
+  static const unsigned char zero64[8];
+  unsigned char rand64[8];
+
+  _gcry_cipher_encrypt (hd, rand64, sizeof (rand64), zero64, sizeof (zero64));
+  return buf_get_le64 (rand64);
+}
+
+static void
+prng_aes_ctr_fini (gcry_cipher_hd_t hd)
+{
+  _gcry_cipher_close (hd);
+}
+
+static size_t
+ballon_context_size (unsigned int parallelism)
+{
+  size_t n;
+
+  n = offsetof (struct balloon_context, thread_data)
+    + parallelism * sizeof (struct balloon_thread_data);
+  return n;
+}
 
 static gpg_err_code_t
 balloon_open (gcry_kdf_hd_t *hd, int subalgo,
               const unsigned long *param, unsigned int paramlen,
-              const void *passphrase, size_t passphraselen,
+              const void *password, size_t passwordlen,
               const void *salt, size_t saltlen)
 {
+  unsigned int blklen;
+  int hash_type;
+  unsigned int s_cost;
+  unsigned int t_cost;
+  unsigned int parallelism = 1;
+  balloon_ctx_t b;
+  gpg_err_code_t ec;
+  size_t n;
+  unsigned char *block;
+  unsigned int i;
+  const gcry_md_spec_t *md_spec;
+
+  hash_type = subalgo;
+  switch (hash_type)
+    {
+    case GCRY_MD_SHA256:
+      md_spec = &_gcry_digest_spec_sha256;
+      break;
+
+    case GCRY_MD_SHA384:
+      md_spec = &_gcry_digest_spec_sha384;
+      break;
+
+    case GCRY_MD_SHA512:
+      md_spec = &_gcry_digest_spec_sha512;
+      break;
+
+    case GCRY_MD_SHA3_256:
+      md_spec = &_gcry_digest_spec_sha3_256;
+      break;
+
+    case GCRY_MD_SHA3_384:
+      md_spec = &_gcry_digest_spec_sha3_384;
+      break;
+
+    case GCRY_MD_SHA3_512:
+      md_spec = &_gcry_digest_spec_sha3_512;
+      break;
+
+    default:
+      return GPG_ERR_NOT_SUPPORTED;
+    }
+
+  blklen = _gcry_md_get_algo_dlen (hash_type);
+  if (!blklen || blklen > BALLOON_BLOCK_LEN_MAX)
+    return GPG_ERR_NOT_SUPPORTED;
+
+  if (saltlen != blklen)
+    return GPG_ERR_NOT_SUPPORTED;
+
   /*
    * It should have space_cost and time_cost.
    * Optionally, for parallelised version, it has parallelism.
+   * Possibly (in future), it may have option to specify PRNG type.
    */
   if (paramlen != 2 && paramlen != 3)
     return GPG_ERR_INV_VALUE;
+  else
+    {
+      s_cost = (unsigned int)param[0];
+      t_cost = (unsigned int)param[1];
+      if (paramlen >= 3)
+        parallelism = (unsigned int)param[2];
+    }
 
-  (void)param;
-  (void)subalgo;
-  (void)passphrase;
-  (void)passphraselen;
-  (void)salt;
-  (void)saltlen;
-  *hd = NULL;
-  return GPG_ERR_NOT_IMPLEMENTED;
+  if (s_cost < 1)
+    return GPG_ERR_INV_VALUE;
+
+  n = ballon_context_size (parallelism);
+  b = xtrymalloc (n);
+  if (!b)
+    return gpg_err_code_from_errno (errno);
+
+  b->algo = GCRY_KDF_BALLOON;
+  b->md_spec = md_spec;
+  b->blklen = blklen;
+
+  b->password = password;
+  b->passwordlen = passwordlen;
+  b->salt = salt;
+
+  b->s_cost = s_cost;
+  b->t_cost = t_cost;
+  b->parallelism = parallelism;
+
+  b->n_blocks = (s_cost * 1024) / b->blklen;
+
+  block = xtrycalloc (parallelism * b->n_blocks, b->blklen);
+  if (!block)
+    {
+      ec = gpg_err_code_from_errno (errno);
+      xfree (b);
+      return ec;
+    }
+  b->block = block;
+
+  for (i = 0; i < parallelism; i++)
+    {
+      struct balloon_thread_data *t = &b->thread_data[i];
+
+      t->b = b;
+      t->ec = 0;
+      t->idx = i;
+      t->block = block;
+      block += b->blklen * b->n_blocks;
+    }
+
+  *hd = (void *)b;
+  return 0;
 }
 
 
+static void
+balloon_xor_block (balloon_ctx_t b, u64 *dst, const u64 *src)
+{
+  int i;
+
+  for (i = 0; i < b->blklen/8; i++)
+    dst[i] ^= src[i];
+}
+
+#define BALLOON_COMPRESS_BLOCKS 5
+
+static void
+balloon_compress (balloon_ctx_t b, u64 *counter_p, unsigned char *out,
+                  const unsigned char *blocks[BALLOON_COMPRESS_BLOCKS])
+{
+  gcry_buffer_t iov[1+BALLOON_COMPRESS_BLOCKS];
+  unsigned char octet_counter[sizeof (u64)];
+  unsigned int i;
+
+  buf_put_le64 (octet_counter, *counter_p);
+  iov[0].data = octet_counter;
+  iov[0].len = sizeof (octet_counter);
+  iov[0].off = 0;
+
+  for (i = 1; i < 1+BALLOON_COMPRESS_BLOCKS; i++)
+    {
+      iov[i].data = (void *)blocks[i-1];
+      iov[i].len = b->blklen;
+      iov[i].off = 0;
+    }
+
+  b->md_spec->hash_buffers (out, b->blklen, iov, 1+BALLOON_COMPRESS_BLOCKS);
+  *counter_p += 1;
+}
+
+static void
+balloon_expand (balloon_ctx_t b, u64 *counter_p, unsigned char *block,
+                u64 n_blocks)
+{
+  gcry_buffer_t iov[2];
+  unsigned char octet_counter[sizeof (u64)];
+  u64 i;
+
+  iov[0].data = octet_counter;
+  iov[0].len = sizeof (octet_counter);
+  iov[0].off = 0;
+  iov[1].len = b->blklen;
+  iov[1].off = 0;
+
+  for (i = 1; i < n_blocks; i++)
+    {
+      buf_put_le64 (octet_counter, *counter_p);
+      iov[1].data = block;
+      block += b->blklen;
+      b->md_spec->hash_buffers (block, b->blklen, iov, 2);
+      *counter_p += 1;
+    }
+}
+
+static void
+balloon_compute_fill (balloon_ctx_t b,
+                      struct balloon_thread_data *t,
+                      const unsigned char *salt,
+                      u64 *counter_p)
+{
+  gcry_buffer_t iov[6];
+  unsigned char octet_counter[sizeof (u64)];
+  unsigned char octet_s_cost[4];
+  unsigned char octet_t_cost[4];
+  unsigned char octet_parallelism[4];
+
+  buf_put_le64 (octet_counter, *counter_p);
+  buf_put_le32 (octet_s_cost, b->s_cost);
+  buf_put_le32 (octet_t_cost, b->t_cost);
+  buf_put_le32 (octet_parallelism, b->parallelism);
+
+  iov[0].data = octet_counter;
+  iov[0].len = sizeof (octet_counter);
+  iov[0].off = 0;
+  iov[1].data = (void *)salt;
+  iov[1].len = b->blklen;
+  iov[1].off = 0;
+  iov[2].data = (void *)b->password;
+  iov[2].len = b->passwordlen;
+  iov[2].off = 0;
+  iov[3].data = octet_s_cost;
+  iov[3].len = 4;
+  iov[3].off = 0;
+  iov[4].data = octet_t_cost;
+  iov[4].len = 4;
+  iov[4].off = 0;
+  iov[5].data = octet_parallelism;
+  iov[5].len = 4;
+  iov[5].off = 0;
+  b->md_spec->hash_buffers (t->block, b->blklen, iov, 6);
+  *counter_p += 1;
+  balloon_expand (b, counter_p, t->block, b->n_blocks);
+}
+
+static void
+balloon_compute_mix (gcry_cipher_hd_t prng,
+                     balloon_ctx_t b, struct balloon_thread_data *t,
+                     u64 *counter_p)
+{
+  u64 i;
+
+  for (i = 0; i < b->n_blocks; i++)
+    {
+      unsigned char *cur_block = t->block + (b->blklen * i);
+      const unsigned char *blocks[BALLOON_COMPRESS_BLOCKS];
+      const unsigned char *prev_block;
+      unsigned int n;
+
+      prev_block = i
+        ? cur_block - b->blklen
+        : t->block + (b->blklen * (t->b->n_blocks - 1));
+
+      n = 0;
+      blocks[n++] = prev_block;
+      blocks[n++] = cur_block;
+
+      for (; n < BALLOON_COMPRESS_BLOCKS; n++)
+        {
+          u64 rand64 = prng_aes_ctr_get_rand64 (prng);
+          blocks[n] = t->block + (b->blklen * (rand64 % b->n_blocks));
+        }
+
+      balloon_compress (b, counter_p, cur_block, blocks);
+    }
+}
+
+
+static void
+balloon_compute (void *priv)
+{
+  struct balloon_thread_data *t = (struct balloon_thread_data *)priv;
+  balloon_ctx_t b = t->b;
+  gcry_cipher_hd_t prng;
+  gcry_buffer_t iov[4];
+  unsigned char salt[BALLOON_BLOCK_LEN_MAX];
+  unsigned char octet_s_cost[4];
+  unsigned char octet_t_cost[4];
+  unsigned char octet_parallelism[4];
+  u32 u;
+  u64 counter;
+  unsigned int i;
+
+  counter = 0;
+
+  memcpy (salt, b->salt, b->blklen);
+  u = buf_get_le32 (b->salt) + t->idx;
+  buf_put_le32 (salt, u);
+
+  buf_put_le32 (octet_s_cost, b->s_cost);
+  buf_put_le32 (octet_t_cost, b->t_cost);
+  buf_put_le32 (octet_parallelism, b->parallelism);
+
+  iov[0].data = salt;
+  iov[0].len = b->blklen;
+  iov[0].off = 0;
+  iov[1].data = octet_s_cost;
+  iov[1].len = 4;
+  iov[1].off = 0;
+  iov[2].data = octet_t_cost;
+  iov[2].len = 4;
+  iov[2].off = 0;
+  iov[3].data = octet_parallelism;
+  iov[3].len = 4;
+  iov[3].off = 0;
+
+  t->ec = prng_aes_ctr_init (&prng, b, iov, 4);
+  if (t->ec)
+    return;
+
+  balloon_compute_fill (b, t, salt, &counter);
+
+  for (i = 0; i < b->t_cost; i++)
+    balloon_compute_mix (prng, b, t, &counter);
+
+  /* The result is now at the last block.  */
+
+  prng_aes_ctr_fini (prng);
+}
+
+static gpg_err_code_t
+balloon_compute_all (balloon_ctx_t b, const struct gcry_kdf_thread_ops *ops)
+{
+  unsigned int parallelism = b->parallelism;
+  unsigned int i;
+  int ret;
+
+  for (i = 0; i < parallelism; i++)
+    {
+      struct balloon_thread_data *t = &b->thread_data[i];
+
+      if (ops)
+        {
+          ret = ops->dispatch_job (ops->jobs_context, balloon_compute, t);
+          if (ret < 0)
+            return GPG_ERR_CANCELED;
+        }
+      else
+        balloon_compute (t);
+    }
+
+  if (ops)
+    {
+      ret = ops->wait_all_jobs (ops->jobs_context);
+      if (ret < 0)
+        return GPG_ERR_CANCELED;
+    }
+
+  return 0;
+}
+
+static gpg_err_code_t
+balloon_final (balloon_ctx_t b, size_t resultlen, void *result)
+{
+  unsigned int parallelism = b->parallelism;
+  unsigned int i;
+  u64 out[BALLOON_BLOCK_LEN_MAX/8];
+
+  if (resultlen != b->blklen)
+    return GPG_ERR_INV_VALUE;
+
+  memset (out, 0, b->blklen);
+  for (i = 0; i < parallelism; i++)
+    {
+      struct balloon_thread_data *t = &b->thread_data[i];
+      const unsigned char *last_block;
+
+      if (t->ec)
+        return t->ec;
+
+      last_block = t->block + (b->blklen * (t->b->n_blocks - 1));
+      balloon_xor_block (b, out, (const u64 *)(void *)last_block);
+    }
+
+  memcpy (result, out, b->blklen);
+
+  return 0;
+}
+
+static void
+balloon_close (balloon_ctx_t b)
+{
+  unsigned int parallelism = b->parallelism;
+  size_t n = ballon_context_size (parallelism);
+
+  if (b->block)
+    {
+      wipememory (b->block, parallelism * b->n_blocks);
+      xfree (b->block);
+    }
+
+  wipememory (b, n);
+  xfree (b);
+}
+
+typedef struct onestep_kdf_context *onestep_kdf_ctx_t;
+
+/* OneStepKDF context */
+struct onestep_kdf_context {
+  int algo;
+  gcry_md_hd_t md;
+  unsigned int blklen;
+  unsigned int outlen;
+  const void *input;
+  size_t inputlen;
+  const void *fixedinfo;
+  size_t fixedinfolen;
+};
+
+static gpg_err_code_t
+onestep_kdf_open (gcry_kdf_hd_t *hd, int hashalgo,
+                  const unsigned long *param, unsigned int paramlen,
+                  const void *input, size_t inputlen,
+                  const void *fixedinfo, size_t fixedinfolen)
+{
+  gpg_err_code_t ec;
+  unsigned int outlen;
+  onestep_kdf_ctx_t o;
+  size_t n;
+
+  if (paramlen != 1)
+    return GPG_ERR_INV_VALUE;
+  else
+    outlen = (unsigned int)param[0];
+
+  n = sizeof (struct onestep_kdf_context);
+  o = xtrymalloc (n);
+  if (!o)
+    return gpg_err_code_from_errno (errno);
+
+  o->blklen = _gcry_md_get_algo_dlen (hashalgo);
+  if (!o->blklen)
+    {
+      xfree (o);
+      return GPG_ERR_DIGEST_ALGO;
+    }
+  ec = _gcry_md_open (&o->md, hashalgo, 0);
+  if (ec)
+    {
+      xfree (o);
+      return ec;
+    }
+  o->algo = GCRY_KDF_ONESTEP_KDF;
+  o->outlen = outlen;
+  o->input = input;
+  o->inputlen = inputlen;
+  o->fixedinfo = fixedinfo;
+  o->fixedinfolen = fixedinfolen;
+
+  *hd = (void *)o;
+  return 0;
+}
+
+
+static gpg_err_code_t
+onestep_kdf_compute (onestep_kdf_ctx_t o, const struct gcry_kdf_thread_ops *ops)
+{
+  (void)o;
+
+  if (ops != NULL)
+    return GPG_ERR_INV_VALUE;
+
+  return 0;
+}
+
+static gpg_err_code_t
+onestep_kdf_final (onestep_kdf_ctx_t o, size_t resultlen, void *result)
+{
+  u32 counter = 0;
+  unsigned char cnt[4];
+  int i;
+
+  if (resultlen != o->outlen)
+    return GPG_ERR_INV_VALUE;
+
+  for (i = 0; i < o->outlen / o->blklen; i++)
+    {
+      counter++;
+      buf_put_be32 (cnt, counter);
+      _gcry_md_write (o->md, cnt, sizeof (cnt));
+      _gcry_md_write (o->md, o->input, o->inputlen);
+      _gcry_md_write (o->md, o->fixedinfo, o->fixedinfolen);
+      _gcry_md_final (o->md);
+      memcpy ((char *)result + o->blklen * i,
+              _gcry_md_read (o->md, 0), o->blklen);
+      resultlen -= o->blklen;
+      _gcry_md_reset (o->md);
+    }
+
+  if (resultlen)
+    {
+      counter++;
+      buf_put_be32 (cnt, counter);
+      _gcry_md_write (o->md, cnt, sizeof (cnt));
+      _gcry_md_write (o->md, o->input, o->inputlen);
+      _gcry_md_write (o->md, o->fixedinfo, o->fixedinfolen);
+      _gcry_md_final (o->md);
+      memcpy ((char *)result + o->blklen * i,
+              _gcry_md_read (o->md, 0), resultlen);
+    }
+
+  return 0;
+}
+
+static void
+onestep_kdf_close (onestep_kdf_ctx_t o)
+{
+  _gcry_md_close (o->md);
+  xfree (o);
+}
+
+typedef struct onestep_kdf_mac_context *onestep_kdf_mac_ctx_t;
+
+/* OneStep_KDF_MAC context */
+struct onestep_kdf_mac_context {
+  int algo;
+  gcry_mac_hd_t md;
+  unsigned int blklen;
+  unsigned int outlen;
+  const void *input;
+  size_t inputlen;
+  const void *salt;
+  size_t saltlen;
+  const void *fixedinfo;
+  size_t fixedinfolen;
+};
+
+static gpg_err_code_t
+onestep_kdf_mac_open (gcry_kdf_hd_t *hd, int macalgo,
+                      const unsigned long *param, unsigned int paramlen,
+                      const void *input, size_t inputlen,
+                      const void *key, size_t keylen,
+                      const void *fixedinfo, size_t fixedinfolen)
+{
+  gpg_err_code_t ec;
+  unsigned int outlen;
+  onestep_kdf_mac_ctx_t o;
+  size_t n;
+
+  if (paramlen != 1)
+    return GPG_ERR_INV_VALUE;
+  else
+    outlen = (unsigned int)param[0];
+
+  n = sizeof (struct onestep_kdf_mac_context);
+  o = xtrymalloc (n);
+  if (!o)
+    return gpg_err_code_from_errno (errno);
+
+  o->blklen = _gcry_mac_get_algo_maclen (macalgo);
+  if (!o->blklen)
+    {
+      xfree (o);
+      return GPG_ERR_MAC_ALGO;
+    }
+  ec = _gcry_mac_open (&o->md, macalgo, 0, NULL);
+  if (ec)
+    {
+      xfree (o);
+      return ec;
+    }
+  o->algo = GCRY_KDF_ONESTEP_KDF_MAC;
+  o->outlen = outlen;
+  o->input = input;
+  o->inputlen = inputlen;
+  o->salt = key;
+  o->saltlen = keylen;
+  o->fixedinfo = fixedinfo;
+  o->fixedinfolen = fixedinfolen;
+
+  *hd = (void *)o;
+  return 0;
+}
+
+
+static gpg_err_code_t
+onestep_kdf_mac_compute (onestep_kdf_mac_ctx_t o,
+                         const struct gcry_kdf_thread_ops *ops)
+{
+  (void)o;
+
+  if (ops != NULL)
+    return GPG_ERR_INV_VALUE;
+
+  return 0;
+}
+
+static gpg_err_code_t
+onestep_kdf_mac_final (onestep_kdf_mac_ctx_t o, size_t resultlen, void *result)
+{
+  u32 counter = 0;
+  unsigned char cnt[4];
+  int i;
+  gcry_err_code_t ec;
+  size_t len = o->blklen;
+
+  if (resultlen != o->outlen)
+    return GPG_ERR_INV_VALUE;
+
+  ec = _gcry_mac_setkey (o->md, o->salt, o->saltlen);
+  if (ec)
+    return ec;
+
+  for (i = 0; i < o->outlen / o->blklen; i++)
+    {
+      counter++;
+      buf_put_be32 (cnt, counter);
+      ec = _gcry_mac_write (o->md, cnt, sizeof (cnt));
+      if (ec)
+        return ec;
+      ec = _gcry_mac_write (o->md, o->input, o->inputlen);
+      if (ec)
+        return ec;
+      ec = _gcry_mac_write (o->md, o->fixedinfo, o->fixedinfolen);
+      if (ec)
+        return ec;
+      ec = _gcry_mac_read (o->md, (char *)result + o->blklen * i, &len);
+      if (ec)
+        return ec;
+      resultlen -= o->blklen;
+      ec = _gcry_mac_ctl (o->md, GCRYCTL_RESET, NULL, 0);
+      if (ec)
+        return ec;
+    }
+
+  if (resultlen)
+    {
+      counter++;
+      len = resultlen;
+      buf_put_be32 (cnt, counter);
+      ec = _gcry_mac_write (o->md, cnt, sizeof (cnt));
+      if (ec)
+        return ec;
+      ec = _gcry_mac_write (o->md, o->input, o->inputlen);
+      if (ec)
+        return ec;
+      ec =_gcry_mac_write (o->md, o->fixedinfo, o->fixedinfolen);
+      if (ec)
+        return ec;
+      ec = _gcry_mac_read (o->md, (char *)result + o->blklen * i, &len);
+      if (ec)
+        return ec;
+    }
+
+  return 0;
+}
+
+static void
+onestep_kdf_mac_close (onestep_kdf_mac_ctx_t o)
+{
+  _gcry_mac_close (o->md);
+  xfree (o);
+}
+
+typedef struct hkdf_context *hkdf_ctx_t;
+
+/* Hkdf context */
+struct hkdf_context {
+  int algo;
+  gcry_mac_hd_t md;
+  int mode;
+  unsigned int blklen;
+  unsigned int outlen;
+  const void *input;
+  size_t inputlen;
+  const void *salt;
+  size_t saltlen;
+  const void *fixedinfo;
+  size_t fixedinfolen;
+  unsigned char *prk;
+};
+
+static gpg_err_code_t
+hkdf_open (gcry_kdf_hd_t *hd, int macalgo,
+           const unsigned long *param, unsigned int paramlen,
+           const void *input, size_t inputlen,
+           const void *salt, size_t saltlen,
+           const void *fixedinfo, size_t fixedinfolen)
+{
+  gpg_err_code_t ec;
+  unsigned int outlen;
+  int mode;
+  hkdf_ctx_t h;
+  size_t n;
+  unsigned char *prk;
+
+  if (paramlen != 1 && paramlen != 2)
+    return GPG_ERR_INV_VALUE;
+  else
+    {
+      outlen = (unsigned int)param[0];
+      /* MODE: support extract only, expand only: FIXME*/
+      if (paramlen == 2)
+        mode = (unsigned int)param[1];
+      else
+        mode = 0;
+    }
+
+  n = sizeof (struct hkdf_context);
+  h = xtrymalloc (n);
+  if (!h)
+    return gpg_err_code_from_errno (errno);
+
+  h->blklen = _gcry_mac_get_algo_maclen (macalgo);
+  if (!h->blklen)
+    {
+      xfree (h);
+      return GPG_ERR_MAC_ALGO;
+    }
+
+  if (outlen > 255 * h->blklen)
+    {
+      xfree (h);
+      return GPG_ERR_INV_VALUE;
+    }
+
+  ec = _gcry_mac_open (&h->md, macalgo, 0, NULL);
+  if (ec)
+    {
+      xfree (h);
+      return ec;
+    }
+  prk = xtrymalloc (h->blklen);
+  if (!prk)
+    {
+      _gcry_mac_close (h->md);
+      xfree (h);
+      return gpg_err_code_from_errno (errno);
+    }
+  h->prk = prk;
+  h->algo = GCRY_KDF_HKDF;
+  h->outlen = outlen;
+  h->mode = mode;
+  h->input = input;
+  h->inputlen = inputlen;
+  h->salt = salt;
+  h->saltlen = saltlen;
+  h->fixedinfo = fixedinfo;
+  h->fixedinfolen = fixedinfolen;
+
+  *hd = (void *)h;
+  return 0;
+}
+
+
+static gpg_err_code_t
+hkdf_compute (hkdf_ctx_t h, const struct gcry_kdf_thread_ops *ops)
+{
+  gcry_err_code_t ec;
+  size_t len = h->blklen;
+
+  if (ops != NULL)
+    return GPG_ERR_INV_VALUE;
+
+  /* Extract */
+  ec = _gcry_mac_setkey (h->md, h->salt, h->saltlen);
+  if (ec)
+    return ec;
+
+  ec = _gcry_mac_write (h->md, h->input, h->inputlen);
+  if (ec)
+    return ec;
+
+  ec = _gcry_mac_read (h->md, h->prk, &len);
+  if (ec)
+    return ec;
+
+  ec = _gcry_mac_ctl (h->md, GCRYCTL_RESET, NULL, 0);
+  if (ec)
+    return ec;
+
+  return 0;
+}
+
+static gpg_err_code_t
+hkdf_final (hkdf_ctx_t h, size_t resultlen, void *result)
+{
+  unsigned char counter = 0;
+  int i;
+  gcry_err_code_t ec;
+  size_t len = h->blklen;
+
+  if (resultlen != h->outlen)
+    return GPG_ERR_INV_VALUE;
+
+  /* Expand */
+  ec = _gcry_mac_setkey (h->md, h->prk, h->blklen);
+  if (ec)
+    return ec;
+
+  /* We re-use the memory of ->prk.  */
+
+  for (i = 0; i < h->outlen / h->blklen; i++)
+    {
+      counter++;
+      if (i)
+        {
+          ec = _gcry_mac_write (h->md, h->prk, h->blklen);
+          if (ec)
+            return ec;
+        }
+      if (h->fixedinfo)
+        {
+          ec = _gcry_mac_write (h->md, h->fixedinfo, h->fixedinfolen);
+          if (ec)
+            return ec;
+        }
+      ec = _gcry_mac_write (h->md, &counter, 1);
+      if (ec)
+        return ec;
+      ec = _gcry_mac_read (h->md, h->prk, &len);
+      if (ec)
+        return ec;
+      memcpy ((char *)result + h->blklen * i, h->prk, len);
+      resultlen -= h->blklen;
+      ec = _gcry_mac_ctl (h->md, GCRYCTL_RESET, NULL, 0);
+      if (ec)
+        return ec;
+    }
+
+  if (resultlen)
+    {
+      counter++;
+      len = resultlen;
+      if (i)
+        {
+          ec = _gcry_mac_write (h->md, h->prk, h->blklen);
+          if (ec)
+            return ec;
+        }
+      if (h->fixedinfo)
+        {
+          ec = _gcry_mac_write (h->md, h->fixedinfo, h->fixedinfolen);
+          if (ec)
+            return ec;
+        }
+      ec = _gcry_mac_write (h->md, &counter, 1);
+      if (ec)
+        return ec;
+      ec = _gcry_mac_read (h->md, (char *)result + h->blklen * i, &len);
+      if (ec)
+        return ec;
+    }
+
+  return 0;
+}
+
+static void
+hkdf_close (hkdf_ctx_t h)
+{
+  _gcry_mac_close (h->md);
+  xfree (h->prk);
+  xfree (h);
+}
+
+typedef struct x963_kdf_context *x963_kdf_ctx_t;
+
+/* X963KDF context */
+struct x963_kdf_context {
+  int algo;
+  gcry_md_hd_t md;
+  unsigned int blklen;
+  unsigned int outlen;
+  const void *input;
+  size_t inputlen;
+  const void *sharedinfo;
+  size_t sharedinfolen;
+};
+
+static gpg_err_code_t
+x963_kdf_open (gcry_kdf_hd_t *hd, int hashalgo,
+                  const unsigned long *param, unsigned int paramlen,
+                  const void *input, size_t inputlen,
+                  const void *sharedinfo, size_t sharedinfolen)
+{
+  gpg_err_code_t ec;
+  unsigned int outlen;
+  x963_kdf_ctx_t o;
+  size_t n;
+
+  if (paramlen != 1)
+    return GPG_ERR_INV_VALUE;
+  else
+    outlen = (unsigned int)param[0];
+
+  n = sizeof (struct x963_kdf_context);
+  o = xtrymalloc (n);
+  if (!o)
+    return gpg_err_code_from_errno (errno);
+
+  o->blklen = _gcry_md_get_algo_dlen (hashalgo);
+  if (!o->blklen)
+    {
+      xfree (o);
+      return GPG_ERR_DIGEST_ALGO;
+    }
+  ec = _gcry_md_open (&o->md, hashalgo, 0);
+  if (ec)
+    {
+      xfree (o);
+      return ec;
+    }
+  o->algo = GCRY_KDF_X963_KDF;
+  o->outlen = outlen;
+  o->input = input;
+  o->inputlen = inputlen;
+  o->sharedinfo = sharedinfo;
+  o->sharedinfolen = sharedinfolen;
+
+  *hd = (void *)o;
+  return 0;
+}
+
+
+static gpg_err_code_t
+x963_kdf_compute (x963_kdf_ctx_t o, const struct gcry_kdf_thread_ops *ops)
+{
+  (void)o;
+
+  if (ops != NULL)
+    return GPG_ERR_INV_VALUE;
+
+  return 0;
+}
+
+static gpg_err_code_t
+x963_kdf_final (x963_kdf_ctx_t o, size_t resultlen, void *result)
+{
+  u32 counter = 0;
+  unsigned char cnt[4];
+  int i;
+
+  if (resultlen != o->outlen)
+    return GPG_ERR_INV_VALUE;
+
+  for (i = 0; i < o->outlen / o->blklen; i++)
+    {
+      counter++;
+      _gcry_md_write (o->md, o->input, o->inputlen);
+      buf_put_be32 (cnt, counter);
+      _gcry_md_write (o->md, cnt, sizeof (cnt));
+      if (o->sharedinfolen)
+        _gcry_md_write (o->md, o->sharedinfo, o->sharedinfolen);
+      _gcry_md_final (o->md);
+      memcpy ((char *)result + o->blklen * i,
+              _gcry_md_read (o->md, 0), o->blklen);
+      resultlen -= o->blklen;
+      _gcry_md_reset (o->md);
+    }
+
+  if (resultlen)
+    {
+      counter++;
+      _gcry_md_write (o->md, o->input, o->inputlen);
+      buf_put_be32 (cnt, counter);
+      _gcry_md_write (o->md, cnt, sizeof (cnt));
+      if (o->sharedinfolen)
+        _gcry_md_write (o->md, o->sharedinfo, o->sharedinfolen);
+      _gcry_md_final (o->md);
+      memcpy ((char *)result + o->blklen * i,
+              _gcry_md_read (o->md, 0), resultlen);
+    }
+
+  return 0;
+}
+
+static void
+x963_kdf_close (x963_kdf_ctx_t o)
+{
+  _gcry_md_close (o->md);
+  xfree (o);
+}
+
 struct gcry_kdf_handle {
   int algo;
   /* And algo specific parts come.  */
@@ -931,7 +1989,7 @@ struct gcry_kdf_handle {
 gpg_err_code_t
 _gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
                 const unsigned long *param, unsigned int paramlen,
-                const void *passphrase, size_t passphraselen,
+                const void *input, size_t inputlen,
                 const void *salt, size_t saltlen,
                 const void *key, size_t keylen,
                 const void *ad, size_t adlen)
@@ -941,25 +1999,69 @@ _gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
   switch (algo)
     {
     case GCRY_KDF_ARGON2:
-      if (!passphraselen || !saltlen)
+      if (!saltlen)
         ec = GPG_ERR_INV_VALUE;
       else
         ec = argon2_open (hd, subalgo, param, paramlen,
-                          passphrase, passphraselen, salt, saltlen,
+                          input, inputlen, salt, saltlen,
                           key, keylen, ad, adlen);
       break;
 
     case GCRY_KDF_BALLOON:
-      if (!passphraselen || !saltlen)
+      if (!inputlen || !saltlen || keylen || adlen)
         ec = GPG_ERR_INV_VALUE;
       else
         {
           (void)key;
-          (void)keylen;
           (void)ad;
-          (void)adlen;
           ec = balloon_open (hd, subalgo, param, paramlen,
-                             passphrase, passphraselen, salt, saltlen);
+                             input, inputlen, salt, saltlen);
+        }
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF:
+      if (!inputlen || !paramlen || !adlen)
+        ec = GPG_ERR_INV_VALUE;
+      else
+        {
+          (void)salt;
+          (void)key;
+          ec = onestep_kdf_open (hd, subalgo, param, paramlen,
+                                 input, inputlen, ad, adlen);
+        }
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF_MAC:
+      if (!inputlen || !paramlen || !keylen || !adlen)
+        ec = GPG_ERR_INV_VALUE;
+      else
+        {
+          (void)salt;
+          ec = onestep_kdf_mac_open (hd, subalgo, param, paramlen,
+                                     input, inputlen, key, keylen, ad, adlen);
+        }
+      break;
+
+    case GCRY_KDF_HKDF:
+      if (!inputlen || !paramlen)
+        ec = GPG_ERR_INV_VALUE;
+      else
+        {
+          (void)salt;
+          ec = hkdf_open (hd, subalgo, param, paramlen,
+                          input, inputlen, key, keylen, ad, adlen);
+        }
+      break;
+
+    case GCRY_KDF_X963_KDF:
+      if (!inputlen || !paramlen)
+        ec = GPG_ERR_INV_VALUE;
+      else
+        {
+          (void)salt;
+          (void)key;
+          ec = x963_kdf_open (hd, subalgo, param, paramlen,
+                              input, inputlen, ad, adlen);
         }
       break;
 
@@ -982,6 +2084,26 @@ _gcry_kdf_compute (gcry_kdf_hd_t h, const struct gcry_kdf_thread_ops *ops)
       ec = argon2_compute ((argon2_ctx_t)(void *)h, ops);
       break;
 
+    case GCRY_KDF_BALLOON:
+      ec = balloon_compute_all ((balloon_ctx_t)(void *)h, ops);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF:
+      ec = onestep_kdf_compute ((onestep_kdf_ctx_t)(void *)h, ops);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF_MAC:
+      ec = onestep_kdf_mac_compute ((onestep_kdf_mac_ctx_t)(void *)h, ops);
+      break;
+
+    case GCRY_KDF_HKDF:
+      ec = hkdf_compute ((hkdf_ctx_t)(void *)h, ops);
+      break;
+
+    case GCRY_KDF_X963_KDF:
+      ec = x963_kdf_compute ((x963_kdf_ctx_t)(void *)h, ops);
+      break;
+
     default:
       ec = GPG_ERR_UNKNOWN_ALGORITHM;
       break;
@@ -1002,6 +2124,27 @@ _gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result)
       ec = argon2_final ((argon2_ctx_t)(void *)h, resultlen, result);
       break;
 
+    case GCRY_KDF_BALLOON:
+      ec = balloon_final ((balloon_ctx_t)(void *)h, resultlen, result);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF:
+      ec = onestep_kdf_final ((onestep_kdf_ctx_t)(void *)h, resultlen, result);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF_MAC:
+      ec = onestep_kdf_mac_final ((onestep_kdf_mac_ctx_t)(void *)h,
+                                  resultlen, result);
+      break;
+
+    case GCRY_KDF_HKDF:
+      ec = hkdf_final ((hkdf_ctx_t)(void *)h, resultlen, result);
+      break;
+
+    case GCRY_KDF_X963_KDF:
+      ec = x963_kdf_final ((x963_kdf_ctx_t)(void *)h, resultlen, result);
+      break;
+
     default:
       ec = GPG_ERR_UNKNOWN_ALGORITHM;
       break;
@@ -1019,11 +2162,31 @@ _gcry_kdf_close (gcry_kdf_hd_t h)
       argon2_close ((argon2_ctx_t)(void *)h);
       break;
 
+    case GCRY_KDF_BALLOON:
+      balloon_close ((balloon_ctx_t)(void *)h);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF:
+      onestep_kdf_close ((onestep_kdf_ctx_t)(void *)h);
+      break;
+
+    case GCRY_KDF_ONESTEP_KDF_MAC:
+      onestep_kdf_mac_close ((onestep_kdf_mac_ctx_t)(void *)h);
+      break;
+
+    case GCRY_KDF_HKDF:
+      hkdf_close ((hkdf_ctx_t)(void *)h);
+      break;
+
+    case GCRY_KDF_X963_KDF:
+      x963_kdf_close ((x963_kdf_ctx_t)(void *)h);
+      break;
+
     default:
       break;
     }
 }
-
+
 /* Check one KDF call with ALGO and HASH_ALGO using the regular KDF
  * API. (passphrase,passphraselen) is the password to be derived,
  * (salt,saltlen) the salt for the key derivation,

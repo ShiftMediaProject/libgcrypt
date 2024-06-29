@@ -29,7 +29,7 @@
 
 /* Constants */
 
-.text
+SECTION_RODATA
 .align 4
 ELF(.type _gcry_sm3_aarch64_consts,@object)
 _gcry_sm3_aarch64_consts:
@@ -383,6 +383,9 @@ ELF(.size _gcry_sm3_aarch64_consts,.-_gcry_sm3_aarch64_consts)
 #define SCHED_W_W5W0W1W2W3W4_3(iop_num, round) \
         SCHED_W_3_##iop_num(round, W5, W0, W1, W2, W3, W4)
 
+
+.text
+
 /*
  * Transform nblks*64 bytes (nblks*16 32-bit words) at DATA.
  *
@@ -390,7 +393,7 @@ ELF(.size _gcry_sm3_aarch64_consts,.-_gcry_sm3_aarch64_consts)
  * _gcry_sm3_transform_aarch64 (void *ctx, const unsigned char *data,
  *                              size_t nblks)
  */
-.align 3
+.align 4
 .globl _gcry_sm3_transform_aarch64
 ELF(.type _gcry_sm3_transform_aarch64,%function;)
 _gcry_sm3_transform_aarch64:

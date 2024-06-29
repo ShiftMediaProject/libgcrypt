@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -22,9 +22,6 @@
 
 #ifndef G10_CIPHER_PROTO_H
 #define G10_CIPHER_PROTO_H
-
-
-enum pk_encoding;
 
 
 /* Definition of a function used to report selftest failures.
@@ -219,7 +216,8 @@ typedef void (*gcry_md_final_t) (void *c);
 typedef unsigned char *(*gcry_md_read_t) (void *c);
 
 /* Type for the md_extract function.  */
-typedef void (*gcry_md_extract_t) (void *c, void *outbuf, size_t nbytes);
+typedef gpg_err_code_t (*gcry_md_extract_t) (void *c, void *outbuf,
+					     size_t nbytes);
 
 /* Type for the md_hash_buffers function. */
 typedef void (*gcry_md_hash_buffers_t) (void *outbuf, size_t nbytes,

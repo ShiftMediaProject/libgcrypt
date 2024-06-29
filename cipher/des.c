@@ -5,7 +5,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -15,8 +15,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * For a description of triple encryption, see:
  *   Bruce Schneier: Applied Cryptography. Second Edition.
@@ -120,7 +120,6 @@
 #include "cipher.h"
 #include "bufhelp.h"
 #include "cipher-internal.h"
-#include "cipher-selftest.h"
 
 
 #define DES_BLOCKSIZE 8
@@ -1047,66 +1046,6 @@ is_weak_key ( const byte *key )
 }
 
 
-/* Alternative setkey for selftests; need larger key than default. */
-static gcry_err_code_t
-bulk_selftest_setkey (void *context, const byte *__key, unsigned __keylen,
-                      cipher_bulk_ops_t *bulk_ops)
-{
-  static const unsigned char key[24] ATTR_ALIGNED_16 = {
-      0x66,0x9A,0x00,0x7F,0xC7,0x6A,0x45,0x9F,
-      0x98,0xBA,0xF9,0x17,0xFE,0xDF,0x95,0x22,
-      0x18,0x2A,0x39,0x47,0x5E,0x6F,0x75,0x82
-    };
-
-  (void)__key;
-  (void)__keylen;
-
-  return do_tripledes_setkey(context, key, sizeof(key), bulk_ops);
-}
-
-
-/* Run the self-tests for DES-CTR, tests IV increment of bulk CTR
-   encryption.  Returns NULL on success. */
-static const char *
-selftest_ctr (void)
-{
-  const int nblocks = 3+1;
-  const int blocksize = DES_BLOCKSIZE;
-  const int context_size = sizeof(struct _tripledes_ctx);
-
-  return _gcry_selftest_helper_ctr("3DES", &bulk_selftest_setkey,
-           &do_tripledes_encrypt, nblocks, blocksize, context_size);
-}
-
-
-/* Run the self-tests for DES-CBC, tests bulk CBC decryption.
-   Returns NULL on success. */
-static const char *
-selftest_cbc (void)
-{
-  const int nblocks = 3+2;
-  const int blocksize = DES_BLOCKSIZE;
-  const int context_size = sizeof(struct _tripledes_ctx);
-
-  return _gcry_selftest_helper_cbc("3DES", &bulk_selftest_setkey,
-           &do_tripledes_encrypt, nblocks, blocksize, context_size);
-}
-
-
-/* Run the self-tests for DES-CFB, tests bulk CBC decryption.
-   Returns NULL on success. */
-static const char *
-selftest_cfb (void)
-{
-  const int nblocks = 3+2;
-  const int blocksize = DES_BLOCKSIZE;
-  const int context_size = sizeof(struct _tripledes_ctx);
-
-  return _gcry_selftest_helper_cfb("3DES", &bulk_selftest_setkey,
-           &do_tripledes_encrypt, nblocks, blocksize, context_size);
-}
-
-
 /*
  * Performs a selftest of this DES/Triple-DES implementation.
  * Returns an string with the error text on failure.
@@ -1115,8 +1054,6 @@ selftest_cfb (void)
 static const char *
 selftest (void)
 {
-  const char *r;
-
   /*
    * Check if 'u32' is really 32 bits wide. This DES / 3DES implementation
    * need this.
@@ -1295,15 +1232,6 @@ selftest (void)
       if (!is_weak_key(weak_keys[i]))
         return "DES weak key detection failed";
   }
-
-  if ( (r = selftest_cbc ()) )
-    return r;
-
-  if ( (r = selftest_cfb ()) )
-    return r;
-
-  if ( (r = selftest_ctr ()) )
-    return r;
 
   return 0;
 }

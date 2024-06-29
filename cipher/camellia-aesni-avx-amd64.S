@@ -1,6 +1,6 @@
 /* camellia-avx-aesni-amd64.S  -  AES-NI/AVX implementation of Camellia cipher
  *
- * Copyright (C) 2013-2015,2020 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013-2015,2020,2023 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -121,25 +121,14 @@
 	filter_8bit(x2, t2, t3, t7, t6); \
 	filter_8bit(x5, t2, t3, t7, t6); \
 	\
-	vpxor t6, t6, t6; \
 	vmovq key, t0; \
 	\
 	/* postfilter sbox 2 */ \
 	filter_8bit(x1, t4, t5, t7, t2); \
 	filter_8bit(x4, t4, t5, t7, t2); \
 	\
-	vpsrldq $5, t0, t5; \
-	vpsrldq $1, t0, t1; \
-	vpsrldq $2, t0, t2; \
-	vpsrldq $3, t0, t3; \
-	vpsrldq $4, t0, t4; \
-	vpshufb t6, t0, t0; \
-	vpshufb t6, t1, t1; \
-	vpshufb t6, t2, t2; \
-	vpshufb t6, t3, t3; \
-	vpshufb t6, t4, t4; \
-	vpsrldq $2, t5, t7; \
-	vpshufb t6, t7, t7; \
+	vpshufb .Lbyte_threes rRIP, t0, t3; \
+	vpshufb .Lbyte_twos rRIP, t0, t2; \
 	\
 	/* P-function */ \
 	vpxor x5, x0, x0; \
@@ -147,15 +136,22 @@
 	vpxor x7, x2, x2; \
 	vpxor x4, x3, x3; \
 	\
+	vpshufb .Lbyte_ones rRIP, t0, t1; \
+	vpshufb .Lbyte_sevens rRIP, t0, t7; \
+	\
 	vpxor x2, x4, x4; \
 	vpxor x3, x5, x5; \
 	vpxor x0, x6, x6; \
 	vpxor x1, x7, x7; \
 	\
+	vpshufb .Lbyte_sixs rRIP, t0, t6; \
+	vpshufb .Lbyte_fives rRIP, t0, t5; \
 	vpxor x7, x0, x0; \
 	vpxor x4, x1, x1; \
 	vpxor x5, x2, x2; \
 	vpxor x6, x3, x3; \
+	\
+	vpshufb .Lbyte_fours rRIP, t0, t4; \
 	\
 	vpxor x3, x4, x4; \
 	vpxor x0, x5, x5; \
@@ -165,14 +161,13 @@
 	/* Add key material and result to CD (x becomes new CD) */ \
 	\
 	vpxor t3, x4, x4; \
+	vpxor t3, t3, t3; \
 	vpxor 0 * 16(mem_cd), x4, x4; \
+	\
+	vpshufb t3, t0, t0; \
 	\
 	vpxor t2, x5, x5; \
 	vpxor 1 * 16(mem_cd), x5, x5; \
-	\
-	vpsrldq $1, t5, t3; \
-	vpshufb t6, t5, t5; \
-	vpshufb t6, t3, t6; \
 	\
 	vpxor t1, x6, x6; \
 	vpxor 2 * 16(mem_cd), x6, x6; \
@@ -294,12 +289,9 @@
 	vpxor tt0, tt0, tt0; \
 	vmovd kll, t0; \
 	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpshufb .Lbyte_ones rRIP, t0, t2; \
+	vpshufb .Lbyte_twos rRIP, t0, t1; \
+	vpshufb .Lbyte_threes rRIP, t0, t0; \
 	\
 	vpand l0, t0, t0; \
 	vpand l1, t1, t1; \
@@ -325,12 +317,9 @@
 	\
 	vmovd krr, t0; \
 	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpshufb .Lbyte_ones rRIP, t0, t2; \
+	vpshufb .Lbyte_twos rRIP, t0, t1; \
+	vpshufb .Lbyte_threes rRIP, t0, t0; \
 	\
 	vpor 4 * 16(r), t0, t0; \
 	vpor 5 * 16(r), t1, t1; \
@@ -353,12 +342,9 @@
 	 */ \
 	vmovd krl, t0; \
 	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpshufb .Lbyte_ones rRIP, t0, t2; \
+	vpshufb .Lbyte_twos rRIP, t0, t1; \
+	vpshufb .Lbyte_threes rRIP, t0, t0; \
 	\
 	vpand 0 * 16(r), t0, t0; \
 	vpand 1 * 16(r), t1, t1; \
@@ -384,12 +370,9 @@
 	\
 	vmovd klr, t0; \
 	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpshufb .Lbyte_ones rRIP, t0, t2; \
+	vpshufb .Lbyte_twos rRIP, t0, t1; \
+	vpshufb .Lbyte_threes rRIP, t0, t0; \
 	\
 	vpor l4, t0, t0; \
 	vpor l5, t1, t1; \
@@ -619,7 +602,10 @@
 	vmovdqu y6, 14 * 16(rio); \
 	vmovdqu y7, 15 * 16(rio);
 
-.text
+SECTION_RODATA
+
+ELF(.type _camellia_aesni_avx_data,@object;)
+_camellia_aesni_avx_data:
 .align 16
 
 #define SHUFB_BYTES(idx) \
@@ -633,6 +619,28 @@
 	.long 0x04050607
 	.long 0x80808080
 	.long 0x80808080
+
+.Lbyte_ones:
+	.quad 1 * 0x0101010101010101
+	.quad 1 * 0x0101010101010101
+.Lbyte_twos:
+	.quad 2 * 0x0101010101010101
+	.quad 2 * 0x0101010101010101
+.Lbyte_threes:
+	.quad 3 * 0x0101010101010101
+	.quad 3 * 0x0101010101010101
+.Lbyte_fours:
+	.quad 4 * 0x0101010101010101
+	.quad 4 * 0x0101010101010101
+.Lbyte_fives:
+	.quad 5 * 0x0101010101010101
+	.quad 5 * 0x0101010101010101
+.Lbyte_sixs:
+	.quad 6 * 0x0101010101010101
+	.quad 6 * 0x0101010101010101
+.Lbyte_sevens:
+	.quad 7 * 0x0101010101010101
+	.quad 7 * 0x0101010101010101
 
 /* For CTR-mode IV byteswap */
 .Lbswap128_mask:
@@ -758,13 +766,46 @@
 .Ltranspose_8x8_shuf:
 	.byte 0, 1, 4, 5, 2, 3, 6, 7, 8+0, 8+1, 8+4, 8+5, 8+2, 8+3, 8+6, 8+7
 
+/* CTR byte addition constants */
+.Lbige_addb_1:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+.Lbige_addb_2:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2
+.Lbige_addb_3:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3
+.Lbige_addb_4:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4
+.Lbige_addb_5:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5
+.Lbige_addb_6:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6
+.Lbige_addb_7:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7
+.Lbige_addb_8:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8
+.Lbige_addb_9:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9
+.Lbige_addb_10:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10
+.Lbige_addb_11:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11
+.Lbige_addb_12:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12
+.Lbige_addb_13:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13
+.Lbige_addb_14:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14
+.Lbige_addb_15:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15
+
 .align 4
 /* 4-bit mask */
 .L0f0f0f0f:
 	.long 0x0f0f0f0f
 
+.text
 
-.align 8
+.align 16
 ELF(.type   __camellia_enc_blk16,@function;)
 
 __camellia_enc_blk16:
@@ -826,7 +867,7 @@ __camellia_enc_blk16:
 	CFI_ENDPROC();
 ELF(.size __camellia_enc_blk16,.-__camellia_enc_blk16;)
 
-.align 8
+.align 16
 ELF(.type   __camellia_dec_blk16,@function;)
 
 __camellia_dec_blk16:
@@ -897,7 +938,7 @@ ELF(.size __camellia_dec_blk16,.-__camellia_dec_blk16;)
 	vpslldq $8, tmp, tmp; \
 	vpsubq tmp, x, x;
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_ctr_enc
 ELF(.type   _gcry_camellia_aesni_avx_ctr_enc,@function;)
 
@@ -925,6 +966,9 @@ _gcry_camellia_aesni_avx_ctr_enc:
 	subq $(16 * 16), %rsp;
 	andq $~31, %rsp;
 	movq %rsp, %rax;
+
+	cmpb $(0x100 - 16), 15(%rcx);
+	jbe .Lctr_byteadd;
 
 	vmovdqa .Lbswap128_mask rRIP, %xmm14;
 
@@ -974,6 +1018,8 @@ _gcry_camellia_aesni_avx_ctr_enc:
 	vpshufb .Lbswap128_mask rRIP, %xmm13, %xmm13; /* le => be */
 	vmovdqu %xmm13, (%rcx);
 
+.align 8
+.Lload_ctr_done:
 	/* inpack16_pre: */
 	vmovq (key_table)(CTX), %xmm15;
 	vpshufb .Lpack_bswap rRIP, %xmm15, %xmm15;
@@ -1022,10 +1068,143 @@ _gcry_camellia_aesni_avx_ctr_enc:
 	leave;
 	CFI_LEAVE();
 	ret_spec_stop;
+
+.align 8
+.Lctr_byteadd_full_ctr_carry:
+	movq 8(%rcx), %r11;
+	movq (%rcx), %r10;
+	bswapq %r11;
+	bswapq %r10;
+	addq $16, %r11;
+	adcq $0, %r10;
+	bswapq %r11;
+	bswapq %r10;
+	movq %r11, 8(%rcx);
+	movq %r10, (%rcx);
+	jmp .Lctr_byteadd_xmm;
+.align 8
+.Lctr_byteadd:
+	vmovdqu (%rcx), %xmm15;
+	je .Lctr_byteadd_full_ctr_carry;
+	addb $16, 15(%rcx);
+.Lctr_byteadd_xmm:
+	vmovdqa %xmm15, %xmm0;
+	vpaddb .Lbige_addb_1 rRIP, %xmm15, %xmm14;
+	vmovdqu %xmm15, 15 * 16(%rax);
+	vpaddb .Lbige_addb_2 rRIP, %xmm15, %xmm13;
+	vmovdqu %xmm14, 14 * 16(%rax);
+	vpaddb .Lbige_addb_3 rRIP, %xmm15, %xmm12;
+	vmovdqu %xmm13, 13 * 16(%rax);
+	vpaddb .Lbige_addb_4 rRIP, %xmm15, %xmm11;
+	vpaddb .Lbige_addb_5 rRIP, %xmm15, %xmm10;
+	vpaddb .Lbige_addb_6 rRIP, %xmm15, %xmm9;
+	vpaddb .Lbige_addb_7 rRIP, %xmm15, %xmm8;
+	vpaddb .Lbige_addb_8 rRIP, %xmm0, %xmm7;
+	vpaddb .Lbige_addb_9 rRIP, %xmm0, %xmm6;
+	vpaddb .Lbige_addb_10 rRIP, %xmm0, %xmm5;
+	vpaddb .Lbige_addb_11 rRIP, %xmm0, %xmm4;
+	vpaddb .Lbige_addb_12 rRIP, %xmm0, %xmm3;
+	vpaddb .Lbige_addb_13 rRIP, %xmm0, %xmm2;
+	vpaddb .Lbige_addb_14 rRIP, %xmm0, %xmm1;
+	vpaddb .Lbige_addb_15 rRIP, %xmm0, %xmm0;
+
+	jmp .Lload_ctr_done;
 	CFI_ENDPROC();
 ELF(.size _gcry_camellia_aesni_avx_ctr_enc,.-_gcry_camellia_aesni_avx_ctr_enc;)
 
-.align 8
+.align 16
+.globl _gcry_camellia_aesni_avx_ecb_enc
+ELF(.type   _gcry_camellia_aesni_avx_ecb_enc,@function;)
+
+_gcry_camellia_aesni_avx_ecb_enc:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (16 blocks)
+	 *	%rdx: src (16 blocks)
+	 */
+	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+
+	vzeroupper;
+
+	cmpl $128, key_bitlength(CTX);
+	movl $32, %r8d;
+	movl $24, %eax;
+	cmovel %eax, %r8d; /* max */
+
+	inpack16_pre(%xmm0, %xmm1, %xmm2, %xmm3, %xmm4, %xmm5, %xmm6, %xmm7,
+		     %xmm8, %xmm9, %xmm10, %xmm11, %xmm12, %xmm13, %xmm14,
+		     %xmm15, %rdx, (key_table)(CTX));
+
+	subq $(16 * 16), %rsp;
+	andq $~31, %rsp;
+	movq %rsp, %rax;
+
+	call __camellia_enc_blk16;
+
+	write_output(%xmm7, %xmm6, %xmm5, %xmm4, %xmm3, %xmm2, %xmm1, %xmm0,
+		     %xmm15, %xmm14, %xmm13, %xmm12, %xmm11, %xmm10, %xmm9,
+		     %xmm8, %rsi);
+
+	vzeroall;
+
+	leave;
+	CFI_LEAVE();
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_camellia_aesni_avx_ecb_enc,.-_gcry_camellia_aesni_avx_ecb_enc;)
+
+.align 16
+.globl _gcry_camellia_aesni_avx_ecb_dec
+ELF(.type   _gcry_camellia_aesni_avx_ecb_dec,@function;)
+
+_gcry_camellia_aesni_avx_ecb_dec:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (16 blocks)
+	 *	%rdx: src (16 blocks)
+	 */
+	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+
+	vzeroupper;
+
+	cmpl $128, key_bitlength(CTX);
+	movl $32, %r8d;
+	movl $24, %eax;
+	cmovel %eax, %r8d; /* max */
+
+	inpack16_pre(%xmm0, %xmm1, %xmm2, %xmm3, %xmm4, %xmm5, %xmm6, %xmm7,
+		     %xmm8, %xmm9, %xmm10, %xmm11, %xmm12, %xmm13, %xmm14,
+		     %xmm15, %rdx, (key_table)(CTX, %r8, 8));
+
+	subq $(16 * 16), %rsp;
+	andq $~31, %rsp;
+	movq %rsp, %rax;
+
+	call __camellia_dec_blk16;
+
+	write_output(%xmm7, %xmm6, %xmm5, %xmm4, %xmm3, %xmm2, %xmm1, %xmm0,
+		     %xmm15, %xmm14, %xmm13, %xmm12, %xmm11, %xmm10, %xmm9,
+		     %xmm8, %rsi);
+
+	vzeroall;
+
+	leave;
+	CFI_LEAVE();
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_camellia_aesni_avx_ecb_dec,.-_gcry_camellia_aesni_avx_ecb_dec;)
+
+.align 16
 .globl _gcry_camellia_aesni_avx_cbc_dec
 ELF(.type   _gcry_camellia_aesni_avx_cbc_dec,@function;)
 
@@ -1098,7 +1277,7 @@ _gcry_camellia_aesni_avx_cbc_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_camellia_aesni_avx_cbc_dec,.-_gcry_camellia_aesni_avx_cbc_dec;)
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_cfb_dec
 ELF(.type   _gcry_camellia_aesni_avx_cfb_dec,@function;)
 
@@ -1180,7 +1359,7 @@ _gcry_camellia_aesni_avx_cfb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_camellia_aesni_avx_cfb_dec,.-_gcry_camellia_aesni_avx_cfb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_ocb_enc
 ELF(.type   _gcry_camellia_aesni_avx_ocb_enc,@function;)
 
@@ -1332,7 +1511,7 @@ _gcry_camellia_aesni_avx_ocb_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_camellia_aesni_avx_ocb_enc,.-_gcry_camellia_aesni_avx_ocb_enc;)
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_ocb_dec
 ELF(.type   _gcry_camellia_aesni_avx_ocb_dec,@function;)
 
@@ -1503,7 +1682,7 @@ _gcry_camellia_aesni_avx_ocb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_camellia_aesni_avx_ocb_dec,.-_gcry_camellia_aesni_avx_ocb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_ocb_auth
 ELF(.type   _gcry_camellia_aesni_avx_ocb_auth,@function;)
 
@@ -1720,6 +1899,10 @@ ELF(.size _gcry_camellia_aesni_avx_ocb_auth,.-_gcry_camellia_aesni_avx_ocb_auth;
 	vpsllq $(64-(nror)), out, out; \
 	vpaddd t0, out, out;
 
+SECTION_RODATA
+
+ELF(.type _camellia_aesni_avx_keysetup_data,@object;)
+_camellia_aesni_avx_keysetup_data:
 
 .align 16
 .Linv_shift_row_and_unpcklbw:
@@ -1752,8 +1935,9 @@ ELF(.size _gcry_camellia_aesni_avx_ocb_auth,.-_gcry_camellia_aesni_avx_ocb_auth;
 .Lsigma6:
 	.long 0xB3E6C1FD, 0xB05688C2;
 
+.text
 
-.align 8
+.align 16
 ELF(.type  __camellia_avx_setup128,@function;)
 __camellia_avx_setup128:
 	/* input:
@@ -2100,7 +2284,7 @@ __camellia_avx_setup128:
 	CFI_ENDPROC();
 ELF(.size __camellia_avx_setup128,.-__camellia_avx_setup128;)
 
-.align 8
+.align 16
 ELF(.type  __camellia_avx_setup256,@function;)
 
 __camellia_avx_setup256:
@@ -2580,7 +2764,7 @@ __camellia_avx_setup256:
 	CFI_ENDPROC();
 ELF(.size __camellia_avx_setup256,.-__camellia_avx_setup256;)
 
-.align 8
+.align 16
 .globl _gcry_camellia_aesni_avx_keygen
 ELF(.type  _gcry_camellia_aesni_avx_keygen,@function;)
 

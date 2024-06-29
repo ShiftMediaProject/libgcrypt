@@ -7,7 +7,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -103,6 +103,9 @@ global_init (void)
   /* Get the system call clamp functions.  */
   if (!pre_syscall_func)
     gpgrt_get_syscall_clamp (&pre_syscall_func, &post_syscall_func);
+
+  /* Add a handler to be called after log_fatal and log_debug.  */
+  _gcry_set_gpgrt_post_log_handler ();
 
   /* See whether the system is in FIPS mode.  This needs to come as
      early as possible but after ATH has been initialized.  */
@@ -309,12 +312,7 @@ print_config (const char *what, gpgrt_stream_t fp)
   if (!what || !strcmp (what, "cc"))
     {
       gpgrt_fprintf (fp, "cc:%d:%s:\n",
-#if GPGRT_VERSION_NUMBER >= 0x011b00 /* 1.27 */
-                     GPGRT_GCC_VERSION
-#else
-                     _GPG_ERR_GCC_VERSION /* Due to a bug in gpg-error.h.  */
-#endif
-                     ,
+                     GPGRT_GCC_VERSION,
 #ifdef __clang__
                      "clang:" __VERSION__
 #elif __GNUC__
@@ -358,6 +356,11 @@ print_config (const char *what, gpgrt_stream_t fp)
       gpgrt_fprintf (fp, "cpu-arch:"
 #if defined(HAVE_CPU_ARCH_X86)
                      "x86"
+#              ifdef __x86_64__
+                     ":amd64"
+#              else
+                     ":i386"
+#              endif
 #elif defined(HAVE_CPU_ARCH_ALPHA)
                      "alpha"
 #elif defined(HAVE_CPU_ARCH_SPARC)
@@ -525,7 +528,7 @@ _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr)
   switch (cmd)
     {
     case GCRYCTL_ENABLE_M_GUARD:
-      _gcry_private_enable_m_guard ();
+      rc = GPG_ERR_NOT_SUPPORTED;
       break;
 
     case GCRYCTL_ENABLE_QUICK_RANDOM:
@@ -1059,20 +1062,6 @@ _gcry_is_secure (const void *a)
   if (is_secure_func)
     return is_secure_func (a) ;
   return _gcry_private_is_secure (a);
-}
-
-void
-_gcry_check_heap( const void *a )
-{
-  (void)a;
-
-    /* FIXME: implement this*/
-#if 0
-    if( some_handler )
-	some_handler(a)
-    else
-	_gcry_private_check_heap(a)
-#endif
 }
 
 static void *

@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -548,9 +548,10 @@ ocb_crypt (gcry_cipher_hd_t c, int encrypt,
       nblks = nblks < nmaxblks ? nblks : nmaxblks;
 
       /* Since checksum xoring is done before/after encryption/decryption,
-	process input in 24KiB chunks to keep data loaded in L1 cache for
-	checksumming. */
-      if (nblks > 24 * 1024 / OCB_BLOCK_LEN)
+	 process input in 24KiB chunks to keep data loaded in L1 cache for
+	 checksumming.  However only do splitting if input is large enough
+	 so that last chunks does not end up being short. */
+      if (nblks > 32 * 1024 / OCB_BLOCK_LEN)
 	nblks = 24 * 1024 / OCB_BLOCK_LEN;
 
       /* Use a bulk method if available.  */

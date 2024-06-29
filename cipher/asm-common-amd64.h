@@ -29,6 +29,12 @@
 # define ELF(...) /*_*/
 #endif
 
+#ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
+# define SECTION_RODATA .section .rdata
+#else
+# define SECTION_RODATA .section .rodata
+#endif
+
 #ifdef __PIC__
 #  define rRIP (%rip)
 #else
@@ -186,8 +192,22 @@
 # define EXIT_SYSV_FUNC
 #endif
 
-/* 'ret' instruction replacement for straight-line speculation mitigation */
+/* 'ret' instruction replacement for straight-line speculation mitigation. */
 #define ret_spec_stop \
 	ret; int3;
+
+/* This prevents speculative execution on old AVX512 CPUs, to prevent
+ * speculative execution to AVX512 code. The vpopcntb instruction is
+ * available on newer CPUs that do not suffer from significant frequency
+ * drop when 512-bit vectors are utilized. */
+#define spec_stop_avx512 \
+	vpxord %ymm16, %ymm16, %ymm16; \
+	vpopcntb %xmm16, %xmm16; /* Supported only by newer AVX512 CPUs. */ \
+	vpxord %ymm16, %ymm16, %ymm16;
+
+#define spec_stop_avx512_intel_syntax \
+	vpxord ymm16, ymm16, ymm16; \
+	vpopcntb xmm16, xmm16; /* Supported only by newer AVX512 CPUs. */ \
+	vpxord ymm16, ymm16, ymm16;
 
 #endif /* GCRY_ASM_COMMON_AMD64_H */

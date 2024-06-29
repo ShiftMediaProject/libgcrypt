@@ -69,6 +69,12 @@ gcry_err_code_t _gcry_cipher_setkey (gcry_cipher_hd_t hd,
                                      const void *key, size_t keylen);
 gcry_err_code_t _gcry_cipher_setiv (gcry_cipher_hd_t hd,
                                     const void *iv, size_t ivlen);
+gcry_err_code_t _gcry_cipher_setup_geniv (gcry_cipher_hd_t hd, int method,
+                                          const void *fixed_iv,
+                                          size_t fixed_ivlen,
+                                          const void *dyn_iv, size_t dyn_ivlen);
+gcry_err_code_t _gcry_cipher_geniv (gcry_cipher_hd_t hd,
+                                    void *iv, size_t ivlen);
 gpg_err_code_t _gcry_cipher_authenticate (gcry_cipher_hd_t hd, const void *abuf,
                                           size_t abuflen);
 gpg_err_code_t _gcry_cipher_gettag (gcry_cipher_hd_t hd, void *outtag,
@@ -110,21 +116,33 @@ gcry_sexp_t _gcry_pk_get_param (int algo, const char *name);
 gpg_err_code_t _gcry_pubkey_get_sexp (gcry_sexp_t *r_sexp,
                                       int mode, gcry_ctx_t ctx);
 unsigned int _gcry_ecc_get_algo_keylen (int algo);
-gpg_error_t _gcry_ecc_mul_point (int algo, unsigned char *result,
-                                 const unsigned char *scalar,
-                                 const unsigned char *point);
+gpg_err_code_t _gcry_ecc_curve_keypair (const char *curve,
+                                        unsigned char *pubkey,
+                                        size_t pubkey_len,
+                                        unsigned char *seckey,
+                                        size_t seckey_len);
+gpg_err_code_t _gcry_ecc_curve_mul_point (const char *curve,
+                                          unsigned char *result,
+                                          size_t result_len,
+                                          const unsigned char *scalar,
+                                          size_t scalar_len,
+                                          const unsigned char *point,
+                                          size_t point_len);
+gpg_err_code_t _gcry_ecc_mul_point (int algo, unsigned char *result,
+                                    const unsigned char *scalar,
+                                    const unsigned char *point);
 gcry_err_code_t _gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl,
                                   gcry_md_hd_t hd, gcry_sexp_t s_skey,
                                   gcry_ctx_t ctx);
 gcry_err_code_t _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl,
                                     gcry_md_hd_t hd, gcry_sexp_t s_pkey,
                                     gcry_ctx_t ctx);
-gpg_err_code_t _gcry_pk_random_override_new (gcry_ctx_t *r_ctx,
-                                             const unsigned char *p,
-                                             size_t len);
-gpg_err_code_t _gcry_pk_get_random_override (gcry_ctx_t ctx,
-                                             const unsigned char **r_p,
-                                             size_t *r_len);
+gpg_err_code_t _gcry_pk_single_data_push (gcry_ctx_t *r_ctx,
+                                          const unsigned char *p,
+                                          size_t len);
+gpg_err_code_t _gcry_pk_get_single_data (gcry_ctx_t *r_ctx,
+                                         const unsigned char **r_p,
+                                         size_t *r_len);
 
 gpg_err_code_t _gcry_md_open (gcry_md_hd_t *h, int algo, unsigned int flags);
 void _gcry_md_close (gcry_md_hd_t hd);
@@ -219,6 +237,20 @@ gcry_err_code_t _gcry_kdf_compute (gcry_kdf_hd_t h,
 gpg_err_code_t _gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result);
 void _gcry_kdf_close (gcry_kdf_hd_t h);
 
+
+gcry_err_code_t _gcry_kem_keypair (int algo,
+                                   void *pubkey, size_t pubkey_len,
+                                   void *seckey, size_t seckey_len);
+gcry_err_code_t _gcry_kem_encap (int algo,
+                                 const void *pubkey, size_t pubkey_len,
+                                 void *ciphertext, size_t ciphertext_len,
+                                 void *shared, size_t shared_len,
+                                 const void *optional, size_t optional_len);
+gcry_err_code_t _gcry_kem_decap (int algo,
+                                 const void *seckey, size_t seckey_len,
+                                 const void *ciphertext, size_t ciphertext_len,
+                                 void *shared, size_t shared_len,
+                                 const void *optional, size_t optional_len);
 
 gpg_err_code_t _gcry_prime_generate (gcry_mpi_t *prime,
                                      unsigned int prime_bits,

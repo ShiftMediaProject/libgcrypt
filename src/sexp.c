@@ -6,7 +6,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -2696,4 +2696,28 @@ _gcry_sexp_extract_param (gcry_sexp_t sexp, const char *path,
   rc = _gcry_sexp_vextract_param (sexp, path, list, arg_ptr);
   va_end (arg_ptr);
   return rc;
+}
+
+/* Convert STRING consisting of hex characters into its binary
+   representation and return it as an allocated buffer. The valid
+   length of the buffer is returned at R_LENGTH.  The string is
+   delimited by end of string.  The function returns NULL on
+   error.  */
+void *
+_gcry_hex2buffer (const char *string, size_t *r_length)
+{
+  const char *s;
+  unsigned char *buffer;
+  size_t length;
+
+  buffer = xmalloc (strlen(string)/2+1);
+  length = 0;
+  for (s=string; *s; s +=2 )
+    {
+      if (!hexdigitp (s) || !hexdigitp (s+1))
+        return NULL;           /* Invalid hex digits. */
+      ((unsigned char*)buffer)[length++] = xtoi_2 (s);
+    }
+  *r_length = length;
+  return buffer;
 }

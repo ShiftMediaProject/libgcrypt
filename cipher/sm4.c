@@ -1,7 +1,7 @@
 /* sm4.c  -  SM4 Cipher Algorithm
  * Copyright (C) 2020 Alibaba Group.
- * Copyright (C) 2020 Tianjia Zhang <tianjia.zhang@linux.alibaba.com>
- * Copyright (C) 2020 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2020-2022 Tianjia Zhang <tianjia.zhang@linux.alibaba.com>
+ * Copyright (C) 2020-2022 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -29,7 +29,7 @@
 #include "cipher.h"
 #include "bufhelp.h"
 #include "cipher-internal.h"
-#include "cipher-selftest.h"
+#include "bulkhelp.h"
 
 /* Helper macro to force alignment to 64 bytes.  */
 #ifdef HAVE_GCC_ATTRIBUTE_ALIGNED
@@ -47,7 +47,7 @@
 # endif
 #endif
 
-/* USE_AESNI_AVX inidicates whether to compile with Intel AES-NI/AVX2 code. */
+/* USE_AESNI_AVX2 inidicates whether to compile with Intel AES-NI/AVX2 code. */
 #undef USE_AESNI_AVX2
 #if defined(ENABLE_AESNI_SUPPORT) && defined(ENABLE_AVX2_SUPPORT)
 # if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
@@ -56,15 +56,71 @@
 # endif
 #endif
 
+/* USE_GFNI_AVX2 inidicates whether to compile with Intel GFNI/AVX2 code. */
+#undef USE_GFNI_AVX2
+#if defined(ENABLE_GFNI_SUPPORT) && defined(ENABLE_AVX2_SUPPORT)
+# if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+#  define USE_GFNI_AVX2 1
+# endif
+#endif
+
+/* USE_GFNI_AVX512 inidicates whether to compile with Intel GFNI/AVX512 code. */
+#undef USE_GFNI_AVX512
+#if defined(ENABLE_GFNI_SUPPORT) && defined(ENABLE_AVX512_SUPPORT)
+# if defined(__x86_64__) && (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+#  define USE_GFNI_AVX512 1
+# endif
+#endif
+
 /* Assembly implementations use SystemV ABI, ABI conversion and additional
  * stack to store XMM6-XMM15 needed on Win64. */
 #undef ASM_FUNC_ABI
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2) || \
+    defined(USE_GFNI_AVX2) || defined(USE_GFNI_AVX512)
 # ifdef HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS
 #  define ASM_FUNC_ABI __attribute__((sysv_abi))
 # else
 #  define ASM_FUNC_ABI
 # endif
+#endif
+
+#undef USE_AARCH64_SIMD
+#ifdef ENABLE_NEON_SUPPORT
+# if defined(__AARCH64EL__) && \
+     defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) && \
+     defined(HAVE_GCC_INLINE_ASM_AARCH64_NEON)
+#   define USE_AARCH64_SIMD 1
+# endif
+#endif
+
+#undef USE_ARM_CE
+#ifdef ENABLE_ARM_CRYPTO_SUPPORT
+# if defined(__AARCH64EL__) && \
+     defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) && \
+     defined(HAVE_GCC_INLINE_ASM_AARCH64_CRYPTO)
+#   define USE_ARM_CE 1
+# endif
+#endif
+
+#undef USE_ARM_SVE_CE
+#ifdef ENABLE_SVE_SUPPORT
+# if defined(__AARCH64EL__) && \
+     defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) && \
+     defined(HAVE_GCC_INLINE_ASM_AARCH64_CRYPTO) && \
+     defined(HAVE_GCC_INLINE_ASM_AARCH64_SVE) && \
+     defined(HAVE_GCC_INLINE_ASM_AARCH64_SVE2)
+#   define USE_ARM_SVE_CE 1
+# endif
+#endif
+
+#undef USE_PPC_CRYPTO
+#if defined(ENABLE_PPC_CRYPTO_SUPPORT) && \
+    defined(HAVE_COMPATIBLE_CC_PPC_ALTIVEC) && \
+    defined(HAVE_GCC_INLINE_ASM_PPC_ALTIVEC) && \
+    !defined(WORDS_BIGENDIAN) && (__GNUC__ >= 4)
+# define USE_PPC_CRYPTO 1
 #endif
 
 static const char *sm4_selftest (void);
@@ -78,21 +134,52 @@ static void _gcry_sm4_cbc_dec (void *context, unsigned char *iv,
 static void _gcry_sm4_cfb_dec (void *context, unsigned char *iv,
 			       void *outbuf_arg, const void *inbuf_arg,
 			       size_t nblocks);
+static void _gcry_sm4_xts_crypt (void *context, unsigned char *tweak,
+                                 void *outbuf_arg, const void *inbuf_arg,
+                                 size_t nblocks, int encrypt);
+static void _gcry_sm4_ecb_crypt (void *context, void *outbuf_arg,
+				 const void *inbuf_arg, size_t nblocks,
+				 int encrypt);
+static void _gcry_sm4_ctr32le_enc(void *context, unsigned char *ctr,
+                                  void *outbuf_arg, const void *inbuf_arg,
+                                  size_t nblocks);
 static size_t _gcry_sm4_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 				   const void *inbuf_arg, size_t nblocks,
 				   int encrypt);
 static size_t _gcry_sm4_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
 				  size_t nblocks);
 
+typedef bulk_crypt_fn_t crypt_blk1_16_fn_t;
+
 typedef struct
 {
   u32 rkey_enc[32];
   u32 rkey_dec[32];
+  crypt_blk1_16_fn_t crypt_blk1_16;
 #ifdef USE_AESNI_AVX
   unsigned int use_aesni_avx:1;
 #endif
 #ifdef USE_AESNI_AVX2
   unsigned int use_aesni_avx2:1;
+#endif
+#ifdef USE_GFNI_AVX2
+  unsigned int use_gfni_avx2:1;
+#endif
+#ifdef USE_GFNI_AVX512
+  unsigned int use_gfni_avx512:1;
+#endif
+#ifdef USE_AARCH64_SIMD
+  unsigned int use_aarch64_simd:1;
+#endif
+#ifdef USE_ARM_CE
+  unsigned int use_arm_ce:1;
+#endif
+#ifdef USE_ARM_SVE_CE
+  unsigned int use_arm_sve_ce:1;
+#endif
+#ifdef USE_PPC_CRYPTO
+  unsigned int use_ppc8le:1;
+  unsigned int use_ppc9le:1;
 #endif
 } SM4_context;
 
@@ -160,6 +247,8 @@ static const u32 ck[] =
   0x10171e25, 0x2c333a41, 0x484f565d, 0x646b7279
 };
 
+static inline crypt_blk1_16_fn_t sm4_get_crypt_blk1_16_fn(SM4_context *ctx);
+
 #ifdef USE_AESNI_AVX
 extern void _gcry_sm4_aesni_avx_expand_key(const byte *key, u32 *rk_enc,
 					   u32 *rk_dec, const u32 *fk,
@@ -195,13 +284,21 @@ extern void _gcry_sm4_aesni_avx_ocb_auth(const u32 *rk_enc,
 					 const u64 Ls[8]) ASM_FUNC_ABI;
 
 extern unsigned int
-_gcry_sm4_aesni_avx_crypt_blk1_8(const u32 *rk, byte *out, const byte *in,
+_gcry_sm4_aesni_avx_crypt_blk1_8(u32 *rk, byte *out, const byte *in,
 				 unsigned int num_blks) ASM_FUNC_ABI;
 
 static inline unsigned int
-sm4_aesni_avx_crypt_blk1_8(const u32 *rk, byte *out, const byte *in,
-			   unsigned int num_blks)
+sm4_aesni_avx_crypt_blk1_16(void *rk, byte *out, const byte *in,
+                            size_t num_blks)
 {
+  if (num_blks > 8)
+    {
+      _gcry_sm4_aesni_avx_crypt_blk1_8(rk, out, in, 8);
+      in += 8 * 16;
+      out += 8 * 16;
+      num_blks -= 8;
+    }
+
   return _gcry_sm4_aesni_avx_crypt_blk1_8(rk, out, in, num_blks);
 }
 
@@ -239,7 +336,301 @@ extern void _gcry_sm4_aesni_avx2_ocb_auth(const u32 *rk_enc,
 					  unsigned char *offset,
 					  unsigned char *checksum,
 					  const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern unsigned int
+_gcry_sm4_aesni_avx2_crypt_blk1_16(u32 *rk, byte *out, const byte *in,
+				   unsigned int num_blks) ASM_FUNC_ABI;
+
+static inline unsigned int
+sm4_aesni_avx2_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			     size_t num_blks)
+{
+#ifdef USE_AESNI_AVX
+  /* Use 128-bit register implementation for short input. */
+  if (num_blks <= 8)
+    return _gcry_sm4_aesni_avx_crypt_blk1_8(rk, out, in, num_blks);
+#endif
+
+  return _gcry_sm4_aesni_avx2_crypt_blk1_16(rk, out, in, num_blks);
+}
+
 #endif /* USE_AESNI_AVX2 */
+
+#ifdef USE_GFNI_AVX2
+extern void _gcry_sm4_gfni_avx2_expand_key(const byte *key, u32 *rk_enc,
+                                           u32 *rk_dec, const u32 *fk,
+                                           const u32 *ck) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_ctr_enc(const u32 *rk_enc, byte *out,
+					const byte *in,
+					byte *ctr) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_cbc_dec(const u32 *rk_dec, byte *out,
+					const byte *in,
+					byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_cfb_dec(const u32 *rk_enc, byte *out,
+					const byte *in,
+					byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_ocb_enc(const u32 *rk_enc,
+					unsigned char *out,
+					const unsigned char *in,
+					unsigned char *offset,
+					unsigned char *checksum,
+					const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_ocb_dec(const u32 *rk_dec,
+					unsigned char *out,
+					const unsigned char *in,
+					unsigned char *offset,
+					unsigned char *checksum,
+					const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx2_ocb_auth(const u32 *rk_enc,
+					 const unsigned char *abuf,
+					 unsigned char *offset,
+					 unsigned char *checksum,
+					 const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern unsigned int
+_gcry_sm4_gfni_avx2_crypt_blk1_16(u32 *rk, byte *out, const byte *in,
+				  unsigned int num_blks) ASM_FUNC_ABI;
+
+static inline unsigned int
+sm4_gfni_avx2_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			    size_t num_blks)
+{
+  return _gcry_sm4_gfni_avx2_crypt_blk1_16(rk, out, in, num_blks);
+}
+
+#endif /* USE_GFNI_AVX2 */
+
+#ifdef USE_GFNI_AVX512
+extern void _gcry_sm4_gfni_avx512_expand_key(const byte *key, u32 *rk_enc,
+                                             u32 *rk_dec, const u32 *fk,
+                                             const u32 *ck) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ctr_enc(const u32 *rk_enc, byte *out,
+                                          const byte *in,
+                                          byte *ctr) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_cbc_dec(const u32 *rk_dec, byte *out,
+                                          const byte *in,
+                                          byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_cfb_dec(const u32 *rk_enc, byte *out,
+                                          const byte *in,
+                                          byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ocb_enc(const u32 *rk_enc,
+                                          unsigned char *out,
+                                          const unsigned char *in,
+                                          unsigned char *offset,
+                                          unsigned char *checksum,
+                                          const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ocb_dec(const u32 *rk_dec,
+                                          unsigned char *out,
+                                          const unsigned char *in,
+                                          unsigned char *offset,
+                                          unsigned char *checksum,
+                                          const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ocb_auth(const u32 *rk_enc,
+                                           const unsigned char *abuf,
+                                           unsigned char *offset,
+                                           unsigned char *checksum,
+                                           const u64 Ls[16]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ctr_enc_blk32(const u32 *rk_enc, byte *out,
+                                                const byte *in,
+                                                byte *ctr) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_cbc_dec_blk32(const u32 *rk_enc, byte *out,
+                                                const byte *in,
+                                                byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_cfb_dec_blk32(const u32 *rk_enc, byte *out,
+                                                const byte *in,
+                                                byte *iv) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ocb_enc_blk32(const u32 *rk_enc,
+                                                unsigned char *out,
+                                                const unsigned char *in,
+                                                unsigned char *offset,
+                                                unsigned char *checksum,
+                                                const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_sm4_gfni_avx512_ocb_dec_blk32(const u32 *rk_dec,
+                                                unsigned char *out,
+                                                const unsigned char *in,
+                                                unsigned char *offset,
+                                                unsigned char *checksum,
+                                                const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern unsigned int
+_gcry_sm4_gfni_avx512_crypt_blk1_16(u32 *rk, byte *out, const byte *in,
+                                    unsigned int num_blks) ASM_FUNC_ABI;
+
+extern unsigned int
+_gcry_sm4_gfni_avx512_crypt_blk32(u32 *rk, byte *out,
+                                  const byte *in) ASM_FUNC_ABI;
+
+static inline unsigned int
+sm4_gfni_avx512_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			      size_t num_blks)
+{
+  return _gcry_sm4_gfni_avx512_crypt_blk1_16(rk, out, in, num_blks);
+}
+
+#endif /* USE_GFNI_AVX2 */
+
+#ifdef USE_AARCH64_SIMD
+extern void _gcry_sm4_aarch64_crypt(const u32 *rk, byte *out,
+				    const byte *in,
+				    size_t num_blocks);
+
+extern void _gcry_sm4_aarch64_ctr_enc(const u32 *rk_enc, byte *out,
+				      const byte *in,
+				      byte *ctr,
+				      size_t nblocks);
+
+extern void _gcry_sm4_aarch64_cbc_dec(const u32 *rk_dec, byte *out,
+				      const byte *in,
+				      byte *iv,
+				      size_t nblocks);
+
+extern void _gcry_sm4_aarch64_cfb_dec(const u32 *rk_enc, byte *out,
+				      const byte *in,
+				      byte *iv,
+				      size_t nblocks);
+
+extern void _gcry_sm4_aarch64_crypt_blk1_8(u32 *rk, byte *out,
+					   const byte *in,
+					   size_t num_blocks);
+
+static inline unsigned int
+sm4_aarch64_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			  size_t num_blks)
+{
+  if (num_blks > 8)
+    {
+      _gcry_sm4_aarch64_crypt_blk1_8(rk, out, in, 8);
+      in += 8 * 16;
+      out += 8 * 16;
+      num_blks -= 8;
+    }
+
+  _gcry_sm4_aarch64_crypt_blk1_8(rk, out, in, num_blks);
+  return 0;
+}
+
+#endif /* USE_AARCH64_SIMD */
+
+#ifdef USE_ARM_CE
+extern void _gcry_sm4_armv8_ce_expand_key(const byte *key,
+					  u32 *rkey_enc, u32 *rkey_dec,
+					  const u32 *fk, const u32 *ck);
+
+extern void _gcry_sm4_armv8_ce_crypt(const u32 *rk, byte *out,
+				     const byte *in,
+				     size_t num_blocks);
+
+extern void _gcry_sm4_armv8_ce_ctr_enc(const u32 *rk_enc, byte *out,
+				       const byte *in,
+				       byte *ctr,
+				       size_t nblocks);
+
+extern void _gcry_sm4_armv8_ce_cbc_dec(const u32 *rk_dec, byte *out,
+				       const byte *in,
+				       byte *iv,
+				       size_t nblocks);
+
+extern void _gcry_sm4_armv8_ce_cfb_dec(const u32 *rk_enc, byte *out,
+				       const byte *in,
+				       byte *iv,
+				       size_t nblocks);
+
+extern void _gcry_sm4_armv8_ce_xts_crypt(const u32 *rk, byte *out,
+					 const byte *in,
+					 byte *tweak,
+					 size_t nblocks);
+
+extern void _gcry_sm4_armv8_ce_crypt_blk1_8(u32 *rk, byte *out,
+					    const byte *in,
+					    size_t num_blocks);
+
+static inline unsigned int
+sm4_armv8_ce_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			   size_t num_blks)
+{
+  if (num_blks > 8)
+    {
+      _gcry_sm4_armv8_ce_crypt_blk1_8(rk, out, in, 8);
+      in += 8 * 16;
+      out += 8 * 16;
+      num_blks -= 8;
+    }
+
+  _gcry_sm4_armv8_ce_crypt_blk1_8(rk, out, in, num_blks);
+  return 0;
+}
+
+#endif /* USE_ARM_CE */
+
+#ifdef USE_ARM_SVE_CE
+extern void _gcry_sm4_armv9_sve_ce_crypt(u32 *rk, byte *out,
+					 const byte *in,
+					 size_t nblocks);
+
+extern void _gcry_sm4_armv9_sve_ce_ctr_enc(const u32 *rk_enc, byte *out,
+					   const byte *in,
+					   byte *ctr,
+					   size_t nblocks);
+
+extern void _gcry_sm4_armv9_sve_ce_cbc_dec(const u32 *rk_dec, byte *out,
+					   const byte *in,
+					   byte *iv,
+					   size_t nblocks);
+
+extern void _gcry_sm4_armv9_sve_ce_cfb_dec(const u32 *rk_enc, byte *out,
+					   const byte *in,
+					   byte *iv,
+					   size_t nblocks);
+
+static inline unsigned int
+sm4_armv9_sve_ce_crypt_blk1_16(void *rk, byte *out, const byte *in,
+			       size_t num_blks)
+{
+  _gcry_sm4_armv9_sve_ce_crypt(rk, out, in, num_blks);
+  return 0;
+}
+
+extern unsigned int _gcry_sm4_armv9_sve_get_vl(void);
+#endif /* USE_ARM_SVE_CE */
+
+#ifdef USE_PPC_CRYPTO
+extern void _gcry_sm4_ppc8le_crypt_blk1_16(u32 *rk, byte *out, const byte *in,
+					   size_t num_blks);
+
+extern void _gcry_sm4_ppc9le_crypt_blk1_16(u32 *rk, byte *out, const byte *in,
+					   size_t num_blks);
+
+static inline unsigned int
+sm4_ppc8le_crypt_blk1_16(void *rk, byte *out, const byte *in, size_t num_blks)
+{
+  _gcry_sm4_ppc8le_crypt_blk1_16(rk, out, in, num_blks);
+  return 0;
+}
+
+static inline unsigned int
+sm4_ppc9le_crypt_blk1_16(void *rk, byte *out, const byte *in, size_t num_blks)
+{
+  _gcry_sm4_ppc9le_crypt_blk1_16(rk, out, in, num_blks);
+  return 0;
+}
+#endif /* USE_PPC_CRYPTO */
 
 static inline void prefetch_sbox_table(void)
 {
@@ -309,6 +700,24 @@ sm4_expand_key (SM4_context *ctx, const byte *key)
   u32 rk[4];
   int i;
 
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      _gcry_sm4_gfni_avx512_expand_key (key, ctx->rkey_enc, ctx->rkey_dec,
+                                        fk, ck);
+      return;
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      _gcry_sm4_gfni_avx2_expand_key (key, ctx->rkey_enc, ctx->rkey_dec,
+                                      fk, ck);
+      return;
+    }
+#endif
+
 #ifdef USE_AESNI_AVX
   if (ctx->use_aesni_avx)
     {
@@ -317,6 +726,17 @@ sm4_expand_key (SM4_context *ctx, const byte *key)
       return;
     }
 #endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    {
+      _gcry_sm4_armv8_ce_expand_key (key, ctx->rkey_enc, ctx->rkey_dec,
+				     fk, ck);
+      return;
+    }
+#endif
+
+  prefetch_sbox_table ();
 
   rk[0] = buf_get_be32(key + 4 * 0) ^ fk[0];
   rk[1] = buf_get_be32(key + 4 * 1) ^ fk[1];
@@ -372,12 +792,51 @@ sm4_setkey (void *context, const byte *key, const unsigned keylen,
 #ifdef USE_AESNI_AVX2
   ctx->use_aesni_avx2 = (hwf & HWF_INTEL_AESNI) && (hwf & HWF_INTEL_AVX2);
 #endif
+#ifdef USE_GFNI_AVX2
+  ctx->use_gfni_avx2 = (hwf & HWF_INTEL_GFNI) && (hwf & HWF_INTEL_AVX2);
+#endif
+#ifdef USE_GFNI_AVX512
+  ctx->use_gfni_avx512 = (hwf & HWF_INTEL_GFNI) && (hwf & HWF_INTEL_AVX512);
+#endif
+#ifdef USE_AARCH64_SIMD
+  ctx->use_aarch64_simd = !!(hwf & HWF_ARM_NEON);
+#endif
+#ifdef USE_ARM_CE
+  ctx->use_arm_ce = !!(hwf & HWF_ARM_SM4);
+#endif
+#ifdef USE_ARM_SVE_CE
+  /* Only enabled when the SVE vector length is greater than 128 bits */
+  ctx->use_arm_sve_ce = (hwf & HWF_ARM_SVE2) && (hwf & HWF_ARM_SVESM4)
+		&& _gcry_sm4_armv9_sve_get_vl() > 16;
+#endif
+#ifdef USE_PPC_CRYPTO
+  ctx->use_ppc8le = (hwf & HWF_PPC_VCRYPTO) != 0;
+  ctx->use_ppc9le = (hwf & HWF_PPC_VCRYPTO) && (hwf & HWF_PPC_ARCH_3_00);
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      /* Disable AESNI implementations when GFNI implementation is enabled. */
+#ifdef USE_AESNI_AVX
+      ctx->use_aesni_avx = 0;
+#endif
+#ifdef USE_AESNI_AVX2
+      ctx->use_aesni_avx2 = 0;
+#endif
+    }
+#endif
+
+  ctx->crypt_blk1_16 = sm4_get_crypt_blk1_16_fn(ctx);
 
   /* Setup bulk encryption routines.  */
   memset (bulk_ops, 0, sizeof(*bulk_ops));
   bulk_ops->cbc_dec = _gcry_sm4_cbc_dec;
   bulk_ops->cfb_dec = _gcry_sm4_cfb_dec;
   bulk_ops->ctr_enc = _gcry_sm4_ctr_enc;
+  bulk_ops->xts_crypt = _gcry_sm4_xts_crypt;
+  bulk_ops->ecb_crypt = _gcry_sm4_ecb_crypt;
+  bulk_ops->ctr32le_enc = _gcry_sm4_ctr32le_enc;
   bulk_ops->ocb_crypt = _gcry_sm4_ocb_crypt;
   bulk_ops->ocb_auth  = _gcry_sm4_ocb_auth;
 
@@ -417,6 +876,21 @@ sm4_encrypt (void *context, byte *outbuf, const byte *inbuf)
 {
   SM4_context *ctx = context;
 
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    return sm4_gfni_avx512_crypt_blk1_16(ctx->rkey_enc, outbuf, inbuf, 1);
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    return sm4_gfni_avx2_crypt_blk1_16(ctx->rkey_enc, outbuf, inbuf, 1);
+#endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    return sm4_armv8_ce_crypt_blk1_16(ctx->rkey_enc, outbuf, inbuf, 1);
+#endif
+
   prefetch_sbox_table ();
 
   return sm4_do_crypt (ctx->rkey_enc, outbuf, inbuf);
@@ -426,6 +900,21 @@ static unsigned int
 sm4_decrypt (void *context, byte *outbuf, const byte *inbuf)
 {
   SM4_context *ctx = context;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    return sm4_gfni_avx512_crypt_blk1_16(ctx->rkey_dec, outbuf, inbuf, 1);
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    return sm4_gfni_avx2_crypt_blk1_16(ctx->rkey_dec, outbuf, inbuf, 1);
+#endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    return sm4_armv8_ce_crypt_blk1_16(ctx->rkey_dec, outbuf, inbuf, 1);
+#endif
 
   prefetch_sbox_table ();
 
@@ -481,9 +970,10 @@ sm4_do_crypt_blks2 (const u32 *rk, byte *out, const byte *in)
 }
 
 static unsigned int
-sm4_crypt_blocks (const u32 *rk, byte *out, const byte *in,
-		  unsigned int num_blks)
+sm4_crypt_blocks (void *ctx, byte *out, const byte *in,
+		  size_t num_blks)
 {
+  const u32 *rk = ctx;
   unsigned int burn_depth = 0;
   unsigned int nburn;
 
@@ -510,6 +1000,70 @@ sm4_crypt_blocks (const u32 *rk, byte *out, const byte *in,
   return burn_depth;
 }
 
+static inline crypt_blk1_16_fn_t
+sm4_get_crypt_blk1_16_fn(SM4_context *ctx)
+{
+  if (0)
+    ;
+#ifdef USE_GFNI_AVX512
+  else if (ctx->use_gfni_avx512)
+    {
+      return &sm4_gfni_avx512_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_GFNI_AVX2
+  else if (ctx->use_gfni_avx2)
+    {
+      return &sm4_gfni_avx2_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_AESNI_AVX2
+  else if (ctx->use_aesni_avx2)
+    {
+      return &sm4_aesni_avx2_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_AESNI_AVX
+  else if (ctx->use_aesni_avx)
+    {
+      return &sm4_aesni_avx_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_ARM_SVE_CE
+  else if (ctx->use_arm_sve_ce)
+    {
+      return &sm4_armv9_sve_ce_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_ARM_CE
+  else if (ctx->use_arm_ce)
+    {
+      return &sm4_armv8_ce_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_AARCH64_SIMD
+  else if (ctx->use_aarch64_simd)
+    {
+      return &sm4_aarch64_crypt_blk1_16;
+    }
+#endif
+#ifdef USE_PPC_CRYPTO
+  else if (ctx->use_ppc9le)
+    {
+      return &sm4_ppc9le_crypt_blk1_16;
+    }
+  else if (ctx->use_ppc8le)
+    {
+      return &sm4_ppc8le_crypt_blk1_16;
+    }
+#endif
+  else
+    {
+      (void)ctx;
+      return &sm4_crypt_blocks;
+    }
+}
+
 /* Bulk encryption of complete blocks in CTR mode.  This function is only
    intended for the bulk encryption feature of cipher.c.  CTR is expected to be
    of size 16. */
@@ -522,6 +1076,47 @@ _gcry_sm4_ctr_enc(void *context, unsigned char *ctr,
   byte *outbuf = outbuf_arg;
   const byte *inbuf = inbuf_arg;
   int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      /* Process data in 32 block chunks. */
+      while (nblocks >= 32)
+        {
+          _gcry_sm4_gfni_avx512_ctr_enc_blk32(ctx->rkey_enc,
+                                              outbuf, inbuf, ctr);
+
+          nblocks -= 32;
+          outbuf += 32 * 16;
+          inbuf += 32 * 16;
+        }
+
+      /* Process data in 16 block chunks. */
+      if (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx512_ctr_enc(ctx->rkey_enc, outbuf, inbuf, ctr);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx2_ctr_enc(ctx->rkey_enc, outbuf, inbuf, ctr);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
   if (ctx->use_aesni_avx2)
@@ -553,57 +1148,65 @@ _gcry_sm4_ctr_enc(void *context, unsigned char *ctr,
     }
 #endif
 
+#ifdef USE_ARM_SVE_CE
+  if (ctx->use_arm_sve_ce)
+    {
+      /* Process all blocks at a time. */
+      _gcry_sm4_armv9_sve_ce_ctr_enc(ctx->rkey_enc, outbuf, inbuf,
+				     ctr, nblocks);
+      nblocks = 0;
+    }
+#endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_armv8_ce_ctr_enc(ctx->rkey_enc, outbuf, inbuf, ctr, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
+#ifdef USE_AARCH64_SIMD
+  if (ctx->use_aarch64_simd)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_aarch64_ctr_enc(ctx->rkey_enc, outbuf, inbuf, ctr, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
   /* Process remaining blocks. */
   if (nblocks)
     {
-      unsigned int (*crypt_blk1_8)(const u32 *rk, byte *out, const byte *in,
-				   unsigned int num_blks);
-      byte tmpbuf[16 * 8];
+      crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+      byte tmpbuf[16 * 16];
       unsigned int tmp_used = 16;
+      size_t nburn;
 
-      if (0)
-	;
-#ifdef USE_AESNI_AVX
-      else if (ctx->use_aesni_avx)
-	{
-	  crypt_blk1_8 = sm4_aesni_avx_crypt_blk1_8;
-	}
-#endif
-      else
-	{
-	  prefetch_sbox_table ();
-	  crypt_blk1_8 = sm4_crypt_blocks;
-	}
+      if (crypt_blk1_16 == &sm4_crypt_blocks)
+	prefetch_sbox_table ();
 
-      /* Process remaining blocks. */
-      while (nblocks)
-	{
-	  size_t curr_blks = nblocks > 8 ? 8 : nblocks;
-	  size_t i;
-
-	  if (curr_blks * 16 > tmp_used)
-	    tmp_used = curr_blks * 16;
-
-	  cipher_block_cpy (tmpbuf + 0 * 16, ctr, 16);
-	  for (i = 1; i < curr_blks; i++)
-	    {
-	      cipher_block_cpy (&tmpbuf[i * 16], ctr, 16);
-	      cipher_block_add (&tmpbuf[i * 16], i, 16);
-	    }
-	  cipher_block_add (ctr, curr_blks, 16);
-
-	  burn_stack_depth = crypt_blk1_8 (ctx->rkey_enc, tmpbuf, tmpbuf,
-					   curr_blks);
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      cipher_block_xor (outbuf, &tmpbuf[i * 16], inbuf, 16);
-	      outbuf += 16;
-	      inbuf += 16;
-	    }
-
-	  nblocks -= curr_blks;
-	}
+      nburn = bulk_ctr_enc_128(ctx->rkey_enc, crypt_blk1_16, outbuf, inbuf,
+                               nblocks, ctr, tmpbuf, sizeof(tmpbuf) / 16,
+                               &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
 
       wipememory(tmpbuf, tmp_used);
     }
@@ -623,6 +1226,46 @@ _gcry_sm4_cbc_dec(void *context, unsigned char *iv,
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
   int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      /* Process data in 32 block chunks. */
+      while (nblocks >= 32)
+        {
+          _gcry_sm4_gfni_avx512_cbc_dec_blk32(ctx->rkey_dec, outbuf, inbuf, iv);
+
+          nblocks -= 32;
+          outbuf += 32 * 16;
+          inbuf += 32 * 16;
+        }
+
+      /* Process data in 16 block chunks. */
+      if (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx512_cbc_dec(ctx->rkey_dec, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx2_cbc_dec(ctx->rkey_dec, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
   if (ctx->use_aesni_avx2)
@@ -654,52 +1297,67 @@ _gcry_sm4_cbc_dec(void *context, unsigned char *iv,
     }
 #endif
 
+#ifdef USE_ARM_SVE_CE
+  if (ctx->use_arm_sve_ce)
+    {
+      /* Process all blocks at a time. */
+      _gcry_sm4_armv9_sve_ce_cbc_dec(ctx->rkey_dec, outbuf, inbuf,
+				     iv, nblocks);
+      nblocks = 0;
+    }
+#endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_armv8_ce_cbc_dec(ctx->rkey_dec, outbuf, inbuf, iv, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
+#ifdef USE_AARCH64_SIMD
+  if (ctx->use_aarch64_simd)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_aarch64_cbc_dec(ctx->rkey_dec, outbuf, inbuf, iv, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
   /* Process remaining blocks. */
   if (nblocks)
     {
-      unsigned int (*crypt_blk1_8)(const u32 *rk, byte *out, const byte *in,
-				   unsigned int num_blks);
-      unsigned char savebuf[16 * 8];
+      crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+      unsigned char tmpbuf[16 * 16];
       unsigned int tmp_used = 16;
+      size_t nburn;
 
-      if (0)
-	;
-#ifdef USE_AESNI_AVX
-      else if (ctx->use_aesni_avx)
-	{
-	  crypt_blk1_8 = sm4_aesni_avx_crypt_blk1_8;
-	}
-#endif
-      else
-	{
-	  prefetch_sbox_table ();
-	  crypt_blk1_8 = sm4_crypt_blocks;
-	}
+      if (crypt_blk1_16 == &sm4_crypt_blocks)
+	prefetch_sbox_table ();
 
-      /* Process remaining blocks. */
-      while (nblocks)
-	{
-	  size_t curr_blks = nblocks > 8 ? 8 : nblocks;
-	  size_t i;
+      nburn = bulk_cbc_dec_128(ctx->rkey_dec, crypt_blk1_16, outbuf, inbuf,
+                               nblocks, iv, tmpbuf, sizeof(tmpbuf) / 16,
+                               &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
 
-	  if (curr_blks * 16 > tmp_used)
-	    tmp_used = curr_blks * 16;
-
-	  burn_stack_depth = crypt_blk1_8 (ctx->rkey_dec, savebuf, inbuf,
-					   curr_blks);
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      cipher_block_xor_n_copy_2(outbuf, &savebuf[i * 16], iv, inbuf,
-					16);
-	      outbuf += 16;
-	      inbuf += 16;
-	    }
-
-	  nblocks -= curr_blks;
-	}
-
-      wipememory(savebuf, tmp_used);
+      wipememory(tmpbuf, tmp_used);
     }
 
   if (burn_stack_depth)
@@ -717,6 +1375,46 @@ _gcry_sm4_cfb_dec(void *context, unsigned char *iv,
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
   int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      /* Process data in 32 block chunks. */
+      while (nblocks >= 32)
+        {
+          _gcry_sm4_gfni_avx512_cfb_dec_blk32(ctx->rkey_enc, outbuf, inbuf, iv);
+
+          nblocks -= 32;
+          outbuf += 32 * 16;
+          inbuf += 32 * 16;
+        }
+
+      /* Process data in 16 block chunks. */
+      if (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx512_cfb_dec(ctx->rkey_enc, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      /* Process data in 16 block chunks. */
+      while (nblocks >= 16)
+        {
+          _gcry_sm4_gfni_avx2_cfb_dec(ctx->rkey_enc, outbuf, inbuf, iv);
+
+          nblocks -= 16;
+          outbuf += 16 * 16;
+          inbuf += 16 * 16;
+        }
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
   if (ctx->use_aesni_avx2)
@@ -748,60 +1446,228 @@ _gcry_sm4_cfb_dec(void *context, unsigned char *iv,
     }
 #endif
 
+#ifdef USE_ARM_SVE_CE
+  if (ctx->use_arm_sve_ce)
+    {
+      /* Process all blocks at a time. */
+      _gcry_sm4_armv9_sve_ce_cfb_dec(ctx->rkey_enc, outbuf, inbuf,
+				     iv, nblocks);
+      nblocks = 0;
+    }
+#endif
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_armv8_ce_cfb_dec(ctx->rkey_enc, outbuf, inbuf, iv, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
+#ifdef USE_AARCH64_SIMD
+  if (ctx->use_aarch64_simd)
+    {
+      /* Process multiples of 8 blocks at a time. */
+      if (nblocks >= 8)
+        {
+          size_t nblks = nblocks & ~(8 - 1);
+
+          _gcry_sm4_aarch64_cfb_dec(ctx->rkey_enc, outbuf, inbuf, iv, nblks);
+
+          nblocks -= nblks;
+          outbuf += nblks * 16;
+          inbuf += nblks * 16;
+        }
+    }
+#endif
+
   /* Process remaining blocks. */
   if (nblocks)
     {
-      unsigned int (*crypt_blk1_8)(const u32 *rk, byte *out, const byte *in,
-				   unsigned int num_blks);
-      unsigned char ivbuf[16 * 8];
+      crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+      unsigned char tmpbuf[16 * 16];
       unsigned int tmp_used = 16;
+      size_t nburn;
 
-      if (0)
-	;
-#ifdef USE_AESNI_AVX
-      else if (ctx->use_aesni_avx)
-	{
-	  crypt_blk1_8 = sm4_aesni_avx_crypt_blk1_8;
-	}
-#endif
-      else
-	{
-	  prefetch_sbox_table ();
-	  crypt_blk1_8 = sm4_crypt_blocks;
-	}
+      if (crypt_blk1_16 == &sm4_crypt_blocks)
+	prefetch_sbox_table ();
 
-      /* Process remaining blocks. */
-      while (nblocks)
-	{
-	  size_t curr_blks = nblocks > 8 ? 8 : nblocks;
-	  size_t i;
+      nburn = bulk_cfb_dec_128(ctx->rkey_enc, crypt_blk1_16, outbuf, inbuf,
+                               nblocks, iv, tmpbuf, sizeof(tmpbuf) / 16,
+                               &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
 
-	  if (curr_blks * 16 > tmp_used)
-	    tmp_used = curr_blks * 16;
-
-	  cipher_block_cpy (&ivbuf[0 * 16], iv, 16);
-	  for (i = 1; i < curr_blks; i++)
-	    cipher_block_cpy (&ivbuf[i * 16], &inbuf[(i - 1) * 16], 16);
-	  cipher_block_cpy (iv, &inbuf[(i - 1) * 16], 16);
-
-	  burn_stack_depth = crypt_blk1_8 (ctx->rkey_enc, ivbuf, ivbuf,
-					   curr_blks);
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      cipher_block_xor (outbuf, inbuf, &ivbuf[i * 16], 16);
-	      outbuf += 16;
-	      inbuf += 16;
-	    }
-
-	  nblocks -= curr_blks;
-	}
-
-      wipememory(ivbuf, tmp_used);
+      wipememory(tmpbuf, tmp_used);
     }
 
   if (burn_stack_depth)
     _gcry_burn_stack(burn_stack_depth);
+}
+
+static unsigned int
+sm4_crypt_blk1_32 (SM4_context *ctx, byte *outbuf, const byte *inbuf,
+		   size_t num_blks, u32 *rk)
+{
+  crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+  unsigned int stack_burn_size = 0;
+  unsigned int nburn;
+
+  gcry_assert (num_blks <= 32);
+
+#ifdef USE_GFNI_AVX512
+  if (num_blks == 32 && ctx->use_gfni_avx512)
+    {
+      return _gcry_sm4_gfni_avx512_crypt_blk32 (rk, outbuf, inbuf);
+    }
+#endif
+#ifdef USE_ARM_SVE_CE
+  if (ctx->use_arm_sve_ce)
+    {
+      _gcry_sm4_armv9_sve_ce_crypt (rk, outbuf, inbuf, num_blks);
+      return 0;
+    }
+#endif
+
+  do
+    {
+      unsigned int curr_blks = num_blks > 16 ? 16 : num_blks;
+      nburn = crypt_blk1_16 (rk, outbuf, inbuf, curr_blks);
+      stack_burn_size = nburn > stack_burn_size ? nburn : stack_burn_size;
+      outbuf += curr_blks * 16;
+      inbuf += curr_blks * 16;
+      num_blks -= curr_blks;
+    }
+  while (num_blks > 0);
+
+  return stack_burn_size;
+}
+
+static unsigned int
+sm4_encrypt_blk1_32 (void *context, byte *out, const byte *in,
+		     size_t num_blks)
+{
+  SM4_context *ctx = context;
+  return sm4_crypt_blk1_32 (ctx, out, in, num_blks, ctx->rkey_enc);
+}
+
+static unsigned int
+sm4_decrypt_blk1_32 (void *context, byte *out, const byte *in,
+		     size_t num_blks)
+{
+  SM4_context *ctx = context;
+  return sm4_crypt_blk1_32 (ctx, out, in, num_blks, ctx->rkey_dec);
+}
+
+/* Bulk encryption/decryption in ECB mode. */
+static void
+_gcry_sm4_ecb_crypt (void *context, void *outbuf_arg,
+		     const void *inbuf_arg, size_t nblocks, int encrypt)
+{
+  SM4_context *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      size_t nburn;
+
+      if (ctx->crypt_blk1_16 == &sm4_crypt_blocks)
+	prefetch_sbox_table ();
+
+      nburn = bulk_ecb_crypt_128(ctx, encrypt ? sm4_encrypt_blk1_32
+                                              : sm4_decrypt_blk1_32,
+                                 outbuf, inbuf, nblocks, 32);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk encryption/decryption of complete blocks in XTS mode. */
+static void
+_gcry_sm4_xts_crypt (void *context, unsigned char *tweak, void *outbuf_arg,
+                     const void *inbuf_arg, size_t nblocks, int encrypt)
+{
+  SM4_context *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+#ifdef USE_ARM_CE
+  if (ctx->use_arm_ce)
+    {
+      /* Process all blocks at a time. */
+      _gcry_sm4_armv8_ce_xts_crypt(encrypt ? ctx->rkey_enc : ctx->rkey_dec,
+                                   outbuf, inbuf, tweak, nblocks);
+
+      nblocks = 0;
+    }
+#endif
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      unsigned char tmpbuf[32 * 16];
+      unsigned int tmp_used = 16;
+      size_t nburn;
+
+      if (ctx->crypt_blk1_16 == &sm4_crypt_blocks)
+	prefetch_sbox_table ();
+
+      nburn = bulk_xts_crypt_128(ctx, encrypt ? sm4_encrypt_blk1_32
+                                              : sm4_decrypt_blk1_32,
+                                 outbuf, inbuf, nblocks,
+                                 tweak, tmpbuf, sizeof(tmpbuf) / 16,
+                                 &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk encryption of complete blocks in CTR32LE mode (for GCM-SIV). */
+static void
+_gcry_sm4_ctr32le_enc(void *context, unsigned char *ctr,
+                      void *outbuf_arg, const void *inbuf_arg,
+                      size_t nblocks)
+{
+  SM4_context *ctx = context;
+  byte *outbuf = outbuf_arg;
+  const byte *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      byte tmpbuf[32 * 16];
+      unsigned int tmp_used = 16;
+      size_t nburn;
+
+      nburn = bulk_ctr32le_enc_128 (ctx, sm4_encrypt_blk1_32, outbuf, inbuf,
+                                    nblocks, ctr, tmpbuf, sizeof(tmpbuf) / 16,
+                                    &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory (tmpbuf, tmp_used);
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack (burn_stack_depth);
 }
 
 /* Bulk encryption/decryption of complete blocks in OCB mode. */
@@ -815,31 +1681,99 @@ _gcry_sm4_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
   u64 blkn = c->u_mode.ocb.data_nblocks;
   int burn_stack_depth = 0;
 
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      u64 Ls[32];
+      u64 *l;
+
+      if (nblocks >= 32)
+	{
+          l = bulk_ocb_prepare_L_pointers_array_blk32 (c, Ls, blkn);
+
+	  /* Process data in 32 block chunks. */
+	  while (nblocks >= 32)
+	    {
+	      blkn += 32;
+	      *l = (uintptr_t)(void *)ocb_get_l (c, blkn - blkn % 32);
+
+	      if (encrypt)
+		_gcry_sm4_gfni_avx512_ocb_enc_blk32 (ctx->rkey_enc, outbuf,
+                                                     inbuf, c->u_iv.iv,
+                                                     c->u_ctr.ctr, Ls);
+	      else
+		_gcry_sm4_gfni_avx512_ocb_dec_blk32 (ctx->rkey_dec, outbuf,
+                                                     inbuf, c->u_iv.iv,
+                                                     c->u_ctr.ctr, Ls);
+
+	      nblocks -= 32;
+	      outbuf += 32 * 16;
+	      inbuf += 32 * 16;
+	    }
+	}
+
+      if (nblocks >= 16)
+	{
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
+
+	  /* Process data in 16 block chunks. */
+	  blkn += 16;
+	  *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 16);
+
+	  if (encrypt)
+	    _gcry_sm4_gfni_avx512_ocb_enc(ctx->rkey_enc, outbuf, inbuf,
+					  c->u_iv.iv, c->u_ctr.ctr, Ls);
+	  else
+	    _gcry_sm4_gfni_avx512_ocb_dec(ctx->rkey_dec, outbuf, inbuf,
+					  c->u_iv.iv, c->u_ctr.ctr, Ls);
+
+	  nblocks -= 16;
+	  outbuf += 16 * 16;
+	  inbuf += 16 * 16;
+	}
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      u64 Ls[16];
+      u64 *l;
+
+      if (nblocks >= 16)
+	{
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
+
+	  /* Process data in 16 block chunks. */
+	  while (nblocks >= 16)
+	    {
+	      blkn += 16;
+	      *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 16);
+
+	      if (encrypt)
+		_gcry_sm4_gfni_avx2_ocb_enc(ctx->rkey_enc, outbuf, inbuf,
+					    c->u_iv.iv, c->u_ctr.ctr, Ls);
+	      else
+		_gcry_sm4_gfni_avx2_ocb_dec(ctx->rkey_dec, outbuf, inbuf,
+					    c->u_iv.iv, c->u_ctr.ctr, Ls);
+
+	      nblocks -= 16;
+	      outbuf += 16 * 16;
+	      inbuf += 16 * 16;
+	    }
+	}
+    }
+#endif
+
 #ifdef USE_AESNI_AVX2
   if (ctx->use_aesni_avx2)
     {
       u64 Ls[16];
-      unsigned int n = 16 - (blkn % 16);
       u64 *l;
-      int i;
 
       if (nblocks >= 16)
 	{
-	  for (i = 0; i < 16; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
-
-	  Ls[(7 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(15 + n) % 16];
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
 
 	  /* Process data in 16 block chunks. */
 	  while (nblocks >= 16)
@@ -866,22 +1800,11 @@ _gcry_sm4_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
   if (ctx->use_aesni_avx)
     {
       u64 Ls[8];
-      unsigned int n = 8 - (blkn % 8);
       u64 *l;
 
       if (nblocks >= 8)
 	{
-	  /* Use u64 to store pointers for x32 support (assembly function
-	   * assumes 64-bit pointers). */
-	  Ls[(0 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(1 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	  Ls[(2 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(3 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	  Ls[(4 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(5 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	  Ls[(6 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(7 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(7 + n) % 8];
+          l = bulk_ocb_prepare_L_pointers_array_blk8 (c, Ls, blkn);
 
 	  /* Process data in 8 block chunks. */
 	  while (nblocks >= 8)
@@ -904,66 +1827,19 @@ _gcry_sm4_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
     }
 #endif
 
+  /* Process remaining blocks. */
   if (nblocks)
     {
-      unsigned int (*crypt_blk1_8)(const u32 *rk, byte *out, const byte *in,
-				   unsigned int num_blks);
-      const u32 *rk = encrypt ? ctx->rkey_enc : ctx->rkey_dec;
-      unsigned char tmpbuf[16 * 8];
+      crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+      u32 *rk = encrypt ? ctx->rkey_enc : ctx->rkey_dec;
+      unsigned char tmpbuf[16 * 16];
       unsigned int tmp_used = 16;
+      size_t nburn;
 
-      if (0)
-	;
-#ifdef USE_AESNI_AVX
-      else if (ctx->use_aesni_avx)
-	{
-	  crypt_blk1_8 = sm4_aesni_avx_crypt_blk1_8;
-	}
-#endif
-      else
-	{
-	  prefetch_sbox_table ();
-	  crypt_blk1_8 = sm4_crypt_blocks;
-	}
-
-      while (nblocks)
-	{
-	  size_t curr_blks = nblocks > 8 ? 8 : nblocks;
-	  size_t i;
-
-	  if (curr_blks * 16 > tmp_used)
-	    tmp_used = curr_blks * 16;
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      const unsigned char *l = ocb_get_l(c, ++blkn);
-
-	      /* Checksum_i = Checksum_{i-1} xor P_i  */
-	      if (encrypt)
-		cipher_block_xor_1(c->u_ctr.ctr, &inbuf[i * 16], 16);
-
-	      /* Offset_i = Offset_{i-1} xor L_{ntz(i)} */
-	      cipher_block_xor_2dst (&tmpbuf[i * 16], c->u_iv.iv, l, 16);
-	      cipher_block_xor (&outbuf[i * 16], &inbuf[i * 16],
-				c->u_iv.iv, 16);
-	    }
-
-	  /* C_i = Offset_i xor ENCIPHER(K, P_i xor Offset_i)  */
-	  crypt_blk1_8 (rk, outbuf, outbuf, curr_blks);
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      cipher_block_xor_1 (&outbuf[i * 16], &tmpbuf[i * 16], 16);
-
-	      /* Checksum_i = Checksum_{i-1} xor P_i  */
-	      if (!encrypt)
-		  cipher_block_xor_1(c->u_ctr.ctr, &outbuf[i * 16], 16);
-	    }
-
-	  outbuf += curr_blks * 16;
-	  inbuf  += curr_blks * 16;
-	  nblocks -= curr_blks;
-	}
+      nburn = bulk_ocb_crypt_128 (c, rk, crypt_blk1_16, outbuf, inbuf, nblocks,
+                                  &blkn, encrypt, tmpbuf, sizeof(tmpbuf) / 16,
+                                  &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
 
       wipememory(tmpbuf, tmp_used);
     }
@@ -983,32 +1859,71 @@ _gcry_sm4_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg, size_t nblocks)
   SM4_context *ctx = (void *)&c->context.c;
   const unsigned char *abuf = abuf_arg;
   u64 blkn = c->u_mode.ocb.aad_nblocks;
+  int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      u64 Ls[16];
+      u64 *l;
+
+      if (nblocks >= 16)
+        {
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
+
+          /* Process data in 16 block chunks. */
+          while (nblocks >= 16)
+            {
+              blkn += 16;
+              *l = (uintptr_t)(void *)ocb_get_l (c, blkn - blkn % 16);
+
+              _gcry_sm4_gfni_avx512_ocb_auth (ctx->rkey_enc, abuf,
+                                              c->u_mode.ocb.aad_offset,
+                                              c->u_mode.ocb.aad_sum, Ls);
+
+              nblocks -= 16;
+              abuf += 16 * 16;
+            }
+        }
+    }
+#endif
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      u64 Ls[16];
+      u64 *l;
+
+      if (nblocks >= 16)
+	{
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
+
+	  /* Process data in 16 block chunks. */
+	  while (nblocks >= 16)
+	    {
+	      blkn += 16;
+	      *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 16);
+
+	      _gcry_sm4_gfni_avx2_ocb_auth(ctx->rkey_enc, abuf,
+					   c->u_mode.ocb.aad_offset,
+					   c->u_mode.ocb.aad_sum, Ls);
+
+	      nblocks -= 16;
+	      abuf += 16 * 16;
+	    }
+	}
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
   if (ctx->use_aesni_avx2)
     {
       u64 Ls[16];
-      unsigned int n = 16 - (blkn % 16);
       u64 *l;
-      int i;
 
       if (nblocks >= 16)
 	{
-	  for (i = 0; i < 16; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
-
-	  Ls[(7 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(15 + n) % 16];
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
 
 	  /* Process data in 16 block chunks. */
 	  while (nblocks >= 16)
@@ -1031,22 +1946,11 @@ _gcry_sm4_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg, size_t nblocks)
   if (ctx->use_aesni_avx)
     {
       u64 Ls[8];
-      unsigned int n = 8 - (blkn % 8);
       u64 *l;
 
       if (nblocks >= 8)
 	{
-	  /* Use u64 to store pointers for x32 support (assembly function
-	    * assumes 64-bit pointers). */
-	  Ls[(0 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(1 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	  Ls[(2 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(3 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	  Ls[(4 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(5 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	  Ls[(6 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	  Ls[(7 + n) % 8] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(7 + n) % 8];
+          l = bulk_ocb_prepare_L_pointers_array_blk8 (c, Ls, blkn);
 
 	  /* Process data in 8 block chunks. */
 	  while (nblocks >= 8)
@@ -1065,102 +1969,27 @@ _gcry_sm4_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg, size_t nblocks)
     }
 #endif
 
+  /* Process remaining blocks. */
   if (nblocks)
     {
-      unsigned int (*crypt_blk1_8)(const u32 *rk, byte *out, const byte *in,
-				   unsigned int num_blks);
-      unsigned char tmpbuf[16 * 8];
+      crypt_blk1_16_fn_t crypt_blk1_16 = ctx->crypt_blk1_16;
+      unsigned char tmpbuf[16 * 16];
       unsigned int tmp_used = 16;
+      size_t nburn;
 
-      if (0)
-	;
-#ifdef USE_AESNI_AVX
-      else if (ctx->use_aesni_avx)
-	{
-	  crypt_blk1_8 = sm4_aesni_avx_crypt_blk1_8;
-	}
-#endif
-      else
-	{
-	  prefetch_sbox_table ();
-	  crypt_blk1_8 = sm4_crypt_blocks;
-	}
-
-      while (nblocks)
-	{
-	  size_t curr_blks = nblocks > 8 ? 8 : nblocks;
-	  size_t i;
-
-	  if (curr_blks * 16 > tmp_used)
-	    tmp_used = curr_blks * 16;
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      const unsigned char *l = ocb_get_l(c, ++blkn);
-
-	      /* Offset_i = Offset_{i-1} xor L_{ntz(i)} */
-	      cipher_block_xor_2dst (&tmpbuf[i * 16],
-				     c->u_mode.ocb.aad_offset, l, 16);
-	      cipher_block_xor_1 (&tmpbuf[i * 16], &abuf[i * 16], 16);
-	    }
-
-	  /* C_i = Offset_i xor ENCIPHER(K, P_i xor Offset_i)  */
-	  crypt_blk1_8 (ctx->rkey_enc, tmpbuf, tmpbuf, curr_blks);
-
-	  for (i = 0; i < curr_blks; i++)
-	    {
-	      cipher_block_xor_1 (c->u_mode.ocb.aad_sum, &tmpbuf[i * 16], 16);
-	    }
-
-	  abuf += curr_blks * 16;
-	  nblocks -= curr_blks;
-	}
+      nburn = bulk_ocb_auth_128 (c, ctx->rkey_enc, crypt_blk1_16, abuf, nblocks,
+                                 &blkn, tmpbuf, sizeof(tmpbuf) / 16, &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
 
       wipememory(tmpbuf, tmp_used);
     }
 
   c->u_mode.ocb.aad_nblocks = blkn;
 
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+
   return 0;
-}
-
-/* Run the self-tests for SM4-CTR, tests IV increment of bulk CTR
-   encryption.  Returns NULL on success. */
-static const char*
-selftest_ctr_128 (void)
-{
-  const int nblocks = 16 - 1;
-  const int blocksize = 16;
-  const int context_size = sizeof(SM4_context);
-
-  return _gcry_selftest_helper_ctr("SM4", &sm4_setkey,
-           &sm4_encrypt, nblocks, blocksize, context_size);
-}
-
-/* Run the self-tests for SM4-CBC, tests bulk CBC decryption.
-   Returns NULL on success. */
-static const char*
-selftest_cbc_128 (void)
-{
-  const int nblocks = 16 - 1;
-  const int blocksize = 16;
-  const int context_size = sizeof(SM4_context);
-
-  return _gcry_selftest_helper_cbc("SM4", &sm4_setkey,
-           &sm4_encrypt, nblocks, blocksize, context_size);
-}
-
-/* Run the self-tests for SM4-CFB, tests bulk CFB decryption.
-   Returns NULL on success. */
-static const char*
-selftest_cfb_128 (void)
-{
-  const int nblocks = 16 - 1;
-  const int blocksize = 16;
-  const int context_size = sizeof(SM4_context);
-
-  return _gcry_selftest_helper_cfb("SM4", &sm4_setkey,
-           &sm4_encrypt, nblocks, blocksize, context_size);
 }
 
 static const char *
@@ -1168,7 +1997,6 @@ sm4_selftest (void)
 {
   SM4_context ctx;
   byte scratch[16];
-  const char *r;
 
   static const byte plaintext[16] = {
     0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
@@ -1192,15 +2020,6 @@ sm4_selftest (void)
   sm4_decrypt (&ctx, scratch, scratch);
   if (memcmp (scratch, plaintext, sizeof (plaintext)))
     return "SM4 test decryption failed.";
-
-  if ( (r = selftest_ctr_128 ()) )
-    return r;
-
-  if ( (r = selftest_cbc_128 ()) )
-    return r;
-
-  if ( (r = selftest_cfb_128 ()) )
-    return r;
 
   return NULL;
 }

@@ -34,6 +34,21 @@
 #include "rijndael-ppc-common.h"
 
 
+#ifdef HAVE_GCC_ATTRIBUTE_OPTIMIZE
+# define FUNC_ATTR_OPT __attribute__((optimize("-O2")))
+#else
+# define FUNC_ATTR_OPT
+#endif
+
+#if defined(__clang__) && defined(HAVE_CLANG_ATTRIBUTE_PPC_TARGET)
+# define PPC_OPT_ATTR __attribute__((target("arch=pwr9"))) FUNC_ATTR_OPT
+#elif defined(HAVE_GCC_ATTRIBUTE_PPC_TARGET)
+# define PPC_OPT_ATTR __attribute__((target("cpu=power9"))) FUNC_ATTR_OPT
+#else
+# define PPC_OPT_ATTR FUNC_ATTR_OPT
+#endif
+
+
 static ASM_FUNC_ATTR_INLINE block
 asm_load_be_const(void)
 {
@@ -88,6 +103,7 @@ asm_store_be_noswap(block vec, unsigned long offset, void *ptr)
 #define GCRY_AES_PPC9LE 1
 #define ENCRYPT_BLOCK_FUNC	_gcry_aes_ppc9le_encrypt
 #define DECRYPT_BLOCK_FUNC	_gcry_aes_ppc9le_decrypt
+#define ECB_CRYPT_FUNC		_gcry_aes_ppc9le_ecb_crypt
 #define CFB_ENC_FUNC		_gcry_aes_ppc9le_cfb_enc
 #define CFB_DEC_FUNC		_gcry_aes_ppc9le_cfb_dec
 #define CBC_ENC_FUNC		_gcry_aes_ppc9le_cbc_enc
@@ -96,6 +112,7 @@ asm_store_be_noswap(block vec, unsigned long offset, void *ptr)
 #define OCB_CRYPT_FUNC		_gcry_aes_ppc9le_ocb_crypt
 #define OCB_AUTH_FUNC		_gcry_aes_ppc9le_ocb_auth
 #define XTS_CRYPT_FUNC		_gcry_aes_ppc9le_xts_crypt
+#define CTR32LE_ENC_FUNC	_gcry_aes_ppc9le_ctr32le_enc
 
 #include <rijndael-ppc-functions.h>
 

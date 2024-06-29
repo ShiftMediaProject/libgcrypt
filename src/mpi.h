@@ -5,7 +5,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -15,8 +15,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * Note: This code is heavily based on the GNU MP Library.
  *	 Actually it's the same code with only minor changes in the
@@ -117,7 +117,6 @@ void _gcry_mpi_immutable_failed (void);
 #define mpi_alloc_like(a)     _gcry_mpi_alloc_like((a))
 
 #define mpi_alloc_set_ui(a)   _gcry_mpi_alloc_set_ui ((a))
-#define mpi_m_check(a)        _gcry_mpi_m_check ((a))
 #define mpi_const(n)          _gcry_mpi_const ((n))
 #define mpi_swap_cond(a,b,sw)  _gcry_mpi_swap_cond ((a),(b),(sw))
 #define mpi_set_cond(w,u,set)  _gcry_mpi_set_cond ((w),(u),(set))
@@ -128,7 +127,6 @@ gcry_mpi_t _gcry_mpi_set_cond (gcry_mpi_t w, const gcry_mpi_t u,
                                unsigned long swap);
 gcry_mpi_t  _gcry_mpi_alloc_like( gcry_mpi_t a );
 gcry_mpi_t  _gcry_mpi_alloc_set_ui( unsigned long u);
-void _gcry_mpi_m_check( gcry_mpi_t a );
 void _gcry_mpi_swap( gcry_mpi_t a, gcry_mpi_t b);
 void _gcry_mpi_swap_cond (gcry_mpi_t a, gcry_mpi_t b, unsigned long swap);
 void _gcry_mpi_set_bit_cond (gcry_mpi_t a, unsigned int n, unsigned long set);

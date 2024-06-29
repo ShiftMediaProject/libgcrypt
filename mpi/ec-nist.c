@@ -88,14 +88,9 @@ _gcry_mpi_ec_nist192_mod (gcry_mpi_t w, mpi_ec_t ctx)
   };
   const mpi_limb64_t zero = LIMB_TO64(0);
   mpi_ptr_t wp;
-  mpi_size_t wsize = 192 / BITS_PER_MPI_LIMB64;
-#if defined(_MSC_VER)
-  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* o = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-#else
-  mpi_limb64_t s[wsize + 1];
-  mpi_limb64_t o[wsize + 1];
-#endif
+  mpi_limb64_t s[192 / BITS_PER_MPI_LIMB64 + 1];
+  mpi_limb64_t o[DIM(s)];
+  const mpi_size_t wsize = DIM(s) - 1;
   mpi_limb_t mask1;
   mpi_limb_t mask2;
   mpi_limb_t s_is_negative;
@@ -185,15 +180,10 @@ _gcry_mpi_ec_nist224_mod (gcry_mpi_t w, mpi_ec_t ctx)
   };
   const mpi_limb64_t zero = LIMB_TO64(0);
   mpi_ptr_t wp;
-  mpi_size_t wsize = (224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
+  mpi_limb64_t s[(224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64];
+  mpi_limb64_t d[DIM(s)];
+  const mpi_size_t wsize = DIM(s);
   mpi_size_t psize = ctx->p->nlimbs;
-#if defined(_MSC_VER)
-  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
-#else
-  mpi_limb64_t s[wsize];
-  mpi_limb64_t d[wsize];
-#endif
   mpi_limb_t mask1;
   mpi_limb_t mask2;
   mpi_limb_t s_is_negative;
@@ -349,19 +339,12 @@ _gcry_mpi_ec_nist256_mod (gcry_mpi_t w, mpi_ec_t ctx)
   };
   const mpi_limb64_t zero = LIMB_TO64(0);
   mpi_ptr_t wp;
-  mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
+  mpi_limb64_t s[(256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64 + 1];
+  mpi_limb64_t t[DIM(s)];
+  mpi_limb64_t d[DIM(s)];
+  mpi_limb64_t e[DIM(s)];
+  const mpi_size_t wsize = DIM(s) - 1;
   mpi_size_t psize = ctx->p->nlimbs;
-#if defined(_MSC_VER)
-  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* e = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-#else
-  mpi_limb64_t s[wsize + 1];
-  mpi_limb64_t t[wsize + 1];
-  mpi_limb64_t d[wsize + 1];
-  mpi_limb64_t e[wsize + 1];
-#endif
   mpi_limb_t mask1;
   mpi_limb_t mask2;
   mpi_limb_t mask3;
@@ -488,11 +471,15 @@ _gcry_mpi_ec_nist256_mod (gcry_mpi_t w, mpi_ec_t ctx)
 
   carry = LO32_LIMB64(s[4]);
 
+  /* Load values to stack to ease register pressure on i386. */
+  e[0] = p_mult[carry + 4][0];
+  e[1] = p_mult[carry + 4][1];
+  e[2] = p_mult[carry + 4][2];
+  e[3] = p_mult[carry + 4][3];
+  e[4] = p_mult[carry + 4][4];
   SUB5_LIMB64 (s[4], s[3], s[2], s[1], s[0],
 	       s[4], s[3], s[2], s[1], s[0],
-	       p_mult[carry + 4][4], p_mult[carry + 4][3],
-	       p_mult[carry + 4][2], p_mult[carry + 4][1],
-	       p_mult[carry + 4][0]);
+	       e[4], e[3], e[2], e[1], e[0]);
 
   /* Add 1*P */
   ADD5_LIMB64 (d[4], d[3], d[2], d[1], d[0],
@@ -606,22 +593,15 @@ _gcry_mpi_ec_nist384_mod (gcry_mpi_t w, mpi_ec_t ctx)
   };
   const mpi_limb64_t zero = LIMB_TO64(0);
   mpi_ptr_t wp;
-  mpi_size_t wsize = (384 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
-  mpi_size_t psize = ctx->p->nlimbs;
+  mpi_limb64_t s[(384 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64 + 1];
+  mpi_limb64_t t[DIM(s)];
+  mpi_limb64_t d[DIM(s)];
+  mpi_limb64_t x[DIM(s)];
 #if (BITS_PER_MPI_LIMB64 == BITS_PER_MPI_LIMB) && defined(WORDS_BIGENDIAN)
-  mpi_limb_t wp_shr32[wsize * LIMBS_PER_LIMB64];
+  mpi_limb_t wp_shr32[(DIM(s) - 1) * LIMBS_PER_LIMB64];
 #endif
-#if defined(_MSC_VER)
-  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-  mpi_limb64_t* x = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-#else
-  mpi_limb64_t s[wsize + 1];
-  mpi_limb64_t t[wsize + 1];
-  mpi_limb64_t d[wsize + 1];
-  mpi_limb64_t x[wsize + 1];
-#endif
+  const mpi_size_t wsize = DIM(s) - 1;
+  mpi_size_t psize = ctx->p->nlimbs;
   mpi_limb_t mask1;
   mpi_limb_t mask2;
   mpi_limb_t s_is_negative;
@@ -773,12 +753,17 @@ _gcry_mpi_ec_nist384_mod (gcry_mpi_t w, mpi_ec_t ctx)
 
   carry = LO32_LIMB64(s[6]);
 
+  /* Load values to stack to ease register pressure on i386. */
+  x[0] = p_mult[carry + 3][0];
+  x[1] = p_mult[carry + 3][1];
+  x[2] = p_mult[carry + 3][2];
+  x[3] = p_mult[carry + 3][3];
+  x[4] = p_mult[carry + 3][4];
+  x[5] = p_mult[carry + 3][5];
+  x[6] = p_mult[carry + 3][6];
   SUB7_LIMB64 (s[6], s[5], s[4], s[3], s[2], s[1], s[0],
 	       s[6], s[5], s[4], s[3], s[2], s[1], s[0],
-	       p_mult[carry + 3][6], p_mult[carry + 3][5],
-	       p_mult[carry + 3][4], p_mult[carry + 3][3],
-	       p_mult[carry + 3][2], p_mult[carry + 3][1],
-	       p_mult[carry + 3][0]);
+	       x[6], x[5], x[4], x[3], x[2], x[1], x[0]);
 
   ADD7_LIMB64 (d[6], d[5], d[4], d[3], d[2], d[1], d[0],
 	       s[6], s[5], s[4], s[3], s[2], s[1], s[0],
@@ -809,12 +794,8 @@ _gcry_mpi_ec_nist384_mod (gcry_mpi_t w, mpi_ec_t ctx)
 void
 _gcry_mpi_ec_nist521_mod (gcry_mpi_t w, mpi_ec_t ctx)
 {
-  mpi_size_t wsize = (521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
-#if defined(_MSC_VER)
-  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize) * sizeof(mpi_limb_t));
-#else
-  mpi_limb_t s[wsize];
-#endif
+  mpi_limb_t s[(521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB];
+  const mpi_size_t wsize = DIM(s);
   mpi_limb_t cy;
   mpi_ptr_t wp;
 

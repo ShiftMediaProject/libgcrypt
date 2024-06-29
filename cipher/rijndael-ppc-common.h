@@ -30,6 +30,7 @@
 
 
 typedef vector unsigned char block;
+typedef vector unsigned int vec_u32;
 
 typedef union
 {
@@ -158,31 +159,6 @@ typedef union
     rkeylast = ALIGNED_LOAD (rk, nrounds); \
   } while (0)
 
-#define AES_ENCRYPT_ALL(blk, nrounds) \
-  do { \
-    blk ^= rkey0; \
-    blk = asm_cipher_be (blk, rkey1); \
-    blk = asm_cipher_be (blk, rkey2); \
-    blk = asm_cipher_be (blk, rkey3); \
-    blk = asm_cipher_be (blk, rkey4); \
-    blk = asm_cipher_be (blk, rkey5); \
-    blk = asm_cipher_be (blk, rkey6); \
-    blk = asm_cipher_be (blk, rkey7); \
-    blk = asm_cipher_be (blk, rkey8); \
-    blk = asm_cipher_be (blk, rkey9); \
-    if (nrounds >= 12) \
-      { \
-	blk = asm_cipher_be (blk, rkey10); \
-	blk = asm_cipher_be (blk, rkey11); \
-	if (rounds > 12) \
-	  { \
-	    blk = asm_cipher_be (blk, rkey12); \
-	    blk = asm_cipher_be (blk, rkey13); \
-	  } \
-      } \
-    blk = asm_cipherlast_be (blk, rkeylast); \
-  } while (0)
-
 
 static ASM_FUNC_ATTR_INLINE block
 asm_aligned_ld(unsigned long offset, const void *ptr)
@@ -278,6 +254,16 @@ asm_xor(block a, block b)
 		    : "=v" (res)
 		    : "v" (a), "v" (b));
   return res;
+}
+
+static ASM_FUNC_ATTR_INLINE block
+asm_sbox_be(block b)
+{
+  block o;
+  __asm__ volatile ("vsbox %0, %1\n\t"
+		    : "=v" (o)
+		    : "v" (b));
+  return o;
 }
 
 static ASM_FUNC_ATTR_INLINE block

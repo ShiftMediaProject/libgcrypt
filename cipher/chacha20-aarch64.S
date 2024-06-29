@@ -36,8 +36,6 @@
 
 .cpu generic+simd
 
-.text
-
 #include "asm-poly1305-aarch64.h"
 
 /* register macros */
@@ -180,20 +178,24 @@
 		ROTATE4(b1, b2, b3, b4, 7, tmp1, tmp2, tmp3, tmp4,		\
 			_(iop27), _(iop28), _(iop29));
 
+SECTION_RODATA
+
 .align 4
-.globl _gcry_chacha20_aarch64_blocks4_data_inc_counter
+ELF(.type _gcry_chacha20_aarch64_blocks4_data_inc_counter,%object;)
 _gcry_chacha20_aarch64_blocks4_data_inc_counter:
 	.long 0,1,2,3
 
 .align 4
-.globl _gcry_chacha20_aarch64_blocks4_data_rot8
+ELF(.type _gcry_chacha20_aarch64_blocks4_data_rot8,%object;)
 _gcry_chacha20_aarch64_blocks4_data_rot8:
 	.byte 3,0,1,2
 	.byte 7,4,5,6
 	.byte 11,8,9,10
 	.byte 15,12,13,14
 
-.align 3
+.text
+
+.align 4
 .globl _gcry_chacha20_aarch64_blocks4
 ELF(.type _gcry_chacha20_aarch64_blocks4,%function;)
 
@@ -364,7 +366,7 @@ ELF(.size _gcry_chacha20_aarch64_blocks4, .-_gcry_chacha20_aarch64_blocks4;)
   4-way stitched chacha20-poly1305
  **********************************************************************/
 
-.align 3
+.align 4
 .globl _gcry_chacha20_poly1305_aarch64_blocks4
 ELF(.type _gcry_chacha20_poly1305_aarch64_blocks4,%function;)
 

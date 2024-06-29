@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -132,8 +132,15 @@ static const gcry_mac_spec_t * const mac_list[] = {
   &_gcry_mac_type_spec_poly1305mac,
 #if USE_SM4
   &_gcry_mac_type_spec_cmac_sm4,
+  &_gcry_mac_type_spec_gmac_sm4,
+  &_gcry_mac_type_spec_poly1305mac_sm4,
 #endif
-  NULL,
+#if USE_ARIA
+  &_gcry_mac_type_spec_cmac_aria,
+  &_gcry_mac_type_spec_gmac_aria,
+  &_gcry_mac_type_spec_poly1305mac_aria,
+#endif
+  NULL
 };
 
 /* HMAC implementations start with index 101 (enum gcry_mac_algos) */
@@ -242,10 +249,10 @@ static const gcry_mac_spec_t * const mac_list_algo101[] =
 #endif
 #if USE_SHA512
     &_gcry_mac_type_spec_hmac_sha512_256,
-    &_gcry_mac_type_spec_hmac_sha512_224,
+    &_gcry_mac_type_spec_hmac_sha512_224
 #else
     NULL,
-    NULL,
+    NULL
 #endif
   };
 
@@ -308,7 +315,12 @@ static const gcry_mac_spec_t * const mac_list_algo201[] =
     NULL,
 #endif
 #if USE_SM4
-    &_gcry_mac_type_spec_cmac_sm4
+    &_gcry_mac_type_spec_cmac_sm4,
+#else
+    NULL,
+#endif
+#if USE_ARIA
+    &_gcry_mac_type_spec_cmac_aria
 #else
     NULL
 #endif
@@ -338,7 +350,17 @@ static const gcry_mac_spec_t * const mac_list_algo401[] =
     NULL,
 #endif
 #if USE_SEED
-    &_gcry_mac_type_spec_gmac_seed
+    &_gcry_mac_type_spec_gmac_seed,
+#else
+    NULL,
+#endif
+#if USE_SM4
+    &_gcry_mac_type_spec_gmac_sm4,
+#else
+    NULL,
+#endif
+#if USE_ARIA
+    &_gcry_mac_type_spec_gmac_aria
 #else
     NULL
 #endif
@@ -369,7 +391,17 @@ static const gcry_mac_spec_t * const mac_list_algo501[] =
     NULL,
 #endif
 #if USE_SEED
-    &_gcry_mac_type_spec_poly1305mac_seed
+    &_gcry_mac_type_spec_poly1305mac_seed,
+#else
+    NULL,
+#endif
+#if USE_SM4
+    &_gcry_mac_type_spec_poly1305mac_sm4,
+#else
+    NULL,
+#endif
+#if USE_ARIA
+    &_gcry_mac_type_spec_poly1305mac_aria
 #else
     NULL
 #endif

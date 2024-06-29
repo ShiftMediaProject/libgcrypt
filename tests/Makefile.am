@@ -13,8 +13,8 @@
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
-# License along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+# License along with this program; if not, see <https://www.gnu.org/licenses/>.
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 ## Process this file with automake to produce Makefile.in
 
@@ -25,7 +25,7 @@ tests_bin = \
         version t-secmem mpitests t-sexp t-convert \
 	t-mpi-bit t-mpi-point t-lock \
 	prime basic keygen pubkey hmac hashtest t-kdf keygrip \
-	aeswrap random
+	aeswrap random t-kem t-mlkem
 
 if USE_RSA
 tests_bin += pkcs1v2 t-rsa-pss t-rsa-15 t-rsa-testparm
@@ -44,13 +44,14 @@ tests_bin_last = benchmark bench-slope
 
 tests_sh = basic-disable-all-hwf
 
-tests_sh_last = hashtest-256g
+tests_sh_last = hashtest-6g hashtest-256g
 
 TESTS = $(tests_bin) $(tests_sh) $(tests_bin_last) $(tests_sh_last)
 
 # Force sequential run of some tests.
 bench-slope.log:    benchmark.log
-hashtest-256g.log:  bench-slope.log
+hashtest-6g.log:    bench-slope.log
+hashtest-256g.log:  hashtest-6g.log
 
 
 TESTS_ENVIRONMENT = GCRYPT_IN_REGRESSION_TEST=1
@@ -60,7 +61,11 @@ TESTS_ENVIRONMENT = GCRYPT_IN_REGRESSION_TEST=1
 # a built header.
 AM_CPPFLAGS = -I../src -I$(top_srcdir)/src
 AM_CFLAGS = $(GPG_ERROR_CFLAGS)
+if HAVE_W32_SYSTEM
+AM_LDFLAGS = -no-fast-install
+else
 AM_LDFLAGS = -no-install
+endif
 
 standard_ldadd = \
 	../src/libgcrypt.la \
@@ -76,8 +81,9 @@ CLEANFILES = testdrv-build
 EXTRA_DIST = README rsa-16k.key \
 	     pkcs1v2-oaep.h pkcs1v2-pss.h pkcs1v2-v15c.h pkcs1v2-v15s.h \
 	     t-ed25519.inp t-ed448.inp t-dsa.inp t-ecdsa.inp t-rsa-15.inp \
-	     t-rsa-pss.inp stopwatch.h hashtest-256g.in sha3-224.h \
-	     sha3-256.h sha3-384.h sha3-512.h blake2b.h blake2s.h \
+	     t-rsa-pss.inp t-mlkem.inp \
+	     stopwatch.h hashtest-6g.in hashtest-256g.in \
+	     sha3-224.h sha3-256.h sha3-384.h sha3-512.h blake2b.h blake2s.h \
 	     basic-disable-all-hwf.in basic_all_hwfeature_combinations.sh
 
 LDADD = $(standard_ldadd) $(GPG_ERROR_LIBS) @LDADD_FOR_TESTS_KLUDGE@

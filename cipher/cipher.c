@@ -6,7 +6,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -91,7 +91,12 @@ static gcry_cipher_spec_t * const cipher_list[] =
 #if USE_SM4
      &_gcry_cipher_spec_sm4,
 #endif
-    NULL
+#if USE_ARIA
+     &_gcry_cipher_spec_aria128,
+     &_gcry_cipher_spec_aria192,
+     &_gcry_cipher_spec_aria256,
+#endif
+     NULL
   };
 
 /* Cipher implementations starting with index 0 (enum gcry_cipher_algos) */
@@ -207,9 +212,18 @@ static gcry_cipher_spec_t * const cipher_list_algo301[] =
     NULL,
 #endif
 #if USE_SM4
-     &_gcry_cipher_spec_sm4,
+    &_gcry_cipher_spec_sm4,
 #else
     NULL,
+#endif
+#if USE_ARIA
+    &_gcry_cipher_spec_aria128,
+    &_gcry_cipher_spec_aria192,
+    &_gcry_cipher_spec_aria256
+#else
+    NULL,
+    NULL,
+    NULL
 #endif
   };
 
@@ -765,6 +779,8 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
   rc = c->spec->setkey (&c->context.c, key, keylen, &c->bulk);
   if (!rc || (c->marks.allow_weak_key && rc == GPG_ERR_WEAK_KEY))
     {
+      int is_weak_key = (rc == GPG_ERR_WEAK_KEY);
+
       /* Duplicate initial context.  */
       memcpy ((void *) ((char *) &c->context.c + c->spec->contextsize),
               (void *) &c->context.c,
@@ -787,7 +803,7 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
 
         case GCRY_CIPHER_MODE_GCM_SIV:
           rc = _gcry_cipher_gcm_siv_setkey (c, keylen);
-          if (rc)
+          if (rc && !(c->marks.allow_weak_key && rc == GPG_ERR_WEAK_KEY))
 	    c->marks.key = 0;
           break;
 
@@ -829,6 +845,11 @@ cipher_setkey (gcry_cipher_hd_t c, byte *key, size_t keylen)
         default:
           break;
         }
+
+      /* Restore "weak key" error-code in case mode specific setkey
+       * returned success. */
+      if (!rc && is_weak_key)
+	rc = GPG_ERR_WEAK_KEY;
     }
   else
     c->marks.key = 0;
@@ -983,14 +1004,11 @@ cipher_reset (gcry_cipher_hd_t c)
 
 
 static gcry_err_code_t
-do_ecb_crypt (gcry_cipher_hd_t c,
-              unsigned char *outbuf, size_t outbuflen,
-              const unsigned char *inbuf, size_t inbuflen,
-              gcry_cipher_encrypt_t crypt_fn)
+do_ecb_crypt (gcry_cipher_hd_t c, unsigned char *outbuf, size_t outbuflen,
+	      const unsigned char *inbuf, size_t inbuflen, int encrypt)
 {
   unsigned int blocksize = c->spec->blocksize;
   size_t n, nblocks;
-  unsigned int burn, nburn;
 
   if (outbuflen < inbuflen)
     return GPG_ERR_BUFFER_TOO_SHORT;
@@ -998,18 +1016,32 @@ do_ecb_crypt (gcry_cipher_hd_t c,
     return GPG_ERR_INV_LENGTH;
 
   nblocks = inbuflen / blocksize;
-  burn = 0;
 
-  for (n=0; n < nblocks; n++ )
+  if (nblocks == 0)
+    return 0;
+
+  if (c->bulk.ecb_crypt)
     {
-      nburn = crypt_fn (&c->context.c, outbuf, inbuf);
-      burn = nburn > burn ? nburn : burn;
-      inbuf  += blocksize;
-      outbuf += blocksize;
+      c->bulk.ecb_crypt (&c->context.c, outbuf, inbuf, nblocks, encrypt);
     }
+  else
+    {
+      gcry_cipher_encrypt_t crypt_fn =
+          encrypt ? c->spec->encrypt : c->spec->decrypt;
+      unsigned int burn = 0;
+      unsigned int nburn;
 
-  if (burn > 0)
-    _gcry_burn_stack (burn + 4 * sizeof(void *));
+      for (n = 0; n < nblocks; n++)
+	{
+	  nburn = crypt_fn (&c->context.c, outbuf, inbuf);
+	  burn = nburn > burn ? nburn : burn;
+	  inbuf  += blocksize;
+	  outbuf += blocksize;
+	}
+
+      if (burn > 0)
+	_gcry_burn_stack (burn + 4 * sizeof(void *));
+    }
 
   return 0;
 }
@@ -1019,7 +1051,7 @@ do_ecb_encrypt (gcry_cipher_hd_t c,
                 unsigned char *outbuf, size_t outbuflen,
                 const unsigned char *inbuf, size_t inbuflen)
 {
-  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, c->spec->encrypt);
+  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, 1);
 }
 
 static gcry_err_code_t
@@ -1027,7 +1059,7 @@ do_ecb_decrypt (gcry_cipher_hd_t c,
                 unsigned char *outbuf, size_t outbuflen,
                 const unsigned char *inbuf, size_t inbuflen)
 {
-  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, c->spec->decrypt);
+  return do_ecb_crypt (c, outbuf, outbuflen, inbuf, inbuflen, 0);
 }
 
 
@@ -1210,9 +1242,20 @@ _gcry_cipher_setkey (gcry_cipher_hd_t hd, const void *key, size_t keylen)
 
 
 gcry_err_code_t
-_gcry_cipher_setiv (gcry_cipher_hd_t hd, const void *iv, size_t ivlen)
+_gcry_cipher_setiv (gcry_cipher_hd_t c, const void *iv, size_t ivlen)
 {
-  return hd->mode_ops.setiv (hd, iv, ivlen);
+  if (c->mode == GCRY_CIPHER_MODE_GCM)
+    {
+      c->u_mode.gcm.disallow_encryption_because_of_setiv_in_fips_mode = 0;
+
+      if (fips_mode ())
+        {
+          /* Direct invocation of GCM setiv in FIPS mode disables encryption. */
+          c->u_mode.gcm.disallow_encryption_because_of_setiv_in_fips_mode = 1;
+        }
+    }
+
+  return c->mode_ops.setiv (c, iv, ivlen);
 }
 
 
@@ -1247,6 +1290,56 @@ _gcry_cipher_getctr (gcry_cipher_hd_t hd, void *ctr, size_t ctrlen)
     return GPG_ERR_INV_ARG;
 
   return 0;
+}
+
+
+gcry_err_code_t
+_gcry_cipher_setup_geniv (gcry_cipher_hd_t hd, int method,
+                          const void *fixed_iv, size_t fixed_iv_len,
+                          const void *dyn_iv, size_t dyn_iv_len)
+{
+  gcry_err_code_t rc = 0;
+
+  if (method != GCRY_CIPHER_GENIV_METHOD_CONCAT)
+    return GPG_ERR_INV_ARG;
+
+  if (fixed_iv_len + dyn_iv_len > MAX_BLOCKSIZE)
+    return GPG_ERR_INV_ARG;
+
+  hd->aead.geniv_method = GCRY_CIPHER_GENIV_METHOD_CONCAT;
+  hd->aead.fixed_iv_len = fixed_iv_len;
+  hd->aead.dynamic_iv_len = dyn_iv_len;
+  memset (hd->aead.fixed, 0, MAX_BLOCKSIZE);
+  memset (hd->aead.dynamic, 0, MAX_BLOCKSIZE);
+  memcpy (hd->aead.fixed, fixed_iv, fixed_iv_len);
+  memcpy (hd->aead.dynamic, dyn_iv, dyn_iv_len);
+
+  return rc;
+}
+
+
+gcry_err_code_t
+_gcry_cipher_geniv (gcry_cipher_hd_t hd, void *iv, size_t iv_len)
+{
+  gcry_err_code_t rc = 0;
+  int i;
+
+  if (hd->aead.geniv_method != GCRY_CIPHER_GENIV_METHOD_CONCAT)
+    return GPG_ERR_INV_ARG;
+
+  if (iv_len != hd->aead.fixed_iv_len + hd->aead.dynamic_iv_len)
+    return GPG_ERR_INV_ARG;
+
+  memcpy (iv, hd->aead.fixed, hd->aead.fixed_iv_len);
+  memcpy ((byte *)iv+hd->aead.fixed_iv_len,
+          hd->aead.dynamic, hd->aead.dynamic_iv_len);
+  rc = hd->mode_ops.setiv (hd, iv, iv_len);
+
+  for (i = hd->aead.dynamic_iv_len; i > 0; i--)
+    if (++hd->aead.dynamic[i - 1] != 0)
+      break;
+
+  return rc;
 }
 
 
@@ -1648,6 +1741,30 @@ _gcry_cipher_ctl (gcry_cipher_hd_t h, int cmd, void *buffer, size_t buflen)
           ivp = h->u_iv.iv + h->spec->blocksize - n;
           while (n--)
             *dst++ = *ivp++;
+        }
+      break;
+
+    case PRIV_CIPHERCTL_GET_COUNTER: /* (private)  */
+      /* This is the input block as used in CTR mode which has
+         initially been set as IV.  The returned format is:
+           1 byte  Actual length of the block in bytes.
+           n byte  The block.
+         If the provided buffer is too short, an error is returned. */
+      if (buflen < (1 + h->spec->blocksize))
+        rc = GPG_ERR_TOO_SHORT;
+      else
+        {
+          unsigned char *ctrp;
+          unsigned char *dst = buffer;
+          int n = h->unused;
+
+          if (!n)
+            n = h->spec->blocksize;
+          gcry_assert (n <= h->spec->blocksize);
+          *dst++ = n;
+          ctrp = h->u_ctr.ctr + h->spec->blocksize - n;
+          while (n--)
+            *dst++ = *ctrp++;
         }
       break;
 

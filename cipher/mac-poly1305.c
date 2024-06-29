@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -82,6 +82,12 @@ poly1305mac_open (gcry_mac_hd_t h)
       break;
     case GCRY_MAC_POLY1305_SEED:
       cipher_algo = GCRY_CIPHER_SEED;
+      break;
+    case GCRY_MAC_POLY1305_SM4:
+      cipher_algo = GCRY_CIPHER_SM4;
+      break;
+    case GCRY_MAC_POLY1305_ARIA:
+      cipher_algo = GCRY_CIPHER_ARIA128;
       break;
     }
 
@@ -359,6 +365,18 @@ const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_serpent = {
 #if USE_SEED
 const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_seed = {
   GCRY_MAC_POLY1305_SEED, {0, 0}, "POLY1305_SEED",
+  &poly1305mac_ops
+};
+#endif
+#if USE_SM4
+const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_sm4 = {
+  GCRY_MAC_POLY1305_SM4, {0, 0}, "POLY1305_SM4",
+  &poly1305mac_ops
+};
+#endif
+#if USE_ARIA
+const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_aria = {
+  GCRY_MAC_POLY1305_ARIA, {0, 0}, "POLY1305_ARIA",
   &poly1305mac_ops
 };
 #endif

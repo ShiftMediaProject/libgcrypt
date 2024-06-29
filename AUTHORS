@@ -1,7 +1,6 @@
 Library: Libgcrypt
-Homepage: https://www.gnupg.org/related_software/libgcrypt/
-Download: https://ftp.gnupg.org/ftp/gcrypt/libgcrypt/
-          ftp://ftp.gnupg.org/gcrypt/libgcrypt/
+Homepage: https://gnupg.org/related_software/libgcrypt/
+Download: https://gnupg.org/ftp/gcrypt/libgcrypt/
 Repository: git://git.gnupg.org/libgcrypt.git
 Maintainer: Werner Koch <wk@gnupg.org>
 Bug reports: https://bugs.gnupg.org
@@ -32,17 +31,18 @@ List of Copyright holders
   Copyright (C) 2003 Nikos Mavroyanopoulos
   Copyright (c) 2006 CRYPTOGAMS
   Copyright (C) 2006-2007 NTT (Nippon Telegraph and Telephone Corporation)
-  Copyright (C) 2012-2023 g10 Code GmbH
+  Copyright (C) 2012-2024 g10 Code GmbH
   Copyright (C) 2012 Simon Josefsson, Niels Möller
   Copyright (c) 2012 Intel Corporation
   Copyright (C) 2013 Christian Grothoff
-  Copyright (C) 2013-2022 Jussi Kivilinna
+  Copyright (C) 2013-2024 Jussi Kivilinna
   Copyright (C) 2013-2014 Dmitry Eremin-Solenikov
   Copyright (C) 2014 Stephan Mueller
   Copyright (C) 2017 Jia Zhang
   Copyright (C) 2018 Bundesamt für Sicherheit in der Informationstechnik
   Copyright (C) 2020 Alibaba Group.
   Copyright (C) 2020 Tianjia Zhang
+  Copyright (C) 2023 Simon Josefsson
 
 
 Authors with a FSF copyright assignment
@@ -169,6 +169,9 @@ Dmitry Eremin-Solenikov <dbaryshkov@gmail.com>
 Dmitry Kasatkin <dmitry.kasatkin@intel.com>
 2012-12-14:50CAE2DB.80302@intel.com:
 
+Falko Strenzke <falko.strenzke@mtg.de>
+2023-09-27:51677567-0b78-4665-805d-fd0cdd50f7fa@mtg.de:
+
 H.J. Lu <hjl.tools@gmail.com>
 2020-01-19:20200119135241.GA4970@gmail.com:
 
@@ -210,6 +213,9 @@ Sergey V. <sftp.mtuci@gmail.com>
 
 Shawn Landden <shawn@git.icu>
 2019-07-09:2794651562684255@iva4-64850291ca1c.qloud-c.yandex.net:
+
+Simit Ghane <simit.ghane@lge.com>
+2024-05-06:OF22575887.761836D9-ON48258B15.0044A21E-48258B15.0044A222@lge.com:
 
 Stephan Mueller <smueller@chronox.de>
 2014-08-22:2008899.25OeoelVVA@myon.chronox.de:
@@ -253,6 +259,10 @@ security corporation.  See the file for details.
 
 The file salsa20.c is based on D.J. Bernstein's public domain code and
 taken from Nettle.  Copyright 2012 Simon Josefsson and Niels Möller.
+
+The sntrup761 code is based on public domain code written by Daniel
+J. Bernstein, Chitchanok Chuengsatiansup, Tanja Lange, and Christine
+van Vredendaal.  Copyright 2023 Simon Josefsson.
 
 
  This file is free software; as a special exception the author gives

@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -38,9 +38,9 @@ static unsigned int
 do_cbc_mac (gcry_cipher_hd_t c, const unsigned char *inbuf, size_t inlen,
             int do_padding)
 {
-#define blocksize 16
   gcry_cipher_encrypt_t enc_fn = c->spec->encrypt;
-  unsigned char tmp[blocksize];
+  unsigned char tmp[16];
+  const unsigned int blocksize = DIM(tmp);
   unsigned int burn = 0;
   unsigned int unused = c->u_mode.ccm.mac_unused;
   size_t nblocks;
@@ -260,7 +260,7 @@ _gcry_cipher_ccm_authenticate (gcry_cipher_hd_t c, const unsigned char *abuf,
 }
 
 
-gcry_err_code_t
+static gcry_err_code_t
 _gcry_cipher_ccm_tag (gcry_cipher_hd_t c, unsigned char *outbuf,
 		      size_t outbuflen, int check)
 {
@@ -345,8 +345,10 @@ _gcry_cipher_ccm_encrypt (gcry_cipher_hd_t c, unsigned char *outbuf,
       size_t currlen = inbuflen;
 
       /* Since checksumming is done before encryption, process input in 24KiB
-       * chunks to keep data loaded in L1 cache for encryption. */
-      if (currlen > 24 * 1024)
+       * chunks to keep data loaded in L1 cache for encryption.  However only
+       * do splitting if input is large enough so that last chunks does not
+       * end up being short. */
+      if (currlen > 32 * 1024)
 	currlen = 24 * 1024;
 
       c->u_mode.ccm.encryptlen -= currlen;
@@ -391,8 +393,10 @@ _gcry_cipher_ccm_decrypt (gcry_cipher_hd_t c, unsigned char *outbuf,
       size_t currlen = inbuflen;
 
       /* Since checksumming is done after decryption, process input in 24KiB
-       * chunks to keep data loaded in L1 cache for checksumming. */
-      if (currlen > 24 * 1024)
+       * chunks to keep data loaded in L1 cache for checksumming.  However
+       * only do splitting if input is large enough so that last chunks
+       * does not end up being short. */
+      if (currlen > 32 * 1024)
 	currlen = 24 * 1024;
 
       err = _gcry_cipher_ctr_encrypt (c, outbuf, outbuflen, inbuf, currlen);

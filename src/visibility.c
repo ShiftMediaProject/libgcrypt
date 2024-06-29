@@ -774,6 +774,22 @@ gcry_cipher_setctr (gcry_cipher_hd_t hd, const void *ctr, size_t ctrlen)
 }
 
 gcry_error_t
+gcry_cipher_setup_geniv (gcry_cipher_hd_t hd, int method,
+                         const void *fixed_iv, size_t fixed_iv_len,
+                         const void *dyn_iv, size_t dyn_iv_len)
+{
+  return gcry_error (_gcry_cipher_setup_geniv (hd, method,
+                                               fixed_iv, fixed_iv_len,
+                                               dyn_iv, dyn_iv_len));
+}
+
+gcry_error_t
+gcry_cipher_geniv (gcry_cipher_hd_t hd, void *iv, size_t iv_len)
+{
+  return gcry_error (_gcry_cipher_geniv (hd, iv, iv_len));
+}
+
+gcry_error_t
 gcry_cipher_authenticate (gcry_cipher_hd_t hd, const void *abuf, size_t abuflen)
 {
   if (!fips_is_operational ())
@@ -1062,7 +1078,7 @@ gcry_pk_hash_verify (gcry_sexp_t sigval, const char *data_tmpl, gcry_sexp_t pkey
 gcry_error_t
 gcry_pk_random_override_new (gcry_ctx_t *r_ctx, const unsigned char *p, size_t len)
 {
-  return gpg_error (_gcry_pk_random_override_new (r_ctx, p, len));
+  return gpg_error (_gcry_pk_single_data_push (r_ctx, p, len));
 }
 
 gcry_error_t
@@ -1177,7 +1193,7 @@ gpg_error_t
 gcry_ecc_mul_point (int curveid, unsigned char *result,
                     const unsigned char *scalar, const unsigned char *point)
 {
-  return _gcry_ecc_mul_point (curveid, result, scalar, point);
+  return gpg_error (_gcry_ecc_mul_point (curveid, result, scalar, point));
 }
 
 gcry_error_t
@@ -1251,7 +1267,9 @@ gcry_md_read (gcry_md_hd_t hd, int algo)
 gcry_error_t
 gcry_md_extract (gcry_md_hd_t hd, int algo, void *buffer, size_t length)
 {
-  return gpg_error (_gcry_md_extract(hd, algo, buffer, length));
+  if (!fips_is_operational ())
+    return gpg_error (fips_not_operational ());
+  return gpg_error (_gcry_md_extract (hd, algo, buffer, length));
 }
 
 void
@@ -1276,6 +1294,20 @@ gcry_md_hash_buffers (int algo, unsigned int flags, void *digest,
       fips_signal_error ("called in non-operational state");
     }
   return gpg_error (_gcry_md_hash_buffers (algo, flags, digest, iov, iovcnt));
+}
+
+gpg_error_t
+gcry_md_hash_buffers_ext (int algo, unsigned int flags, void *digest,
+                          int digestlen, const gcry_buffer_t *iov,
+                          int iovcnt)
+{
+  if (!fips_is_operational ())
+    {
+      (void)fips_not_operational ();
+      fips_signal_error ("called in non-operational state");
+    }
+  return gpg_error (_gcry_md_hash_buffers_extract (algo, flags, digest,
+                                                   digestlen, iov, iovcnt));
 }
 
 int
@@ -1408,6 +1440,45 @@ void
 gcry_kdf_close (gcry_kdf_hd_t h)
 {
   _gcry_kdf_close (h);
+}
+
+gcry_error_t
+gcry_kem_keypair (int algo,
+                  void *pubkey, size_t pubkey_len,
+                  void *seckey, size_t seckey_len)
+
+{
+  return gpg_error (_gcry_kem_keypair (algo,
+                                       pubkey, pubkey_len,
+                                       seckey, seckey_len));
+}
+
+gcry_error_t
+gcry_kem_encap (int algo,
+                const void *pubkey, size_t pubkey_len,
+                void *ciphertext, size_t ciphertext_len,
+                void *shared, size_t shared_len,
+                const void *optional, size_t optional_len)
+{
+  return gpg_error (_gcry_kem_encap (algo,
+                                     pubkey, pubkey_len,
+                                     ciphertext, ciphertext_len,
+                                     shared, shared_len,
+                                     optional, optional_len));
+}
+
+gcry_error_t
+gcry_kem_decap (int algo,
+                const void *seckey, size_t seckey_len,
+                const void *ciphertext, size_t ciphertext_len,
+                void *shared, size_t shared_len,
+                const void *optional, size_t optional_len)
+{
+  return gpg_error (_gcry_kem_decap (algo,
+                                     seckey, seckey_len,
+                                     ciphertext, ciphertext_len,
+                                     shared, shared_len,
+                                     optional, optional_len));
 }
 
 void

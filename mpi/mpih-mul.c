@@ -15,8 +15,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * Note: This code is heavily based on the GNU MP Library.
  *	 Actually it's the same code with only minor changes in the
@@ -39,7 +39,7 @@
 	    mul_n_basecase (prodp, up, vp, size);	\
 	else						\
 	    mul_n (prodp, up, vp, size, tspace);	\
-    } while (0);
+    } while (0)
 
 #define MPN_SQR_N_RECURSE(prodp, up, size, tspace) \
     do {					    \
@@ -47,7 +47,7 @@
 	    _gcry_mpih_sqr_n_basecase (prodp, up, size);	 \
 	else					    \
 	    _gcry_mpih_sqr_n (prodp, up, size, tspace);	 \
-    } while (0);
+    } while (0)
 
 
 

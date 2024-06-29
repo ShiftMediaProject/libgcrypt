@@ -1,6 +1,6 @@
-/* camellia-aesni-avx2-amd64.h - AES-NI/VAES/AVX2 implementation of Camellia
+/* camellia-aesni-avx2-amd64.h - AES-NI/VAES/GFNI/AVX2 implementation of Camellia
  *
- * Copyright (C) 2013-2015,2020-2021 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013-2015,2020-2023 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -36,6 +36,8 @@
 /**********************************************************************
   helper macros
  **********************************************************************/
+
+#ifndef CAMELLIA_GFNI_BUILD
 #define filter_8bit(x, lo_t, hi_t, mask4bit, tmp0) \
 	vpand x, mask4bit, tmp0; \
 	vpandn x, mask4bit, x; \
@@ -44,6 +46,7 @@
 	vpshufb tmp0, lo_t, tmp0; \
 	vpshufb x, hi_t, x; \
 	vpxor tmp0, x, x;
+#endif
 
 #define ymm0_x xmm0
 #define ymm1_x xmm1
@@ -70,11 +73,69 @@
 # define IF_VAES(...)
 #endif
 
+#ifdef CAMELLIA_GFNI_BUILD
+# define IF_GFNI(...) __VA_ARGS__
+# define IF_NOT_GFNI(...)
+#else
+# define IF_GFNI(...)
+# define IF_NOT_GFNI(...) __VA_ARGS__
+#endif
+
+/**********************************************************************
+  GFNI helper macros and constants
+ **********************************************************************/
+
+#ifdef CAMELLIA_GFNI_BUILD
+
+#define BV8(a0,a1,a2,a3,a4,a5,a6,a7) \
+	( (((a0) & 1) << 0) | \
+	  (((a1) & 1) << 1) | \
+	  (((a2) & 1) << 2) | \
+	  (((a3) & 1) << 3) | \
+	  (((a4) & 1) << 4) | \
+	  (((a5) & 1) << 5) | \
+	  (((a6) & 1) << 6) | \
+	  (((a7) & 1) << 7) )
+
+#define BM8X8(l0,l1,l2,l3,l4,l5,l6,l7) \
+	( ((l7) << (0 * 8)) | \
+	  ((l6) << (1 * 8)) | \
+	  ((l5) << (2 * 8)) | \
+	  ((l4) << (3 * 8)) | \
+	  ((l3) << (4 * 8)) | \
+	  ((l2) << (5 * 8)) | \
+	  ((l1) << (6 * 8)) | \
+	  ((l0) << (7 * 8)) )
+
+/* Pre-filters and post-filters constants for Camellia sboxes s1, s2, s3 and s4.
+ *   See http://urn.fi/URN:NBN:fi:oulu-201305311409, pages 43-48.
+ *
+ * Pre-filters are directly from above source, "θ₁"/"θ₄". Post-filters are
+ * combination of function "A" (AES SubBytes affine transformation) and
+ * "ψ₁"/"ψ₂"/"ψ₃".
+ */
+
+/* Constant from "θ₁(x)" and "θ₄(x)" functions. */
+#define pre_filter_constant_s1234 BV8(1, 0, 1, 0, 0, 0, 1, 0)
+
+/* Constant from "ψ₁(A(x))" function: */
+#define post_filter_constant_s14  BV8(0, 1, 1, 1, 0, 1, 1, 0)
+
+/* Constant from "ψ₂(A(x))" function: */
+#define post_filter_constant_s2   BV8(0, 0, 1, 1, 1, 0, 1, 1)
+
+/* Constant from "ψ₃(A(x))" function: */
+#define post_filter_constant_s3   BV8(1, 1, 1, 0, 1, 1, 0, 0)
+
+#endif /* CAMELLIA_GFNI_BUILD */
+
 /**********************************************************************
   32-way camellia
  **********************************************************************/
 
-/*
+#ifdef CAMELLIA_GFNI_BUILD
+
+/* roundsm32 (GFNI version)
  * IN:
  *   x0..x7: byte-sliced AB state
  *   mem_cd: register pointer storing CD state
@@ -82,7 +143,110 @@
  * OUT:
  *   x0..x7: new byte-sliced CD state
  */
+#define roundsm32(x0, x1, x2, x3, x4, x5, x6, x7, t0, t1, t2, t3, t4, t5, \
+		  t6, t7, mem_cd, key) \
+	/* \
+	 * S-function with AES subbytes \
+	 */ \
+	vpbroadcastq .Lpre_filter_bitmatrix_s123 rRIP, t5; \
+	vpbroadcastq .Lpre_filter_bitmatrix_s4 rRIP, t2; \
+	vpbroadcastq .Lpost_filter_bitmatrix_s14 rRIP, t4; \
+	vpbroadcastq .Lpost_filter_bitmatrix_s2 rRIP, t3; \
+	vpbroadcastq .Lpost_filter_bitmatrix_s3 rRIP, t6; \
+	\
+	/* prefilter sboxes */ \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x0, x0; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x7, x7; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t2, x3, x3; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t2, x6, x6; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x2, x2; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x5, x5; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x1, x1; \
+	vgf2p8affineqb $(pre_filter_constant_s1234), t5, x4, x4; \
+	\
+	/* sbox GF8 inverse + postfilter sboxes 1 and 4 */ \
+	vgf2p8affineinvqb $(post_filter_constant_s14), t4, x0, x0; \
+	vgf2p8affineinvqb $(post_filter_constant_s14), t4, x7, x7; \
+	vgf2p8affineinvqb $(post_filter_constant_s14), t4, x3, x3; \
+	vgf2p8affineinvqb $(post_filter_constant_s14), t4, x6, x6; \
+	\
+	/* sbox GF8 inverse + postfilter sbox 3 */ \
+	vgf2p8affineinvqb $(post_filter_constant_s3), t6, x2, x2; \
+	vgf2p8affineinvqb $(post_filter_constant_s3), t6, x5, x5; \
+	\
+	/* sbox GF8 inverse + postfilter sbox 2 */ \
+	vgf2p8affineinvqb $(post_filter_constant_s2), t3, x1, x1; \
+	vgf2p8affineinvqb $(post_filter_constant_s2), t3, x4, x4; \
+	\
+	vpbroadcastb 7+key, t7; \
+	vpbroadcastb 6+key, t6; \
+	\
+	/* P-function */ \
+	vpxor x5, x0, x0; \
+	vpxor x6, x1, x1; \
+	vpxor x7, x2, x2; \
+	vpxor x4, x3, x3; \
+	\
+	vpbroadcastb 5+key, t5; \
+	vpbroadcastb 4+key, t4; \
+	\
+	vpxor x2, x4, x4; \
+	vpxor x3, x5, x5; \
+	vpxor x0, x6, x6; \
+	vpxor x1, x7, x7; \
+	\
+	vpbroadcastb 3+key, t3; \
+	vpbroadcastb 2+key, t2; \
+	\
+	vpxor x7, x0, x0; \
+	vpxor x4, x1, x1; \
+	vpxor x5, x2, x2; \
+	vpxor x6, x3, x3; \
+	\
+	vpbroadcastb 1+key, t1; \
+	vpbroadcastb 0+key, t0; \
+	\
+	vpxor x3, x4, x4; \
+	vpxor x0, x5, x5; \
+	vpxor x1, x6, x6; \
+	vpxor x2, x7, x7; /* note: high and low parts swapped */ \
+	\
+	/* Add key material and result to CD (x becomes new CD) */ \
+	\
+	vpxor t7, x0, x0; \
+	vpxor 4 * 32(mem_cd), x0, x0; \
+	\
+	vpxor t6, x1, x1; \
+	vpxor 5 * 32(mem_cd), x1, x1; \
+	\
+	vpxor t5, x2, x2; \
+	vpxor 6 * 32(mem_cd), x2, x2; \
+	\
+	vpxor t4, x3, x3; \
+	vpxor 7 * 32(mem_cd), x3, x3; \
+	\
+	vpxor t3, x4, x4; \
+	vpxor 0 * 32(mem_cd), x4, x4; \
+	\
+	vpxor t2, x5, x5; \
+	vpxor 1 * 32(mem_cd), x5, x5; \
+	\
+	vpxor t1, x6, x6; \
+	vpxor 2 * 32(mem_cd), x6, x6; \
+	\
+	vpxor t0, x7, x7; \
+	vpxor 3 * 32(mem_cd), x7, x7;
 
+#else /* CAMELLIA_GFNI_BUILD */
+
+/* roundsm32 (AES-NI / VAES version)
+ * IN:
+ *   x0..x7: byte-sliced AB state
+ *   mem_cd: register pointer storing CD state
+ *   key: index for key material
+ * OUT:
+ *   x0..x7: new byte-sliced CD state
+ */
 #define roundsm32(x0, x1, x2, x3, x4, x5, x6, x7, t0, t1, t2, t3, t4, t5, \
 		  t6, t7, mem_cd, key) \
 	/* \
@@ -120,7 +284,7 @@
 	filter_8bit(x1, t5, t6, t7, t4); \
 	filter_8bit(x4, t5, t6, t7, t4); \
 	\
-	vpxor t4##_x, t4##_x, t4##_x; \
+	vpxor t4, t4, t4; \
 	\
 	/* AES subbytes + AES shift rows */ \
 	IF_AESNI(vextracti128 $1, x2, t6##_x; \
@@ -176,17 +340,12 @@
 	filter_8bit(x2, t2, t3, t7, t6); \
 	filter_8bit(x5, t2, t3, t7, t6); \
 	\
-	vpbroadcastq key, t0; /* higher 64-bit duplicate ignored */ \
-	\
 	/* postfilter sbox 2 */ \
 	filter_8bit(x1, t4, t5, t7, t2); \
 	filter_8bit(x4, t4, t5, t7, t2); \
-	vpxor t7, t7, t7; \
 	\
-	vpsrldq $1, t0, t1; \
-	vpsrldq $2, t0, t2; \
-	vpshufb t7, t1, t1; \
-	vpsrldq $3, t0, t3; \
+	vpbroadcastb 7+key, t7; \
+	vpbroadcastb 6+key, t6; \
 	\
 	/* P-function */ \
 	vpxor x5, x0, x0; \
@@ -194,25 +353,24 @@
 	vpxor x7, x2, x2; \
 	vpxor x4, x3, x3; \
 	\
-	vpshufb t7, t2, t2; \
-	vpsrldq $4, t0, t4; \
-	vpshufb t7, t3, t3; \
-	vpsrldq $5, t0, t5; \
-	vpshufb t7, t4, t4; \
+	vpbroadcastb 5+key, t5; \
+	vpbroadcastb 4+key, t4; \
 	\
 	vpxor x2, x4, x4; \
 	vpxor x3, x5, x5; \
 	vpxor x0, x6, x6; \
 	vpxor x1, x7, x7; \
 	\
-	vpsrldq $6, t0, t6; \
-	vpshufb t7, t5, t5; \
-	vpshufb t7, t6, t6; \
+	vpbroadcastb 3+key, t3; \
+	vpbroadcastb 2+key, t2; \
 	\
 	vpxor x7, x0, x0; \
 	vpxor x4, x1, x1; \
 	vpxor x5, x2, x2; \
 	vpxor x6, x3, x3; \
+	\
+	vpbroadcastb 1+key, t1; \
+	vpbroadcastb 0+key, t0; \
 	\
 	vpxor x3, x4, x4; \
 	vpxor x0, x5, x5; \
@@ -221,15 +379,11 @@
 	\
 	/* Add key material and result to CD (x becomes new CD) */ \
 	\
-	vpxor t6, x1, x1; \
-	vpxor 5 * 32(mem_cd), x1, x1; \
-	\
-	vpsrldq $7, t0, t6; \
-	vpshufb t7, t0, t0; \
-	vpshufb t7, t6, t7; \
-	\
 	vpxor t7, x0, x0; \
 	vpxor 4 * 32(mem_cd), x0, x0; \
+	\
+	vpxor t6, x1, x1; \
+	vpxor 5 * 32(mem_cd), x1, x1; \
 	\
 	vpxor t5, x2, x2; \
 	vpxor 6 * 32(mem_cd), x2, x2; \
@@ -248,6 +402,8 @@
 	\
 	vpxor t0, x7, x7; \
 	vpxor 3 * 32(mem_cd), x7, x7;
+
+#endif /* CAMELLIA_GFNI_BUILD */
 
 /*
  * IN/OUT:
@@ -311,6 +467,26 @@
  * OUT:
  *  v0..3: (IN <<< 1)
  */
+#ifdef CAMELLIA_GFNI_BUILD
+#define rol32_1_32(v0, v1, v2, v3, t0, t1, t2, right_shift_by_7) \
+	vgf2p8affineqb $0, right_shift_by_7, v0, t0; \
+	vpaddb v0, v0, v0; \
+	\
+	vgf2p8affineqb $0, right_shift_by_7, v1, t1; \
+	vpaddb v1, v1, v1; \
+	\
+	vgf2p8affineqb $0, right_shift_by_7, v2, t2; \
+	vpaddb v2, v2, v2; \
+	\
+	vpor t0, v1, v1; \
+	\
+	vgf2p8affineqb $0, right_shift_by_7, v3, t0; \
+	vpaddb v3, v3, v3; \
+	\
+	vpor t1, v2, v2; \
+	vpor t2, v3, v3; \
+	vpor t0, v0, v0;
+#else
 #define rol32_1_32(v0, v1, v2, v3, t0, t1, t2, zero) \
 	vpcmpgtb v0, zero, t0; \
 	vpaddb v0, v0, v0; \
@@ -333,6 +509,7 @@
 	vpor t1, v2, v2; \
 	vpor t2, v3, v3; \
 	vpor t0, v0, v0;
+#endif
 
 /*
  * IN:
@@ -348,15 +525,12 @@
 	 * t0 &= ll; \
 	 * lr ^= rol32(t0, 1); \
 	 */ \
-	vpbroadcastd kll, t0; /* only lowest 32-bit used */ \
-	vpxor tt0, tt0, tt0; \
-	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	IF_NOT_GFNI(vpxor tt0, tt0, tt0); \
+	IF_GFNI(vpbroadcastq .Lright_shift_by_7 rRIP, tt0); \
+	vpbroadcastb 0+kll, t3; \
+	vpbroadcastb 1+kll, t2; \
+	vpbroadcastb 2+kll, t1; \
+	vpbroadcastb 3+kll, t0; \
 	\
 	vpand l0, t0, t0; \
 	vpand l1, t1, t1; \
@@ -366,7 +540,6 @@
 	rol32_1_32(t3, t2, t1, t0, tt1, tt2, tt3, tt0); \
 	\
 	vpxor l4, t0, l4; \
-	vpbroadcastd krr, t0; /* only lowest 32-bit used */ \
 	vmovdqu l4, 4 * 32(l); \
 	vpxor l5, t1, l5; \
 	vmovdqu l5, 5 * 32(l); \
@@ -381,13 +554,10 @@
 	 * rl ^= t2; \
 	 */ \
 	\
-	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpbroadcastb 0+krr, t3; \
+	vpbroadcastb 1+krr, t2; \
+	vpbroadcastb 2+krr, t1; \
+	vpbroadcastb 3+krr, t0; \
 	\
 	vpor 4 * 32(r), t0, t0; \
 	vpor 5 * 32(r), t1, t1; \
@@ -399,7 +569,6 @@
 	vpxor 2 * 32(r), t2, t2; \
 	vpxor 3 * 32(r), t3, t3; \
 	vmovdqu t0, 0 * 32(r); \
-	vpbroadcastd krl, t0; /* only lowest 32-bit used */ \
 	vmovdqu t1, 1 * 32(r); \
 	vmovdqu t2, 2 * 32(r); \
 	vmovdqu t3, 3 * 32(r); \
@@ -409,13 +578,10 @@
 	 * t2 &= rl; \
 	 * rr ^= rol32(t2, 1); \
 	 */ \
-	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpbroadcastb 0+krl, t3; \
+	vpbroadcastb 1+krl, t2; \
+	vpbroadcastb 2+krl, t1; \
+	vpbroadcastb 3+krl, t0; \
 	\
 	vpand 0 * 32(r), t0, t0; \
 	vpand 1 * 32(r), t1, t1; \
@@ -429,7 +595,6 @@
 	vpxor 6 * 32(r), t2, t2; \
 	vpxor 7 * 32(r), t3, t3; \
 	vmovdqu t0, 4 * 32(r); \
-	vpbroadcastd klr, t0; /* only lowest 32-bit used */ \
 	vmovdqu t1, 5 * 32(r); \
 	vmovdqu t2, 6 * 32(r); \
 	vmovdqu t3, 7 * 32(r); \
@@ -440,13 +605,10 @@
 	 * ll ^= t0; \
 	 */ \
 	\
-	vpshufb tt0, t0, t3; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t2; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t1; \
-	vpsrldq $1, t0, t0; \
-	vpshufb tt0, t0, t0; \
+	vpbroadcastb 0+klr, t3; \
+	vpbroadcastb 1+klr, t2; \
+	vpbroadcastb 2+klr, t1; \
+	vpbroadcastb 3+klr, t0; \
 	\
 	vpor l4, t0, t0; \
 	vpor l5, t1, t1; \
@@ -617,23 +779,136 @@
 	vmovdqu y6, 14 * 32(rio); \
 	vmovdqu y7, 15 * 32(rio);
 
-.text
+SECTION_RODATA
+
 .align 32
 
 #define SHUFB_BYTES(idx) \
 	0 + (idx), 4 + (idx), 8 + (idx), 12 + (idx)
 
-.Lshufb_16x16b:
-	.byte SHUFB_BYTES(0), SHUFB_BYTES(1), SHUFB_BYTES(2), SHUFB_BYTES(3)
-	.byte SHUFB_BYTES(0), SHUFB_BYTES(1), SHUFB_BYTES(2), SHUFB_BYTES(3)
+FUNC_NAME(_constants):
+ELF(.type   FUNC_NAME(_constants),@object;)
 
 .Lpack_bswap:
 	.long 0x00010203, 0x04050607, 0x80808080, 0x80808080
 	.long 0x00010203, 0x04050607, 0x80808080, 0x80808080
 
+.Lshufb_16x16b:
+	.byte SHUFB_BYTES(0), SHUFB_BYTES(1), SHUFB_BYTES(2), SHUFB_BYTES(3)
+
 /* For CTR-mode IV byteswap */
 .Lbswap128_mask:
 	.byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
+/* CTR byte addition constants */
+.align 32
+.Lbige_addb_0_1:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+.Lbige_addb_2_3:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3
+.Lbige_addb_4_5:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5
+.Lbige_addb_6_7:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7
+.Lbige_addb_8_9:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9
+.Lbige_addb_10_11:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11
+.Lbige_addb_12_13:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13
+.Lbige_addb_14_15:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15
+.Lbige_addb_16_16:
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16
+	.byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16
+
+#ifdef CAMELLIA_GFNI_BUILD
+
+.align 64
+/* Pre-filters and post-filters bit-matrixes for Camellia sboxes s1, s2, s3
+ * and s4.
+ *   See http://urn.fi/URN:NBN:fi:oulu-201305311409, pages 43-48.
+ *
+ * Pre-filters are directly from above source, "θ₁"/"θ₄". Post-filters are
+ * combination of function "A" (AES SubBytes affine transformation) and
+ * "ψ₁"/"ψ₂"/"ψ₃".
+ */
+
+/* Bit-matrix from "θ₁(x)" function: */
+.Lpre_filter_bitmatrix_s123:
+	.quad BM8X8(BV8(1, 1, 1, 0, 1, 1, 0, 1),
+		    BV8(0, 0, 1, 1, 0, 0, 1, 0),
+		    BV8(1, 1, 0, 1, 0, 0, 0, 0),
+		    BV8(1, 0, 1, 1, 0, 0, 1, 1),
+		    BV8(0, 0, 0, 0, 1, 1, 0, 0),
+		    BV8(1, 0, 1, 0, 0, 1, 0, 0),
+		    BV8(0, 0, 1, 0, 1, 1, 0, 0),
+		    BV8(1, 0, 0, 0, 0, 1, 1, 0))
+
+/* Bit-matrix from "θ₄(x)" function: */
+.Lpre_filter_bitmatrix_s4:
+	.quad BM8X8(BV8(1, 1, 0, 1, 1, 0, 1, 1),
+		    BV8(0, 1, 1, 0, 0, 1, 0, 0),
+		    BV8(1, 0, 1, 0, 0, 0, 0, 1),
+		    BV8(0, 1, 1, 0, 0, 1, 1, 1),
+		    BV8(0, 0, 0, 1, 1, 0, 0, 0),
+		    BV8(0, 1, 0, 0, 1, 0, 0, 1),
+		    BV8(0, 1, 0, 1, 1, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 1, 1, 0, 1))
+
+/* Bit-matrix from "ψ₁(A(x))" function: */
+.Lpost_filter_bitmatrix_s14:
+	.quad BM8X8(BV8(0, 0, 0, 0, 0, 0, 0, 1),
+		    BV8(0, 1, 1, 0, 0, 1, 1, 0),
+		    BV8(1, 0, 1, 1, 1, 1, 1, 0),
+		    BV8(0, 0, 0, 1, 1, 0, 1, 1),
+		    BV8(1, 0, 0, 0, 1, 1, 1, 0),
+		    BV8(0, 1, 0, 1, 1, 1, 1, 0),
+		    BV8(0, 1, 1, 1, 1, 1, 1, 1),
+		    BV8(0, 0, 0, 1, 1, 1, 0, 0))
+
+/* Bit-matrix from "ψ₂(A(x))" function: */
+.Lpost_filter_bitmatrix_s2:
+	.quad BM8X8(BV8(0, 0, 0, 1, 1, 1, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 1),
+		    BV8(0, 1, 1, 0, 0, 1, 1, 0),
+		    BV8(1, 0, 1, 1, 1, 1, 1, 0),
+		    BV8(0, 0, 0, 1, 1, 0, 1, 1),
+		    BV8(1, 0, 0, 0, 1, 1, 1, 0),
+		    BV8(0, 1, 0, 1, 1, 1, 1, 0),
+		    BV8(0, 1, 1, 1, 1, 1, 1, 1))
+
+/* Bit-matrix from "ψ₃(A(x))" function: */
+.Lpost_filter_bitmatrix_s3:
+	.quad BM8X8(BV8(0, 1, 1, 0, 0, 1, 1, 0),
+		    BV8(1, 0, 1, 1, 1, 1, 1, 0),
+		    BV8(0, 0, 0, 1, 1, 0, 1, 1),
+		    BV8(1, 0, 0, 0, 1, 1, 1, 0),
+		    BV8(0, 1, 0, 1, 1, 1, 1, 0),
+		    BV8(0, 1, 1, 1, 1, 1, 1, 1),
+		    BV8(0, 0, 0, 1, 1, 1, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 1))
+
+/* Bit-matrix for right shifting uint8_t values in vector by 7. */
+.Lright_shift_by_7:
+	.quad BM8X8(BV8(0, 0, 0, 0, 0, 0, 0, 1),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0),
+		    BV8(0, 0, 0, 0, 0, 0, 0, 0))
+
+#else /* CAMELLIA_GFNI_BUILD */
 
 /*
  * pre-SubByte transform
@@ -756,11 +1031,16 @@
 .L0f0f0f0f:
 	.long 0x0f0f0f0f
 
+#endif /* CAMELLIA_GFNI_BUILD */
 
-.align 8
-ELF(.type   __camellia_enc_blk32,@function;)
+ELF(.size FUNC_NAME(_constants),.-FUNC_NAME(_constants);)
 
-__camellia_enc_blk32:
+.text
+
+.align 16
+ELF(.type   FUNC_NAME(enc_blk32),@function;)
+
+FUNC_NAME(enc_blk32):
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rax: temporary storage, 512 bytes
@@ -817,19 +1097,19 @@ __camellia_enc_blk32:
 
 	ret_spec_stop;
 	CFI_ENDPROC();
-ELF(.size __camellia_enc_blk32,.-__camellia_enc_blk32;)
+ELF(.size FUNC_NAME(enc_blk32),.-FUNC_NAME(enc_blk32);)
 
-.align 8
-ELF(.type   __camellia_dec_blk32,@function;)
+.align 16
+ELF(.type   FUNC_NAME(dec_blk32),@function;)
 
-__camellia_dec_blk32:
+FUNC_NAME(dec_blk32):
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rax: temporary storage, 512 bytes
 	 *	%r8d: 24 for 16 byte key, 32 for larger
-	 *	%ymm0..%ymm15: 16 encrypted blocks
+	 *	%ymm0..%ymm15: 32 encrypted blocks
 	 * output:
-	 *	%ymm0..%ymm15: 16 plaintext blocks, order swapped:
+	 *	%ymm0..%ymm15: 32 plaintext blocks, order swapped:
 	 *       7, 8, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8
 	 */
 	CFI_STARTPROC();
@@ -882,7 +1162,7 @@ __camellia_dec_blk32:
 
 	ret_spec_stop;
 	CFI_ENDPROC();
-ELF(.size __camellia_dec_blk32,.-__camellia_dec_blk32;)
+ELF(.size FUNC_NAME(dec_blk32),.-FUNC_NAME(dec_blk32);)
 
 #define inc_le128(x, minus_one, tmp) \
 	vpcmpeqq minus_one, x, tmp; \
@@ -890,7 +1170,7 @@ ELF(.size __camellia_dec_blk32,.-__camellia_dec_blk32;)
 	vpslldq $8, tmp, tmp; \
 	vpsubq tmp, x, x;
 
-.align 8
+.align 16
 .globl FUNC_NAME(ctr_enc)
 ELF(.type   FUNC_NAME(ctr_enc),@function;)
 
@@ -908,11 +1188,6 @@ FUNC_NAME(ctr_enc):
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
 
-	movq 8(%rcx), %r11;
-	bswapq %r11;
-
-	vzeroupper;
-
 	cmpl $128, key_bitlength(CTX);
 	movl $32, %r8d;
 	movl $24, %eax;
@@ -921,6 +1196,12 @@ FUNC_NAME(ctr_enc):
 	subq $(16 * 32), %rsp;
 	andq $~63, %rsp;
 	movq %rsp, %rax;
+
+	cmpb $(0x100 - 32), 15(%rcx);
+	jbe .Lctr_byteadd;
+
+	movq 8(%rcx), %r11;
+	bswapq %r11;
 
 	vpcmpeqd %ymm15, %ymm15, %ymm15;
 	vpsrldq $8, %ymm15, %ymm15; /* ab: -1:0 ; cd: -1:0 */
@@ -1034,9 +1315,9 @@ FUNC_NAME(ctr_enc):
 	vpshufb .Lbswap128_mask rRIP, %xmm13, %xmm13;
 	vmovdqu %xmm13, (%rcx);
 
-.align 4
+.align 8
 .Lload_ctr_done:
-	/* inpack16_pre: */
+	/* inpack32_pre: */
 	vpbroadcastq (key_table)(CTX), %ymm15;
 	vpshufb .Lpack_bswap rRIP, %ymm15, %ymm15;
 	vpxor %ymm0, %ymm15, %ymm0;
@@ -1056,7 +1337,7 @@ FUNC_NAME(ctr_enc):
 	vpxor 14 * 32(%rax), %ymm15, %ymm14;
 	vpxor 15 * 32(%rax), %ymm15, %ymm15;
 
-	call __camellia_enc_blk32;
+	call FUNC_NAME(enc_blk32);
 
 	vpxor 0 * 32(%rdx), %ymm7, %ymm7;
 	vpxor 1 * 32(%rdx), %ymm6, %ymm6;
@@ -1074,7 +1355,6 @@ FUNC_NAME(ctr_enc):
 	vpxor 13 * 32(%rdx), %ymm10, %ymm10;
 	vpxor 14 * 32(%rdx), %ymm9, %ymm9;
 	vpxor 15 * 32(%rdx), %ymm8, %ymm8;
-	leaq 32 * 16(%rdx), %rdx;
 
 	write_output(%ymm7, %ymm6, %ymm5, %ymm4, %ymm3, %ymm2, %ymm1, %ymm0,
 		     %ymm15, %ymm14, %ymm13, %ymm12, %ymm11, %ymm10, %ymm9,
@@ -1085,10 +1365,52 @@ FUNC_NAME(ctr_enc):
 	leave;
 	CFI_LEAVE();
 	ret_spec_stop;
+
+.align 8
+.Lctr_byteadd_full_ctr_carry:
+	movq 8(%rcx), %r11;
+	movq (%rcx), %r10;
+	bswapq %r11;
+	bswapq %r10;
+	addq $32, %r11;
+	adcq $0, %r10;
+	bswapq %r11;
+	bswapq %r10;
+	movq %r11, 8(%rcx);
+	movq %r10, (%rcx);
+	jmp .Lctr_byteadd_ymm;
+.align 8
+.Lctr_byteadd:
+	vbroadcasti128 (%rcx), %ymm8;
+	je .Lctr_byteadd_full_ctr_carry;
+	addb $32, 15(%rcx);
+.Lctr_byteadd_ymm:
+	vpaddb .Lbige_addb_16_16 rRIP, %ymm8, %ymm0;
+	vpaddb .Lbige_addb_0_1 rRIP, %ymm8, %ymm15;
+	vpaddb .Lbige_addb_2_3 rRIP, %ymm8, %ymm14;
+	vmovdqu %ymm15, 15 * 32(%rax);
+	vpaddb .Lbige_addb_4_5 rRIP, %ymm8, %ymm13;
+	vmovdqu %ymm14, 14 * 32(%rax);
+	vpaddb .Lbige_addb_6_7 rRIP, %ymm8, %ymm12;
+	vmovdqu %ymm13, 13 * 32(%rax);
+	vpaddb .Lbige_addb_8_9 rRIP, %ymm8, %ymm11;
+	vpaddb .Lbige_addb_10_11 rRIP, %ymm8, %ymm10;
+	vpaddb .Lbige_addb_12_13 rRIP, %ymm8, %ymm9;
+	vpaddb .Lbige_addb_14_15 rRIP, %ymm8, %ymm8;
+	vpaddb .Lbige_addb_0_1 rRIP, %ymm0, %ymm7;
+	vpaddb .Lbige_addb_2_3 rRIP, %ymm0, %ymm6;
+	vpaddb .Lbige_addb_4_5 rRIP, %ymm0, %ymm5;
+	vpaddb .Lbige_addb_6_7 rRIP, %ymm0, %ymm4;
+	vpaddb .Lbige_addb_8_9 rRIP, %ymm0, %ymm3;
+	vpaddb .Lbige_addb_10_11 rRIP, %ymm0, %ymm2;
+	vpaddb .Lbige_addb_12_13 rRIP, %ymm0, %ymm1;
+	vpaddb .Lbige_addb_14_15 rRIP, %ymm0, %ymm0;
+
+	jmp .Lload_ctr_done;
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(ctr_enc),.-FUNC_NAME(ctr_enc);)
 
-.align 8
+.align 16
 .globl FUNC_NAME(cbc_dec)
 ELF(.type   FUNC_NAME(cbc_dec),@function;)
 
@@ -1106,8 +1428,6 @@ FUNC_NAME(cbc_dec):
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
 
-	vzeroupper;
-
 	movq %rcx, %r9;
 
 	cmpl $128, key_bitlength(CTX);
@@ -1123,7 +1443,7 @@ FUNC_NAME(cbc_dec):
 		     %ymm8, %ymm9, %ymm10, %ymm11, %ymm12, %ymm13, %ymm14,
 		     %ymm15, %rdx, (key_table)(CTX, %r8, 8));
 
-	call __camellia_dec_blk32;
+	call FUNC_NAME(dec_blk32);
 
 	/* XOR output with IV */
 	vmovdqu %ymm8, (%rax);
@@ -1165,7 +1485,7 @@ FUNC_NAME(cbc_dec):
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(cbc_dec),.-FUNC_NAME(cbc_dec);)
 
-.align 8
+.align 16
 .globl FUNC_NAME(cfb_dec)
 ELF(.type   FUNC_NAME(cfb_dec),@function;)
 
@@ -1183,8 +1503,6 @@ FUNC_NAME(cfb_dec):
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
 
-	vzeroupper;
-
 	cmpl $128, key_bitlength(CTX);
 	movl $32, %r8d;
 	movl $24, %eax;
@@ -1194,7 +1512,7 @@ FUNC_NAME(cfb_dec):
 	andq $~63, %rsp;
 	movq %rsp, %rax;
 
-	/* inpack16_pre: */
+	/* inpack32_pre: */
 	vpbroadcastq (key_table)(CTX), %ymm0;
 	vpshufb .Lpack_bswap rRIP, %ymm0, %ymm0;
 	vmovdqu (%rcx), %xmm15;
@@ -1218,7 +1536,7 @@ FUNC_NAME(cfb_dec):
 	vpxor (13 * 32 + 16)(%rdx), %ymm0, %ymm1;
 	vpxor (14 * 32 + 16)(%rdx), %ymm0, %ymm0;
 
-	call __camellia_enc_blk32;
+	call FUNC_NAME(enc_blk32);
 
 	vpxor 0 * 32(%rdx), %ymm7, %ymm7;
 	vpxor 1 * 32(%rdx), %ymm6, %ymm6;
@@ -1249,7 +1567,7 @@ FUNC_NAME(cfb_dec):
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(cfb_dec),.-FUNC_NAME(cfb_dec);)
 
-.align 8
+.align 16
 .globl FUNC_NAME(ocb_enc)
 ELF(.type   FUNC_NAME(ocb_enc),@function;)
 
@@ -1268,8 +1586,6 @@ FUNC_NAME(ocb_enc):
 	CFI_PUSH(%rbp);
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
-
-	vzeroupper;
 
 	subq $(16 * 32 + 4 * 8), %rsp;
 	andq $~63, %rsp;
@@ -1363,7 +1679,7 @@ FUNC_NAME(ocb_enc):
 	movl $24, %r10d;
 	cmovel %r10d, %r8d; /* max */
 
-	/* inpack16_pre: */
+	/* inpack32_pre: */
 	vpbroadcastq (key_table)(CTX), %ymm15;
 	vpshufb .Lpack_bswap rRIP, %ymm15, %ymm15;
 	vpxor %ymm0, %ymm15, %ymm0;
@@ -1383,7 +1699,7 @@ FUNC_NAME(ocb_enc):
 	vpxor 14 * 32(%rax), %ymm15, %ymm14;
 	vpxor 15 * 32(%rax), %ymm15, %ymm15;
 
-	call __camellia_enc_blk32;
+	call FUNC_NAME(enc_blk32);
 
 	vpxor 0 * 32(%rsi), %ymm7, %ymm7;
 	vpxor 1 * 32(%rsi), %ymm6, %ymm6;
@@ -1423,7 +1739,7 @@ FUNC_NAME(ocb_enc):
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(ocb_enc),.-FUNC_NAME(ocb_enc);)
 
-.align 8
+.align 16
 .globl FUNC_NAME(ocb_dec)
 ELF(.type   FUNC_NAME(ocb_dec),@function;)
 
@@ -1442,8 +1758,6 @@ FUNC_NAME(ocb_dec):
 	CFI_PUSH(%rbp);
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
-
-	vzeroupper;
 
 	subq $(16 * 32 + 4 * 8), %rsp;
 	andq $~63, %rsp;
@@ -1532,7 +1846,7 @@ FUNC_NAME(ocb_dec):
 	movl $24, %r9d;
 	cmovel %r9d, %r8d; /* max */
 
-	/* inpack16_pre: */
+	/* inpack32_pre: */
 	vpbroadcastq (key_table)(CTX, %r8, 8), %ymm15;
 	vpshufb .Lpack_bswap rRIP, %ymm15, %ymm15;
 	vpxor %ymm0, %ymm15, %ymm0;
@@ -1552,7 +1866,7 @@ FUNC_NAME(ocb_dec):
 	vpxor 14 * 32(%rax), %ymm15, %ymm14;
 	vpxor 15 * 32(%rax), %ymm15, %ymm15;
 
-	call __camellia_dec_blk32;
+	call FUNC_NAME(dec_blk32);
 
 	vpxor 0 * 32(%rsi), %ymm7, %ymm7;
 	vpxor 1 * 32(%rsi), %ymm6, %ymm6;
@@ -1620,7 +1934,7 @@ FUNC_NAME(ocb_dec):
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(ocb_dec),.-FUNC_NAME(ocb_dec);)
 
-.align 8
+.align 16
 .globl FUNC_NAME(ocb_auth)
 ELF(.type   FUNC_NAME(ocb_auth),@function;)
 
@@ -1638,8 +1952,6 @@ FUNC_NAME(ocb_auth):
 	CFI_PUSH(%rbp);
 	movq %rsp, %rbp;
 	CFI_DEF_CFA_REGISTER(%rbp);
-
-	vzeroupper;
 
 	subq $(16 * 32 + 4 * 8), %rsp;
 	andq $~63, %rsp;
@@ -1728,7 +2040,7 @@ FUNC_NAME(ocb_auth):
 
 	movq %rcx, %r10;
 
-	/* inpack16_pre: */
+	/* inpack32_pre: */
 	vpbroadcastq (key_table)(CTX), %ymm15;
 	vpshufb .Lpack_bswap rRIP, %ymm15, %ymm15;
 	vpxor %ymm0, %ymm15, %ymm0;
@@ -1748,7 +2060,7 @@ FUNC_NAME(ocb_auth):
 	vpxor 14 * 32(%rax), %ymm15, %ymm14;
 	vpxor 15 * 32(%rax), %ymm15, %ymm15;
 
-	call __camellia_enc_blk32;
+	call FUNC_NAME(enc_blk32);
 
 	vpxor %ymm7, %ymm6, %ymm6;
 	vpxor %ymm5, %ymm4, %ymm4;
@@ -1790,5 +2102,226 @@ FUNC_NAME(ocb_auth):
 	ret_spec_stop;
 	CFI_ENDPROC();
 ELF(.size FUNC_NAME(ocb_auth),.-FUNC_NAME(ocb_auth);)
+
+.align 16
+.globl FUNC_NAME(enc_blk1_32)
+ELF(.type   FUNC_NAME(enc_blk1_32),@function;)
+
+FUNC_NAME(enc_blk1_32):
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (32 blocks)
+	 *	%rdx: src (32 blocks)
+	 *	%ecx: nblocks (1 to 32)
+	 */
+	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+
+	movl %ecx, %r9d;
+
+	cmpl $128, key_bitlength(CTX);
+	movl $32, %r8d;
+	movl $24, %eax;
+	cmovel %eax, %r8d; /* max */
+
+	subq $(16 * 32), %rsp;
+	andq $~63, %rsp;
+	movq %rsp, %rax;
+
+	cmpl $31, %ecx;
+	vpxor %xmm0, %xmm0, %xmm0;
+	ja .Lenc_blk32;
+	jb 2f;
+	  vmovdqu 15 * 32(%rdx), %xmm0;
+	2:
+	  vmovdqu %ymm0, (%rax);
+
+	vpbroadcastq (key_table)(CTX), %ymm0;
+	vpshufb .Lpack_bswap rRIP, %ymm0, %ymm0;
+
+#define LOAD_INPUT(offset, ymm) \
+	cmpl $(1 + 2 * (offset)), %ecx; \
+	jb 2f; \
+	ja 1f; \
+	  vmovdqu (offset) * 32(%rdx), %ymm##_x; \
+	  vpxor %ymm0, %ymm, %ymm; \
+	  jmp 2f; \
+	1: \
+	  vpxor (offset) * 32(%rdx), %ymm0, %ymm;
+
+	LOAD_INPUT(0, ymm15);
+	LOAD_INPUT(1, ymm14);
+	LOAD_INPUT(2, ymm13);
+	LOAD_INPUT(3, ymm12);
+	LOAD_INPUT(4, ymm11);
+	LOAD_INPUT(5, ymm10);
+	LOAD_INPUT(6, ymm9);
+	LOAD_INPUT(7, ymm8);
+	LOAD_INPUT(8, ymm7);
+	LOAD_INPUT(9, ymm6);
+	LOAD_INPUT(10, ymm5);
+	LOAD_INPUT(11, ymm4);
+	LOAD_INPUT(12, ymm3);
+	LOAD_INPUT(13, ymm2);
+	LOAD_INPUT(14, ymm1);
+	vpxor (%rax), %ymm0, %ymm0;
+
+2:
+	call FUNC_NAME(enc_blk32);
+
+#define STORE_OUTPUT(ymm, offset) \
+	cmpl $(1 + 2 * (offset)), %r9d; \
+	jb 2f; \
+	ja 1f; \
+	  vmovdqu %ymm##_x, (offset) * 32(%rsi); \
+	  jmp 2f; \
+	1: \
+	  vmovdqu %ymm, (offset) * 32(%rsi);
+
+	STORE_OUTPUT(ymm7, 0);
+	STORE_OUTPUT(ymm6, 1);
+	STORE_OUTPUT(ymm5, 2);
+	STORE_OUTPUT(ymm4, 3);
+	STORE_OUTPUT(ymm3, 4);
+	STORE_OUTPUT(ymm2, 5);
+	STORE_OUTPUT(ymm1, 6);
+	STORE_OUTPUT(ymm0, 7);
+	STORE_OUTPUT(ymm15, 8);
+	STORE_OUTPUT(ymm14, 9);
+	STORE_OUTPUT(ymm13, 10);
+	STORE_OUTPUT(ymm12, 11);
+	STORE_OUTPUT(ymm11, 12);
+	STORE_OUTPUT(ymm10, 13);
+	STORE_OUTPUT(ymm9, 14);
+	STORE_OUTPUT(ymm8, 15);
+	jmp .Lenc_blk32_done;
+
+.align 8
+.Lenc_blk32:
+	inpack32_pre(%ymm0, %ymm1, %ymm2, %ymm3, %ymm4, %ymm5, %ymm6, %ymm7,
+		     %ymm8, %ymm9, %ymm10, %ymm11, %ymm12, %ymm13, %ymm14,
+		     %ymm15, %rdx, (key_table)(CTX));
+
+	call FUNC_NAME(enc_blk32);
+
+	write_output(%ymm7, %ymm6, %ymm5, %ymm4, %ymm3, %ymm2, %ymm1, %ymm0,
+		     %ymm15, %ymm14, %ymm13, %ymm12, %ymm11, %ymm10, %ymm9,
+		     %ymm8, %rsi);
+
+.align 8
+2:
+.Lenc_blk32_done:
+	vzeroall;
+
+	leave;
+	CFI_LEAVE();
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size FUNC_NAME(enc_blk1_32),.-FUNC_NAME(enc_blk1_32);)
+
+.align 16
+.globl FUNC_NAME(dec_blk1_32)
+ELF(.type   FUNC_NAME(dec_blk1_32),@function;)
+
+FUNC_NAME(dec_blk1_32):
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (32 blocks)
+	 *	%rdx: src (32 blocks)
+	 *	%ecx: nblocks (1 to 32)
+	 */
+	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+
+	movl %ecx, %r9d;
+
+	cmpl $128, key_bitlength(CTX);
+	movl $32, %r8d;
+	movl $24, %eax;
+	cmovel %eax, %r8d; /* max */
+
+	subq $(16 * 32), %rsp;
+	andq $~63, %rsp;
+	movq %rsp, %rax;
+
+	cmpl $31, %ecx;
+	vpxor %xmm0, %xmm0, %xmm0;
+	ja .Ldec_blk32;
+	jb 2f;
+	  vmovdqu 15 * 32(%rdx), %xmm0;
+	2:
+	  vmovdqu %ymm0, (%rax);
+
+	vpbroadcastq (key_table)(CTX, %r8, 8), %ymm0;
+	vpshufb .Lpack_bswap rRIP, %ymm0, %ymm0;
+
+	LOAD_INPUT(0, ymm15);
+	LOAD_INPUT(1, ymm14);
+	LOAD_INPUT(2, ymm13);
+	LOAD_INPUT(3, ymm12);
+	LOAD_INPUT(4, ymm11);
+	LOAD_INPUT(5, ymm10);
+	LOAD_INPUT(6, ymm9);
+	LOAD_INPUT(7, ymm8);
+	LOAD_INPUT(8, ymm7);
+	LOAD_INPUT(9, ymm6);
+	LOAD_INPUT(10, ymm5);
+	LOAD_INPUT(11, ymm4);
+	LOAD_INPUT(12, ymm3);
+	LOAD_INPUT(13, ymm2);
+	LOAD_INPUT(14, ymm1);
+	vpxor (%rax), %ymm0, %ymm0;
+
+2:
+	call FUNC_NAME(dec_blk32);
+
+	STORE_OUTPUT(ymm7, 0);
+	STORE_OUTPUT(ymm6, 1);
+	STORE_OUTPUT(ymm5, 2);
+	STORE_OUTPUT(ymm4, 3);
+	STORE_OUTPUT(ymm3, 4);
+	STORE_OUTPUT(ymm2, 5);
+	STORE_OUTPUT(ymm1, 6);
+	STORE_OUTPUT(ymm0, 7);
+	STORE_OUTPUT(ymm15, 8);
+	STORE_OUTPUT(ymm14, 9);
+	STORE_OUTPUT(ymm13, 10);
+	STORE_OUTPUT(ymm12, 11);
+	STORE_OUTPUT(ymm11, 12);
+	STORE_OUTPUT(ymm10, 13);
+	STORE_OUTPUT(ymm9, 14);
+	STORE_OUTPUT(ymm8, 15);
+
+.align 8
+2:
+.Ldec_blk32_done:
+	vzeroall;
+
+	leave;
+	CFI_LEAVE();
+	ret_spec_stop;
+
+.align 8
+.Ldec_blk32:
+	inpack32_pre(%ymm0, %ymm1, %ymm2, %ymm3, %ymm4, %ymm5, %ymm6, %ymm7,
+		     %ymm8, %ymm9, %ymm10, %ymm11, %ymm12, %ymm13, %ymm14,
+		     %ymm15, %rdx, (key_table)(CTX, %r8, 8));
+
+	call FUNC_NAME(dec_blk32);
+
+	write_output(%ymm7, %ymm6, %ymm5, %ymm4, %ymm3, %ymm2, %ymm1, %ymm0,
+		     %ymm15, %ymm14, %ymm13, %ymm12, %ymm11, %ymm10, %ymm9,
+		     %ymm8, %rsi);
+	jmp .Ldec_blk32_done;
+	CFI_ENDPROC();
+ELF(.size FUNC_NAME(dec_blk1_32),.-FUNC_NAME(dec_blk1_32);)
 
 #endif /* GCRY_CAMELLIA_AESNI_AVX2_AMD64_H */

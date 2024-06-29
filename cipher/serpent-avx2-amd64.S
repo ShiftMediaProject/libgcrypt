@@ -401,7 +401,7 @@
 
 .text
 
-.align 8
+.align 16
 ELF(.type   __serpent_enc_blk16,@function;)
 __serpent_enc_blk16:
 	/* input:
@@ -491,7 +491,7 @@ __serpent_enc_blk16:
 	CFI_ENDPROC();
 ELF(.size __serpent_enc_blk16,.-__serpent_enc_blk16;)
 
-.align 8
+.align 16
 ELF(.type   __serpent_dec_blk16,@function;)
 __serpent_dec_blk16:
 	/* input:
@@ -583,13 +583,63 @@ __serpent_dec_blk16:
 	CFI_ENDPROC();
 ELF(.size __serpent_dec_blk16,.-__serpent_dec_blk16;)
 
+.align 16
+.globl _gcry_serpent_avx2_blk16
+ELF(.type   _gcry_serpent_avx2_blk16,@function;)
+_gcry_serpent_avx2_blk16:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (16 blocks)
+	 *	%rdx: src (16 blocks)
+	 *	%ecx: encrypt
+	 */
+	CFI_STARTPROC();
+
+	vmovdqu (0 * 32)(%rdx), RA0;
+	vmovdqu (1 * 32)(%rdx), RA1;
+	vmovdqu (2 * 32)(%rdx), RA2;
+	vmovdqu (3 * 32)(%rdx), RA3;
+	vmovdqu (4 * 32)(%rdx), RB0;
+	vmovdqu (5 * 32)(%rdx), RB1;
+	vmovdqu (6 * 32)(%rdx), RB2;
+	vmovdqu (7 * 32)(%rdx), RB3;
+
+	testl %ecx, %ecx;
+	jz .Lblk16_dec;
+		call __serpent_enc_blk16;
+		vmovdqu RA4, (0 * 32)(%rsi);
+		vmovdqu RA1, (1 * 32)(%rsi);
+		vmovdqu RA2, (2 * 32)(%rsi);
+		vmovdqu RA0, (3 * 32)(%rsi);
+		vmovdqu RB4, (4 * 32)(%rsi);
+		vmovdqu RB1, (5 * 32)(%rsi);
+		vmovdqu RB2, (6 * 32)(%rsi);
+		vmovdqu RB0, (7 * 32)(%rsi);
+		jmp .Lblk16_end;
+	.Lblk16_dec:
+		call __serpent_dec_blk16;
+		vmovdqu RA0, (0 * 32)(%rsi);
+		vmovdqu RA1, (1 * 32)(%rsi);
+		vmovdqu RA2, (2 * 32)(%rsi);
+		vmovdqu RA3, (3 * 32)(%rsi);
+		vmovdqu RB0, (4 * 32)(%rsi);
+		vmovdqu RB1, (5 * 32)(%rsi);
+		vmovdqu RB2, (6 * 32)(%rsi);
+		vmovdqu RB3, (7 * 32)(%rsi);
+
+.Lblk16_end:
+	vzeroall;
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_serpent_avx2_blk16,.-_gcry_serpent_avx2_blk16;)
+
 #define inc_le128(x, minus_one, tmp) \
 	vpcmpeqq minus_one, x, tmp; \
 	vpsubq minus_one, x, x; \
 	vpslldq $8, tmp, tmp; \
 	vpsubq tmp, x, x;
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_ctr_enc
 ELF(.type   _gcry_serpent_avx2_ctr_enc,@function;)
 _gcry_serpent_avx2_ctr_enc:
@@ -701,7 +751,7 @@ _gcry_serpent_avx2_ctr_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_ctr_enc,.-_gcry_serpent_avx2_ctr_enc;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_cbc_dec
 ELF(.type   _gcry_serpent_avx2_cbc_dec,@function;)
 _gcry_serpent_avx2_cbc_dec:
@@ -754,7 +804,7 @@ _gcry_serpent_avx2_cbc_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_cbc_dec,.-_gcry_serpent_avx2_cbc_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_cfb_dec
 ELF(.type   _gcry_serpent_avx2_cfb_dec,@function;)
 _gcry_serpent_avx2_cfb_dec:
@@ -809,7 +859,7 @@ _gcry_serpent_avx2_cfb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_cfb_dec,.-_gcry_serpent_avx2_cfb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_ocb_enc
 ELF(.type _gcry_serpent_avx2_ocb_enc,@function;)
 
@@ -923,7 +973,7 @@ _gcry_serpent_avx2_ocb_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_ocb_enc,.-_gcry_serpent_avx2_ocb_enc;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_ocb_dec
 ELF(.type _gcry_serpent_avx2_ocb_dec,@function;)
 
@@ -1047,7 +1097,7 @@ _gcry_serpent_avx2_ocb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_ocb_dec,.-_gcry_serpent_avx2_ocb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_avx2_ocb_auth
 ELF(.type _gcry_serpent_avx2_ocb_auth,@function;)
 
@@ -1150,9 +1200,13 @@ _gcry_serpent_avx2_ocb_auth:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_avx2_ocb_auth,.-_gcry_serpent_avx2_ocb_auth;)
 
-.align 16
+
+SECTION_RODATA
+ELF(.type _serpent_avx2_consts,@object)
+_serpent_avx2_consts:
 
 /* For CTR-mode IV byteswap */
+.align 16
 .Lbswap128_mask:
 	.byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 

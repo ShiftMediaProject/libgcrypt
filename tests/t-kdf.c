@@ -14,8 +14,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
 #ifdef HAVE_CONFIG_H
@@ -862,6 +862,8 @@ check_openpgp (void)
       /* MD5 isn't supported in fips mode */
       if (in_fips_mode && tv[tvidx].hashalgo == GCRY_MD_MD5)
         continue;
+      if (gcry_md_test_algo (tv[tvidx].hashalgo) != 0)
+        continue;
       if (verbose)
         fprintf (stderr, "checking S2K test vector %d\n", tvidx);
       assert (tv[tvidx].dklen <= sizeof outbuf);
@@ -1105,6 +1107,8 @@ check_pbkdf2 (void)
     {
       if (tv[tvidx].disabled)
         continue;
+      if (gcry_md_test_algo (tv[tvidx].hashalgo) != 0)
+        continue;
       if (verbose)
         fprintf (stderr, "checking PBKDF2 test vector %d algo %d\n", tvidx,
                  tv[tvidx].hashalgo);
@@ -1345,10 +1349,10 @@ static gcry_error_t
 my_kdf_derive (int parallel,
                int algo, int subalgo,
                const unsigned long *params, unsigned int paramslen,
-               const unsigned char *pass, size_t passlen,
-               const unsigned char *salt, size_t saltlen,
-               const unsigned char *key, size_t keylen,
-               const unsigned char *ad, size_t adlen,
+               const char *pass, size_t passlen,
+               const char *salt, size_t saltlen,
+               const char *key, size_t keylen,
+               const char *ad, size_t adlen,
                size_t outlen, unsigned char *out)
 {
   gcry_error_t err;
@@ -1409,92 +1413,517 @@ my_kdf_derive (int parallel,
   return err;
 }
 
-
 static void
 check_argon2 (void)
 {
   gcry_error_t err;
-  const unsigned long param[4] = { 32, 3, 32, 4 };
-  const unsigned char pass[32] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-  };
-  const unsigned char salt[16] = {
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-  };
-  const unsigned char key[8] = { 3, 3, 3, 3, 3, 3, 3, 3 };
-  const unsigned char ad[12] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4 };
-  unsigned char out[32];
-  unsigned char expected[3][32] = {
-    {  /* GCRY_KDF_ARGON2D */
-      0x51, 0x2b, 0x39, 0x1b, 0x6f, 0x11, 0x62, 0x97,
-      0x53, 0x71, 0xd3, 0x09, 0x19, 0x73, 0x42, 0x94,
-      0xf8, 0x68, 0xe3, 0xbe, 0x39, 0x84, 0xf3, 0xc1,
-      0xa1, 0x3a, 0x4d, 0xb9, 0xfa, 0xbe, 0x4a, 0xcb
-    },
-    { /* GCRY_KDF_ARGON2I */
-      0xc8, 0x14, 0xd9, 0xd1, 0xdc, 0x7f, 0x37, 0xaa,
-      0x13, 0xf0, 0xd7, 0x7f, 0x24, 0x94, 0xbd, 0xa1,
-      0xc8, 0xde, 0x6b, 0x01, 0x6d, 0xd3, 0x88, 0xd2,
-      0x99, 0x52, 0xa4, 0xc4, 0x67, 0x2b, 0x6c, 0xe8
-    },
-    { /* GCRY_KDF_ARGON2ID */
-      0x0d, 0x64, 0x0d, 0xf5, 0x8d, 0x78, 0x76, 0x6c,
-      0x08, 0xc0, 0x37, 0xa3, 0x4a, 0x8b, 0x53, 0xc9,
-      0xd0, 0x1e, 0xf0, 0x45, 0x2d, 0x75, 0xb6, 0x5e,
-      0xb5, 0x25, 0x20, 0xe9, 0x6b, 0x01, 0xe6, 0x59
-    }
-  };
-  int i;
-  int subalgo = GCRY_KDF_ARGON2D;
-  int count = 0;
-
- again:
-
-  if (verbose)
-    fprintf (stderr, "checking ARGON2 test vector %d\n", count);
-
-  err = my_kdf_derive (0,
-                       GCRY_KDF_ARGON2, subalgo, param, 4,
-                       pass, 32, salt, 16, key, 8, ad, 12,
-                       32, out);
-  if (err)
-    fail ("argon2 test %d failed: %s\n", 0, gpg_strerror (err));
-  else if (memcmp (out, expected[count], 32))
+  static struct {
+    int subalgo;
+    unsigned long param[4];
+    size_t passlen;
+    const char *pass;
+    size_t saltlen;
+    const char *salt;
+    size_t keylen;
+    const char *key;
+    size_t adlen;
+    const char *ad;
+    size_t dklen;
+    const char *dk;
+  } tv[] = {
     {
-      fail ("argon2 test %d failed: mismatch\n", 0);
-      fputs ("got:", stderr);
-      for (i=0; i < 32; i++)
-        fprintf (stderr, " %02x", out[i]);
-      putc ('\n', stderr);
-    }
+      GCRY_KDF_ARGON2D,
+      { 32, 3, 32, 4 },
+      32,
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01",
+      16,
+      "\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02",
+      8,
+      "\x03\x03\x03\x03\x03\x03\x03\x03",
+      12,
+      "\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04",
+      32,
+      "\x51\x2b\x39\x1b\x6f\x11\x62\x97\x53\x71\xd3\x09\x19\x73\x42\x94"
+      "\xf8\x68\xe3\xbe\x39\x84\xf3\xc1\xa1\x3a\x4d\xb9\xfa\xbe\x4a\xcb"
+    },
+    {
+      GCRY_KDF_ARGON2I,
+      { 32, 3, 32, 4 },
+      32,
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01",
+      16,
+      "\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02",
+      8,
+      "\x03\x03\x03\x03\x03\x03\x03\x03",
+      12,
+      "\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04",
+      32,
+      "\xc8\x14\xd9\xd1\xdc\x7f\x37\xaa\x13\xf0\xd7\x7f\x24\x94\xbd\xa1"
+      "\xc8\xde\x6b\x01\x6d\xd3\x88\xd2\x99\x52\xa4\xc4\x67\x2b\x6c\xe8"
+    },
+    {
+      GCRY_KDF_ARGON2ID,
+      { 32, 3, 32, 4 },
+      32,
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01"
+      "\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01",
+      16,
+      "\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02",
+      8,
+      "\x03\x03\x03\x03\x03\x03\x03\x03",
+      12,
+      "\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04",
+      32,
+      "\x0d\x64\x0d\xf5\x8d\x78\x76\x6c\x08\xc0\x37\xa3\x4a\x8b\x53\xc9"
+      "\xd0\x1e\xf0\x45\x2d\x75\xb6\x5e\xb5\x25\x20\xe9\x6b\x01\xe6\x59"
+    },
+    {
+      /* empty password */
+      GCRY_KDF_ARGON2I,
+      { 32, 3, 128, 1 },
+      0, NULL,
+      16,
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+      0, NULL,
+      0, NULL,
+      32,
+      "\xbb\x1f\xf2\xb9\x9f\xd4\x4a\xd9\xdf\x7f\xb9\x54\x55\x9e\xb8\xeb"
+      "\xb5\x9d\xab\xce\x2e\x62\x9f\x9b\x89\x09\xfe\xde\x57\xcc\x63\x86"
+    },
+    {
+      /* empty password */
+      GCRY_KDF_ARGON2ID,
+      { 32, 3, 128, 1 },
+      0, NULL,
+      16,
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+      0, NULL,
+      0, NULL,
+      32,
+      "\x09\x2f\x38\x35\xac\xb2\x43\x92\x93\xeb\xcd\xe8\x04\x16\x6a\x31"
+      "\xce\x14\xd4\x55\xdb\xd8\xf7\xe6\xb4\xf5\x9d\x64\x8e\xd0\x3a\xdb"
+    },
+  };
+  unsigned char out[32];
+  int i;
+  int count;
+
+  for (count = 0; count < DIM(tv); count++)
+    {
+      if (verbose)
+        fprintf (stderr, "checking ARGON2 test vector %d\n", count);
+
+      err = my_kdf_derive (0, GCRY_KDF_ARGON2,
+                           tv[count].subalgo, tv[count].param, 4,
+                           tv[count].pass, tv[count].passlen,
+                           tv[count].salt, tv[count].saltlen,
+                           tv[count].key, tv[count].keylen,
+                           tv[count].ad, tv[count].adlen,
+                           tv[count].dklen, out);
+      if (err)
+        fail ("argon2 test %d failed: %s\n", count*2+0, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("argon2 test %d failed: mismatch\n", count*2+0);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
 
 #ifdef HAVE_PTHREAD
-  err = my_kdf_derive (1,
-                       GCRY_KDF_ARGON2, subalgo, param, 4,
-                       pass, 32, salt, 16, key, 8, ad, 12,
-                       32, out);
-  if (err)
-    fail ("argon2 test %d failed: %s\n", 1, gpg_strerror (err));
-  else if (memcmp (out, expected[count], 32))
-    {
-      fail ("argon2 test %d failed: mismatch\n", 1);
-      fputs ("got:", stderr);
-      for (i=0; i < 32; i++)
-        fprintf (stderr, " %02x", out[i]);
-      putc ('\n', stderr);
-    }
+      err = my_kdf_derive (1, GCRY_KDF_ARGON2,
+                           tv[count].subalgo, tv[count].param, 4,
+                           tv[count].pass, tv[count].passlen,
+                           tv[count].salt, tv[count].saltlen,
+                           tv[count].key, tv[count].keylen,
+                           tv[count].ad, tv[count].adlen,
+                           tv[count].dklen, out);
+      if (err)
+        fail ("argon2 test %d failed: %s\n", count*2+1, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("argon2 test %d failed: mismatch\n", count*2+1);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
 #endif
+    }
+}
 
-  /* Next algo */
-  if (subalgo == GCRY_KDF_ARGON2D)
-    subalgo = GCRY_KDF_ARGON2I;
-  else if (subalgo == GCRY_KDF_ARGON2I)
-    subalgo = GCRY_KDF_ARGON2ID;
 
-  count++;
-  if (count < 3)
-    goto again;
+static void
+check_balloon (void)
+{
+  gcry_error_t err;
+  /* Two test vectors generated by the research prototype implementation.
+     $ balloon abcdefghijklmno
+     t_cost         = 1
+     s_cost         = 1024
+     p_cost         = 1
+     passwd         = abcdefghijklmno
+     Time total      : 0.0527251
+     Hashes per sec  : 18.9663
+     Output          : $balloon$v=1$s=1024,t=1,p=1
+                       $FRzqOiIuPvuoy55vGfKzyse+2f28F7m9iFHCctnEBwg=
+                       $NxOGNPyTPZzKiJjgj7H6pJDLIgR05HI7VaxJpxEao5Q=
+     $ balloon -t 12 -s 4096 -p 4 Long_sentence_used_as_passphrase
+     t_cost         = 12
+     s_cost         = 4096
+     p_cost         = 4
+     passwd         = Long_sentence_used_as_passphrase
+     Time total      : 3.70399
+     Hashes per sec  : 0.269979
+     Output          : $balloon$v=1$s=4096,t=12,p=4
+                       $8Yor74EqTwBrrdaeYeSVx0VXVAgDrsILAnJWdVUy93s=
+                       $FaNb9ofeWEggzhW9BUSODgZH5/awzNz5Adoub48+BgQ=
+   */
+  static struct {
+    int subalgo;
+    unsigned long param[3];
+    size_t passlen;
+    const char *pass;
+    size_t saltlen;
+    const char *salt;
+    size_t dklen;
+    const char *dk;
+  } tv[] = {
+    {
+      GCRY_MD_SHA256,
+      { 1024, 1, 1 },
+      15,
+      "abcdefghijklmno",
+      32,
+      "\x15\x1c\xea\x3a\x22\x2e\x3e\xfb\xa8\xcb\x9e\x6f\x19\xf2\xb3\xca"
+      "\xc7\xbe\xd9\xfd\xbc\x17\xb9\xbd\x88\x51\xc2\x72\xd9\xc4\x07\x08",
+      32,
+      "\x37\x13\x86\x34\xfc\x93\x3d\x9c\xca\x88\x98\xe0\x8f\xb1\xfa\xa4"
+      "\x90\xcb\x22\x04\x74\xe4\x72\x3b\x55\xac\x49\xa7\x11\x1a\xa3\x94"
+    },
+    {
+      GCRY_MD_SHA256,
+      { 4096, 12, 4 },
+      32,
+      "Long_sentence_used_as_passphrase",
+      32,
+      "\xf1\x8a\x2b\xef\x81\x2a\x4f\x00\x6b\xad\xd6\x9e\x61\xe4\x95\xc7"
+      "\x45\x57\x54\x08\x03\xae\xc2\x0b\x02\x72\x56\x75\x55\x32\xf7\x7b",
+      32,
+      "\x15\xa3\x5b\xf6\x87\xde\x58\x48\x20\xce\x15\xbd\x05\x44\x8e\x0e"
+      "\x06\x47\xe7\xf6\xb0\xcc\xdc\xf9\x01\xda\x2e\x6f\x8f\x3e\x06\x04"
+    }
+  };
+  unsigned char out[32];
+  int i;
+  int count;
+
+  for (count = 0; count < DIM(tv); count++)
+    {
+      if (verbose)
+        fprintf (stderr, "checking Balloon test vector %d\n", count);
+
+      err = my_kdf_derive (0, GCRY_KDF_BALLOON,
+                           tv[count].subalgo, tv[count].param, 3,
+                           tv[count].pass, tv[count].passlen,
+                           tv[count].salt, tv[count].saltlen,
+                           NULL, 0, NULL, 0, tv[count].dklen, out);
+      if (err)
+        fail ("balloon test %d failed: %s\n", count*2+0, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("balloon test %d failed: mismatch\n", count*2+0);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
+
+#ifdef HAVE_PTHREAD
+      err = my_kdf_derive (1, GCRY_KDF_BALLOON,
+                           tv[count].subalgo, tv[count].param, 3,
+                           tv[count].pass, tv[count].passlen,
+                           tv[count].salt, tv[count].saltlen,
+                           NULL, 0, NULL, 0, tv[count].dklen, out);
+      if (err)
+        fail ("balloon test %d failed: %s\n", count*2+1, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("balloon test %d failed: mismatch\n", count*2+1);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
+#endif
+    }
+}
+
+
+static void
+check_onestep_kdf (void)
+{
+  gcry_error_t err;
+  static struct {
+    int algo;
+    int subalgo;
+    unsigned long param[1];
+    size_t inputlen;
+    const char *input;
+    size_t otherlen;
+    const char *other;
+    size_t keylen;
+    const char *key;
+    size_t dklen;
+    const char *dk;
+  } tv[] = {
+    {
+      GCRY_KDF_ONESTEP_KDF, GCRY_MD_SHA256,
+      { 38 },
+      16,
+      "\x3f\x89\x2b\xd8\xb8\x4d\xae\x64\xa7\x82\xa3\x5f\x6e\xaa\x8f\x00",
+      12,
+      "\xec\x3f\x1c\xd8\x73\xd2\x88\x58\xa5\x8c\xc3\x9e",
+      0, NULL,
+      38,
+      "\xa7\xc0\x66\x52\x98\x25\x25\x31\xe0\xdb\x37\x73\x7a\x37\x46\x51"
+      "\xb3\x68\x27\x5f\x20\x48\x28\x4d\x16\xa1\x66\xc6\xd8\xa9\x0a\x91"
+      "\xa4\x91\xc1\x6f\x49\x64"
+   },
+    {
+      GCRY_KDF_ONESTEP_KDF, GCRY_MD_SHA512,
+      { 68 },
+      16,
+      "\xe6\x5b\x19\x05\x87\x8b\x95\xf6\x8b\x55\x35\xbd\x3b\x2b\x10\x13",
+      12,
+      "\x83\x02\x21\xb1\x73\x0d\x91\x76\xf8\x07\xd4\x07",
+      0, NULL,
+      68,
+      "\xb8\xc4\x4b\xdf\x0b\x85\xa6\x4b\x6a\x51\xc1\x2a\x06\x71\x0e\x37"
+      "\x3d\x82\x9b\xb1\xfd\xa5\xb4\xe1\xa2\x07\x95\xc6\x19\x95\x94\xf6"
+      "\xfa\x65\x19\x8a\x72\x12\x57\xf7\xd5\x8c\xb2\xf6\xf6\xdb\x9b\xb5"
+      "\x69\x9f\x73\x86\x30\x45\x90\x90\x54\xb2\x38\x9e\x06\xec\x00\xfe"
+      "\x31\x8c\xab\xd9"
+    },
+    {
+      GCRY_KDF_ONESTEP_KDF_MAC, GCRY_MAC_HMAC_SHA256,
+      { 44 },
+      16,
+      "\x02\xb4\x0d\x33\xe3\xf6\x85\xae\xae\x67\x7a\xc3\x44\xee\xaf\x77",
+      12,
+      "\xc6\x7c\x38\x95\x80\x12\x8f\x18\xf6\xcf\x85\x92",
+      16,
+      "\x0a\xd5\x2c\x93\x57\xc8\x5e\x47\x81\x29\x6a\x36\xca\x72\x03\x9c",
+      44,
+      "\xbe\x32\xe7\xd3\x06\xd8\x91\x02\x8b\xe0\x88\xf2\x13\xf9\xf9\x47"
+      "\xc5\x04\x20\xd9\xb5\xa1\x2c\xa6\x98\x18\xdd\x99\x95\xde\xdd\x8e"
+      "\x61\x37\xc7\x10\x4d\x67\xf2\xca\x90\x91\x5d\xda"
+    },
+    {
+      GCRY_KDF_ONESTEP_KDF_MAC, GCRY_MAC_HMAC_SHA512,
+      { 56 },
+      16,
+      "\x8e\x5c\xd5\xf6\xae\x55\x8f\xfa\x04\xcd\xa2\xfa\xd9\x4d\xd6\x16",
+      12,
+      "\x4a\x43\x30\x18\xe5\x1c\x09\xbb\xd6\x13\x26\xbb",
+      16,
+      "\x6e\xd9\x3b\x6f\xe5\xb3\x50\x2b\xb4\x2b\x4c\x0f\xcb\x13\x36\x62",
+      56,
+      "\x29\x5d\xfb\xeb\x54\xec\x0f\xe2\x4e\xce\x32\xf5\xb8\x7c\x85\x3e"
+      "\x69\x9a\x62\xe3\x9d\x9c\x9e\xe6\xee\x78\xf8\xb9\xa0\xee\x50\xa3"
+      "\x6a\x82\xe6\x06\x2c\x95\xed\x53\xbc\x36\x67\x00\xe2\xd0\xe0\x93"
+      "\xbf\x75\x2e\xea\x42\x99\x47\x2e"
+    },
+  };
+  unsigned char out[68];
+  int i;
+  int count;
+
+  for (count = 0; count < DIM(tv); count++)
+    {
+      if (verbose)
+        fprintf (stderr, "checking OneStepKDF test vector %d\n", count);
+
+      err = my_kdf_derive (0, tv[count].algo, tv[count].subalgo,
+                           tv[count].param, 1,
+                           tv[count].input, tv[count].inputlen, NULL, 0,
+                           tv[count].key, tv[count].keylen,
+                           tv[count].other, tv[count].otherlen,
+                           tv[count].dklen, out);
+      if (err)
+        fail ("OneStepKDF test %d failed: %s\n", count, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("OneStepKDF test %d failed: mismatch\n", count);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
+    }
+}
+
+
+static void
+check_hkdf (void)
+{
+  gcry_error_t err;
+  static struct {
+    unsigned long param[1];
+    size_t inputlen;
+    const char *input;
+    size_t saltlen;
+    const char *salt;
+    size_t infolen;
+    const char *info;
+    size_t dklen;
+    const char *dk;
+  } tv[] = {
+    {
+      { 42 },
+      22,
+      "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
+      "\x0b\x0b\x0b\x0b\x0b\x0b",
+      13,
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c",
+      10,
+      "\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9",
+      42,
+      "\x3c\xb2\x5f\x25\xfa\xac\xd5\x7a\x90\x43\x4f\x64\xd0\x36\x2f\x2a"
+      "\x2d\x2d\x0a\x90\xcf\x1a\x5a\x4c\x5d\xb0\x2d\x56\xec\xc4\xc5\xbf"
+      "\x34\x00\x72\x08\xd5\xb8\x87\x18\x58\x65"
+    },
+    {
+      { 82 },
+      80,
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+      "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+      "\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f"
+      "\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f"
+      "\x40\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f",
+      80,
+      "\x60\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f"
+      "\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f"
+      "\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f"
+      "\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f"
+      "\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf",
+      80,
+      "\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\xbf"
+      "\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf"
+      "\xd0\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf"
+      "\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef"
+      "\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff",
+      82,
+      "\xb1\x1e\x39\x8d\xc8\x03\x27\xa1\xc8\xe7\xf7\x8c\x59\x6a\x49\x34"
+      "\x4f\x01\x2e\xda\x2d\x4e\xfa\xd8\xa0\x50\xcc\x4c\x19\xaf\xa9\x7c"
+      "\x59\x04\x5a\x99\xca\xc7\x82\x72\x71\xcb\x41\xc6\x5e\x59\x0e\x09"
+      "\xda\x32\x75\x60\x0c\x2f\x09\xb8\x36\x77\x93\xa9\xac\xa3\xdb\x71"
+      "\xcc\x30\xc5\x81\x79\xec\x3e\x87\xc1\x4c\x01\xd5\xc1\xf3\x43\x4f"
+      "\x1d\x87"
+    },
+    {
+      { 42 },
+      22,
+      "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
+      "\x0b\x0b\x0b\x0b\x0b\x0b",
+      0, NULL,
+      0, NULL,
+      42,
+      "\x8d\xa4\xe7\x75\xa5\x63\xc1\x8f\x71\x5f\x80\x2a\x06\x3c\x5a\x31"
+      "\xb8\xa1\x1f\x5c\x5e\xe1\x87\x9e\xc3\x45\x4e\x5f\x3c\x73\x8d\x2d"
+      "\x9d\x20\x13\x95\xfa\xa4\xb6\x1a\x96\xc8"
+    },
+  };
+  unsigned char out[82];
+  int i;
+  int count;
+
+  for (count = 0; count < DIM(tv); count++)
+    {
+      if (verbose)
+        fprintf (stderr, "checking HKDF test vector %d\n", count);
+
+      err = my_kdf_derive (0, GCRY_KDF_HKDF, GCRY_MAC_HMAC_SHA256,
+                           tv[count].param, 1,
+                           tv[count].input, tv[count].inputlen, NULL, 0,
+                           tv[count].salt, tv[count].saltlen,
+                           tv[count].info, tv[count].infolen,
+                           tv[count].dklen, out);
+      if (err)
+        fail ("HKDF test %d failed: %s\n", count, gpg_strerror (err));
+      else if (memcmp (out, tv[count].dk, tv[count].dklen))
+        {
+          fail ("HKDF test %d failed: mismatch\n", count);
+          fputs ("got:", stderr);
+          for (i=0; i < tv[count].dklen; i++)
+            fprintf (stderr, " %02x", out[i]);
+          putc ('\n', stderr);
+        }
+    }
+}
+
+static void
+check_fips_indicators (void)
+{
+  enum gcry_kdf_algos fips_kdf_algos[] = {
+    GCRY_KDF_PBKDF2,
+  };
+  enum gcry_kdf_algos kdf_algos[] = {
+    GCRY_KDF_SIMPLE_S2K,
+    GCRY_KDF_SALTED_S2K,
+    GCRY_KDF_ITERSALTED_S2K,
+    GCRY_KDF_PBKDF1,
+    GCRY_KDF_PBKDF2,
+    GCRY_KDF_SCRYPT,
+    GCRY_KDF_ARGON2  ,
+    GCRY_KDF_BALLOON ,
+    GCRY_KDF_ONESTEP_KDF,
+    GCRY_KDF_ONESTEP_KDF_MAC,
+    GCRY_KDF_HKDF,
+  };
+  size_t i, j;
+
+  for (i = 0; i < sizeof(kdf_algos) / sizeof(*kdf_algos); i++)
+    {
+      int is_fips_kdf_algo = 0;
+      gcry_error_t err = gcry_control (GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, kdf_algos[i]);
+
+      if (verbose)
+        fprintf (stderr, "checking FIPS indicator for KDF %d: %s\n",
+                 kdf_algos[i], gcry_strerror (err));
+
+      for (j = 0; j < sizeof(fips_kdf_algos) / sizeof(*fips_kdf_algos); j++)
+        {
+          if (kdf_algos[i] == fips_kdf_algos[j])
+            {
+              is_fips_kdf_algo = 1;
+              break;
+            }
+        }
+
+      switch (err & GPG_ERR_CODE_MASK)
+        {
+          case GPG_ERR_NO_ERROR:
+            if (!is_fips_kdf_algo)
+              fail ("KDF algorithm %d is marked as approved by"
+                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but only PBKDF2 should"
+                    " be marked as approved.", kdf_algos[i]);
+            break;
+          case GPG_ERR_NOT_SUPPORTED:
+            if (is_fips_kdf_algo)
+              fail ("KDF algorithm %d is marked as not approved by"
+                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but it should be"
+                    " approved", kdf_algos[i]);
+            break;
+          default:
+            fail ("Unexpected error '%s' (%d) returned by"
+                  " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF for KDF algorithm %d",
+                  gcry_strerror (err), err, kdf_algos[i]);
+        }
+    }
 }
 
 
@@ -1633,6 +2062,9 @@ main (int argc, char **argv)
       check_pbkdf2 ();
       check_scrypt ();
       check_argon2 ();
+      check_balloon ();
+      check_onestep_kdf ();
+      check_hkdf ();
       if (in_fips_mode)
         check_fips_indicators();
     }

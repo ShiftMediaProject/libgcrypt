@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -300,7 +300,7 @@ _gcry_cipher_keywrap_decrypt_auto (gcry_cipher_hd_t c,
           unsigned int plen = (t[4]<<24) | (t[5]<<16) | (t[6]<<8) | t[7];
 
           err = 0;
-          if (plen > 8)
+          if (plen >= 8)
             err = GPG_ERR_CHECKSUM;
           else if (plen)
             {

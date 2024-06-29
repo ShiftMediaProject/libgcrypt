@@ -5,7 +5,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -30,6 +30,8 @@
 #include "./cipher-internal.h"
 
 
+static gcry_err_code_t _gcry_cipher_gcm_setiv_zero (gcry_cipher_hd_t c);
+
 /* Helper macro to force alignment to 16 or 64 bytes.  */
 #ifdef HAVE_GCC_ATTRIBUTE_ALIGNED
 # define ATTR_ALIGNED_64  __attribute__ ((aligned (64)))
@@ -39,15 +41,8 @@
 
 
 #ifdef GCM_USE_INTEL_PCLMUL
-extern void _gcry_ghash_setup_intel_pclmul (gcry_cipher_hd_t c);
-
-extern unsigned int _gcry_ghash_intel_pclmul (gcry_cipher_hd_t c, byte *result,
-                                              const byte *buf, size_t nblocks);
-
-extern unsigned int _gcry_polyval_intel_pclmul (gcry_cipher_hd_t c,
-                                                byte *result,
-                                                const byte *buf,
-                                                size_t nblocks);
+extern void _gcry_ghash_setup_intel_pclmul (gcry_cipher_hd_t c,
+					    unsigned int hw_features);
 #endif
 
 #ifdef GCM_USE_ARM_PMULL
@@ -594,9 +589,7 @@ setupM (gcry_cipher_hd_t c)
 #ifdef GCM_USE_INTEL_PCLMUL
   else if (features & HWF_INTEL_PCLMUL)
     {
-      c->u_mode.gcm.ghash_fn = _gcry_ghash_intel_pclmul;
-      c->u_mode.gcm.polyval_fn = _gcry_polyval_intel_pclmul;
-      _gcry_ghash_setup_intel_pclmul (c);
+      _gcry_ghash_setup_intel_pclmul (c, features);
     }
 #endif
 #ifdef GCM_USE_ARM_PMULL
@@ -888,8 +881,9 @@ gcm_crypt_inner (gcry_cipher_hd_t c, byte *outbuf, size_t outbuflen,
 
       /* Since checksumming is done after/before encryption/decryption,
        * process input in 24KiB chunks to keep data loaded in L1 cache for
-       * checksumming/decryption. */
-      if (currlen > 24 * 1024)
+       * checksumming/decryption.  However only do splitting if input is
+       * large enough so that last chunks does not end up being short. */
+      if (currlen > 32 * 1024)
 	currlen = 24 * 1024;
 
       if (!encrypt)
@@ -917,8 +911,6 @@ _gcry_cipher_gcm_encrypt (gcry_cipher_hd_t c,
                           byte *outbuf, size_t outbuflen,
                           const byte *inbuf, size_t inbuflen)
 {
-  static const unsigned char zerobuf[MAX_BLOCKSIZE];
-
   if (c->spec->blocksize != GCRY_GCM_BLOCK_LEN)
     return GPG_ERR_CIPHER_ALGO;
   if (outbuflen < inbuflen)
@@ -931,7 +923,7 @@ _gcry_cipher_gcm_encrypt (gcry_cipher_hd_t c,
     return GPG_ERR_INV_STATE;
 
   if (!c->marks.iv)
-    _gcry_cipher_gcm_setiv (c, zerobuf, GCRY_GCM_BLOCK_LEN);
+    _gcry_cipher_gcm_setiv_zero (c);
 
   if (c->u_mode.gcm.disallow_encryption_because_of_setiv_in_fips_mode)
     return GPG_ERR_INV_STATE;
@@ -959,8 +951,6 @@ _gcry_cipher_gcm_decrypt (gcry_cipher_hd_t c,
                           byte *outbuf, size_t outbuflen,
                           const byte *inbuf, size_t inbuflen)
 {
-  static const unsigned char zerobuf[MAX_BLOCKSIZE];
-
   if (c->spec->blocksize != GCRY_GCM_BLOCK_LEN)
     return GPG_ERR_CIPHER_ALGO;
   if (outbuflen < inbuflen)
@@ -973,7 +963,7 @@ _gcry_cipher_gcm_decrypt (gcry_cipher_hd_t c,
     return GPG_ERR_INV_STATE;
 
   if (!c->marks.iv)
-    _gcry_cipher_gcm_setiv (c, zerobuf, GCRY_GCM_BLOCK_LEN);
+    _gcry_cipher_gcm_setiv_zero (c);
 
   if (!c->u_mode.gcm.ghash_aad_finalized)
     {
@@ -997,8 +987,6 @@ gcry_err_code_t
 _gcry_cipher_gcm_authenticate (gcry_cipher_hd_t c,
                                const byte * aadbuf, size_t aadbuflen)
 {
-  static const unsigned char zerobuf[MAX_BLOCKSIZE];
-
   if (c->spec->blocksize != GCRY_GCM_BLOCK_LEN)
     return GPG_ERR_CIPHER_ALGO;
   if (c->u_mode.gcm.datalen_over_limits)
@@ -1010,7 +998,7 @@ _gcry_cipher_gcm_authenticate (gcry_cipher_hd_t c,
     return GPG_ERR_INV_STATE;
 
   if (!c->marks.iv)
-    _gcry_cipher_gcm_setiv (c, zerobuf, GCRY_GCM_BLOCK_LEN);
+    _gcry_cipher_gcm_setiv_zero (c);
 
   gcm_bytecounter_add(c->u_mode.gcm.aadlen, aadbuflen);
   if (!gcm_check_aadlen_or_ivlen(c->u_mode.gcm.aadlen))
@@ -1113,6 +1101,15 @@ _gcry_cipher_gcm_setiv (gcry_cipher_hd_t c, const byte *iv, size_t ivlen)
 {
   c->marks.iv = 0;
   c->marks.tag = 0;
+
+  return _gcry_cipher_gcm_initiv (c, iv, ivlen);
+}
+
+static gcry_err_code_t
+_gcry_cipher_gcm_setiv_zero (gcry_cipher_hd_t c)
+{
+  static const unsigned char zerobuf[MAX_BLOCKSIZE];
+
   c->u_mode.gcm.disallow_encryption_because_of_setiv_in_fips_mode = 0;
 
   if (fips_mode ())
@@ -1121,7 +1118,7 @@ _gcry_cipher_gcm_setiv (gcry_cipher_hd_t c, const byte *iv, size_t ivlen)
       c->u_mode.gcm.disallow_encryption_because_of_setiv_in_fips_mode = 1;
     }
 
-  return _gcry_cipher_gcm_initiv (c, iv, ivlen);
+  return _gcry_cipher_gcm_setiv (c, zerobuf, GCRY_GCM_BLOCK_LEN);
 }
 
 

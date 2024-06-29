@@ -1,7 +1,7 @@
 # Configure.ac script for Libgcrypt
 # Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006,
 #               2007, 2008, 2009, 2011 Free Software Foundation, Inc.
-# Copyright (C) 2012-2021  g10 Code GmbH
+# Copyright (C) 2012-2024  g10 Code GmbH
 #
 # This file is part of Libgcrypt.
 #
@@ -30,8 +30,8 @@ min_automake_version="1.14"
 # for the LT versions.
 m4_define([mym4_package],[libgcrypt])
 m4_define([mym4_major], [1])
-m4_define([mym4_minor], [10])
-m4_define([mym4_micro], [3])
+m4_define([mym4_minor], [11])
+m4_define([mym4_micro], [0])
 
 # Below is m4 magic to extract and compute the git revision number,
 # the decimalized short revision number, a beta version string and a
@@ -55,9 +55,9 @@ AC_INIT([mym4_package],[mym4_version],[https://bugs.gnupg.org])
 #   (Interfaces removed:    CURRENT++, AGE=0, REVISION=0)
 #   (Interfaces added:      CURRENT++, AGE++, REVISION=0)
 #   (No interfaces changed:                   REVISION++)
-LIBGCRYPT_LT_CURRENT=24
-LIBGCRYPT_LT_AGE=4
-LIBGCRYPT_LT_REVISION=3
+LIBGCRYPT_LT_CURRENT=25
+LIBGCRYPT_LT_AGE=5
+LIBGCRYPT_LT_REVISION=0
 ################################################
 
 AC_SUBST(LIBGCRYPT_LT_CURRENT)
@@ -72,7 +72,7 @@ LIBGCRYPT_CONFIG_API_VERSION=1
 
 # If you change the required gpg-error version, please remove
 # unnecessary error code defines in src/gcrypt-int.h.
-NEED_GPG_ERROR_VERSION=1.27
+NEED_GPG_ERROR_VERSION=1.49
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_SRCDIR([src/libgcrypt.vers])
@@ -150,6 +150,7 @@ AM_PROG_AS
 AC_SEARCH_LIBS([strerror],[cposix])
 AC_PROG_INSTALL
 AC_PROG_AWK
+AC_PROG_FGREP
 
 # Taken from mpfr-4.0.1, then modified for LDADD_FOR_TESTS_KLUDGE
 dnl Under Linux, make sure that the old dtags are used if LD_LIBRARY_PATH
@@ -211,7 +212,7 @@ LIBGCRYPT_CONFIG_HOST="$host"
 # Definitions for symmetric ciphers.
 available_ciphers="arcfour blowfish cast5 des aes twofish serpent rfc2268 seed"
 available_ciphers="$available_ciphers camellia idea salsa20 gost28147 chacha20"
-available_ciphers="$available_ciphers sm4"
+available_ciphers="$available_ciphers sm4 aria"
 enabled_ciphers=""
 
 # Definitions for public-key ciphers.
@@ -359,6 +360,7 @@ AC_CHECK_SIZEOF(unsigned short, 2)
 AC_CHECK_SIZEOF(unsigned int, 4)
 AC_CHECK_SIZEOF(unsigned long, 4)
 AC_CHECK_SIZEOF(unsigned long long, 0)
+AC_CHECK_SIZEOF(unsigned __int128, 0)
 AC_CHECK_SIZEOF(void *, 0)
 
 AC_TYPE_UINTPTR_T
@@ -522,16 +524,6 @@ AC_DEFINE_UNQUOTED(EGD_SOCKET_NAME, "$egd_socket_name",
                    [Define if you don't want the default EGD socket name.
                     For details see cipher/rndegd.c])
 
-# Implementation of the --enable-random-daemon
-AC_MSG_CHECKING([whether the experimental random daemon is requested])
-AC_ARG_ENABLE([random-daemon],
-              AS_HELP_STRING([--enable-random-daemon],
-                             [Build the experimental gcryptrnd]),
-              [enable_random_daemon=$enableval],
-              [enable_random_daemon=no])
-AC_MSG_RESULT($enable_random_daemon)
-AM_CONDITIONAL(ENABLE_RANDOM_DAEMON, test x$enable_random_daemon = xyes)
-
 
 # Implementation of --disable-asm.
 AC_MSG_CHECKING([whether MPI and cipher assembler modules are requested])
@@ -543,17 +535,6 @@ AC_ARG_ENABLE([asm],
 AC_MSG_RESULT($try_asm_modules)
 if test "$try_asm_modules" != yes ; then
     AC_DEFINE(ASM_DISABLED,1,[Defined if --disable-asm was used to configure])
-fi
-
-# Implementation of the --enable-m-guard switch.
-AC_MSG_CHECKING([whether memory guard is requested])
-AC_ARG_ENABLE(m-guard,
-              AS_HELP_STRING([--enable-m-guard],
-                             [Enable memory guard facility]),
-              [use_m_guard=$enableval], [use_m_guard=no])
-AC_MSG_RESULT($use_m_guard)
-if test "$use_m_guard" = yes ; then
-    AC_DEFINE(M_GUARD,1,[Define to use the (obsolete) malloc guarding feature])
 fi
 
 # Implementation of the --enable-large-data-tests switch.
@@ -686,6 +667,22 @@ AC_ARG_ENABLE(avx2-support,
 	      avx2support=$enableval,avx2support=yes)
 AC_MSG_RESULT($avx2support)
 
+# Implementation of the --disable-avx512-support switch.
+AC_MSG_CHECKING([whether AVX512 support is requested])
+AC_ARG_ENABLE(avx512-support,
+              AS_HELP_STRING([--disable-avx512-support],
+                 [Disable support for the Intel AVX512 instructions]),
+	      avx512support=$enableval,avx512support=yes)
+AC_MSG_RESULT($avx512support)
+
+# Implementation of the --disable-gfni-support switch.
+AC_MSG_CHECKING([whether GFNI support is requested])
+AC_ARG_ENABLE(gfni-support,
+              AS_HELP_STRING([--disable-gfni-support],
+                 [Disable support for the Intel GFNI instructions]),
+	      gfnisupport=$enableval,gfnisupport=yes)
+AC_MSG_RESULT($gfnisupport)
+
 # Implementation of the --disable-neon-support switch.
 AC_MSG_CHECKING([whether NEON support is requested])
 AC_ARG_ENABLE(neon-support,
@@ -701,6 +698,22 @@ AC_ARG_ENABLE(arm-crypto-support,
                  [Disable support for the ARMv8 Crypto Extension instructions]),
 	      armcryptosupport=$enableval,armcryptosupport=yes)
 AC_MSG_RESULT($armcryptosupport)
+
+# Implementation of the --disable-sve-support switch.
+AC_MSG_CHECKING([whether SVE support is requested])
+AC_ARG_ENABLE(sve-support,
+              AS_HELP_STRING([--disable-sve-support],
+                 [Disable support for the ARMv8 SVE instructions]),
+	      svesupport=$enableval,svesupport=yes)
+AC_MSG_RESULT($svesupport)
+
+# Implementation of the --disable-sve2-support switch.
+AC_MSG_CHECKING([whether SVE2 support is requested])
+AC_ARG_ENABLE(sve2-support,
+              AS_HELP_STRING([--disable-sve2-support],
+                 [Disable support for the ARMv9 SVE2 instructions]),
+	      sve2support=$enableval,sve2support=yes)
+AC_MSG_RESULT($sve2support)
 
 # Implementation of the --disable-ppc-crypto-support switch.
 AC_MSG_CHECKING([whether PPC crypto support is requested])
@@ -822,43 +835,8 @@ fi
 AC_DEFINE(GPG_ERR_SOURCE_DEFAULT, GPG_ERR_SOURCE_GCRYPT,
           [The default error source for libgcrypt.])
 
-#
-# Check whether the GNU Pth library is available.  We require this
-# to build the optional gcryptrnd program.
-#
-AC_ARG_WITH(pth-prefix,
-            AS_HELP_STRING([--with-pth-prefix=PFX],
-                           [prefix where GNU Pth is installed (optional)]),
-     pth_config_prefix="$withval", pth_config_prefix="")
-if test x$pth_config_prefix != x ; then
-   PTH_CONFIG="$pth_config_prefix/bin/pth-config"
-fi
-if test "$enable_random_daemon" = "yes"; then
-  AC_PATH_PROG(PTH_CONFIG, pth-config, no)
-  if test "$PTH_CONFIG" = "no"; then
-    AC_MSG_WARN([[
-***
-*** To build the Libgcrypt's random number daemon
-*** we need the support of the GNU Portable Threads Library.
-*** Download it from ftp://ftp.gnu.org/gnu/pth/
-*** On a Debian GNU/Linux system you might want to try
-***   apt-get install libpth-dev
-***]])
-  else
-    GNUPG_PTH_VERSION_CHECK([1.3.7])
-    if test $have_pth = yes; then
-       PTH_CFLAGS=`$PTH_CONFIG --cflags`
-       PTH_LIBS=`$PTH_CONFIG --ldflags`
-       PTH_LIBS="$PTH_LIBS `$PTH_CONFIG --libs --all`"
-       AC_DEFINE(USE_GNU_PTH, 1,
-                [Defined if the GNU Portable Thread Library should be used])
-       AC_DEFINE(HAVE_PTH, 1,
-                [Defined if the GNU Pth is available])
-    fi
-  fi
-fi
-AC_SUBST(PTH_CFLAGS)
-AC_SUBST(PTH_LIBS)
+AM_CONDITIONAL(USE_GPGRT_CONFIG, [test -n "$GPGRT_CONFIG" \
+                                  -a "$ac_cv_path_GPG_ERROR_CONFIG" = no])
 
 #
 # Check whether pthreads is available
@@ -881,7 +859,7 @@ AC_SEARCH_LIBS(setsockopt, [nsl])
 #### Checks for header files. ####
 ##################################
 
-AC_CHECK_HEADERS(unistd.h sys/auxv.h sys/random.h)
+AC_CHECK_HEADERS(unistd.h sys/auxv.h sys/random.h sys/sysctl.h)
 
 
 ##########################################
@@ -895,8 +873,6 @@ AC_TYPE_SIZE_T
 AC_TYPE_PID_T
 
 AC_CHECK_TYPES([byte, ushort, u16, u32, u64])
-
-gl_TYPE_SOCKLEN_T
 
 #
 # Check for __builtin_bswap32 intrinsic.
@@ -1242,7 +1218,7 @@ AC_CACHE_CHECK([whether GCC assembler is compatible for ARM assembly implementat
                 ".text\n\t"
                 /* Following causes error if assembler ignored '.syntax unified'.  */
                 "asmfunc:\n\t"
-                "add %r0, %r0, %r4, ror #12;\n\t"
+                "add r0, r0, r4, ror #12;\n\t"
 
                 /* Test if '.type' and '.size' are supported.  */
                 ".size asmfunc,.-asmfunc;\n\t"
@@ -1392,6 +1368,8 @@ if test "$mpi_cpu_arch" != "x86" ; then
    sse41support="n/a"
    avxsupport="n/a"
    avx2support="n/a"
+   avx512support="n/a"
+   gfnisupport="n/a"
    padlocksupport="n/a"
    drngsupport="n/a"
 fi
@@ -1400,6 +1378,8 @@ if test "$mpi_cpu_arch" != "arm" ; then
    if test "$mpi_cpu_arch" != "aarch64" ; then
      neonsupport="n/a"
      armcryptosupport="n/a"
+     svesupport="n/a"
+     sve2support="n/a"
    fi
 fi
 
@@ -1418,6 +1398,21 @@ fi
 # temporarily.
 _gcc_cflags_save=$CFLAGS
 CFLAGS="$CFLAGS -Werror"
+
+
+#
+# Check whether compiler supports 'optimize' function attribute
+#
+AC_CACHE_CHECK([whether compiler supports 'optimize' function attribute],
+       [gcry_cv_gcc_attribute_optimize],
+       [gcry_cv_gcc_attribute_optimize=no
+        AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+          [[int __attribute__ ((optimize("-O2"))) fn(int i){return i;}]])],
+          [gcry_cv_gcc_attribute_optimize=yes])])
+if test "$gcry_cv_gcc_attribute_optimize" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_OPTIMIZE,1,
+     [Defined if compiler supports "__attribute__ ((optimize))" function attribute])
+fi
 
 
 #
@@ -1643,6 +1638,32 @@ fi
 
 
 #
+# Check whether GCC inline assembler supports AVX512 instructions
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports AVX512 instructions],
+       [gcry_cv_gcc_inline_asm_avx512],
+       [if test "$mpi_cpu_arch" != "x86" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_avx512="n/a"
+        else
+          gcry_cv_gcc_inline_asm_avx512=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[void a(void) {
+              __asm__("xgetbv; vpopcntq %%zmm7, %%zmm1%{%%k1%}%{z%};\n\t":::"cc");
+              __asm__("vpexpandb %%zmm3, %%zmm1;\n\t":::"cc");
+              __asm__("vpxorq %%xmm7, %%xmm7, %%xmm7;\n\t":::"cc");
+              __asm__("vpxorq %%ymm7, %%ymm7, %%ymm7;\n\t":::"cc");
+              __asm__("vpxorq (%%eax)%{1to8%}, %%zmm7, %%zmm7;\n\t":::"cc");
+            }]], [ a(); ] )],
+          [gcry_cv_gcc_inline_asm_avx512=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_avx512" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_AVX512,1,
+     [Defined if inline assembler supports AVX512 instructions])
+fi
+
+
+#
 # Check whether GCC inline assembler supports VAES and VPCLMUL instructions
 #
 AC_CACHE_CHECK([whether GCC inline assembler supports VAES and VPCLMUL instructions],
@@ -1664,6 +1685,30 @@ AC_CACHE_CHECK([whether GCC inline assembler supports VAES and VPCLMUL instructi
 if test "$gcry_cv_gcc_inline_asm_vaes_vpclmul" = "yes" ; then
    AC_DEFINE(HAVE_GCC_INLINE_ASM_VAES_VPCLMUL,1,
      [Defined if inline assembler supports VAES and VPCLMUL instructions])
+fi
+
+
+#
+# Check whether GCC inline assembler supports GFNI instructions
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports GFNI instructions],
+       [gcry_cv_gcc_inline_asm_gfni],
+       [if test "$mpi_cpu_arch" != "x86" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_gfni="n/a"
+        else
+          gcry_cv_gcc_inline_asm_gfni=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[void a(void) {
+              __asm__("gf2p8affineqb \$123, %%xmm0, %%xmm0;\n\t":::"cc"); /* SSE */
+              __asm__("vgf2p8affineinvqb \$234, %%ymm1, %%ymm1, %%ymm1;\n\t":::"cc"); /* AVX */
+              __asm__("vgf2p8mulb (%%eax), %%zmm2, %%zmm2;\n\t":::"cc"); /* AVX512 */
+            }]], [ a(); ] )],
+          [gcry_cv_gcc_inline_asm_gfni=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_gfni" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_GFNI,1,
+     [Defined if inline assembler supports GFNI instructions])
 fi
 
 
@@ -1694,6 +1739,47 @@ if test "$gcry_cv_gcc_inline_asm_bmi2" = "yes" ; then
    AC_DEFINE(HAVE_GCC_INLINE_ASM_BMI2,1,
      [Defined if inline assembler supports BMI2 instructions])
 fi
+
+
+#
+# Check whether compiler supports x86/AVX512 intrinsics
+#
+_gcc_cflags_save=$CFLAGS
+CFLAGS="$CFLAGS -mavx512f"
+
+AC_CACHE_CHECK([whether compiler supports x86/AVX512 intrinsics],
+      [gcry_cv_cc_x86_avx512_intrinsics],
+      [if test "$mpi_cpu_arch" != "x86" ||
+	  test "$try_asm_modules" != "yes" ; then
+	gcry_cv_cc_x86_avx512_intrinsics="n/a"
+      else
+	gcry_cv_cc_x86_avx512_intrinsics=no
+	AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+	[[#include <immintrin.h>
+	  __m512i fn(void *in, __m128i y)
+	  {
+	    __m512i x;
+            x = _mm512_loadu_epi32 (in); /* check the GCC bug 90980. */
+	    x = _mm512_maskz_loadu_epi32(_cvtu32_mask16(0xfff0), in)
+		  ^ _mm512_castsi128_si512(y);
+	    asm volatile ("vinserti32x4 \$3, %0, %%zmm6, %%zmm6;\n\t"
+			  "vpxord %%zmm6, %%zmm6, %%zmm6"
+			  ::"x"(y),"r"(in):"memory","xmm6");
+	    return x;
+	  }
+	  ]])],
+	[gcry_cv_cc_x86_avx512_intrinsics=yes])
+      fi])
+if test "$gcry_cv_cc_x86_avx512_intrinsics" = "yes" ; then
+    AC_DEFINE(HAVE_COMPATIBLE_CC_X86_AVX512_INTRINSICS,1,
+	    [Defined if underlying compiler supports x86/AVX512 intrinsics])
+fi
+
+AM_CONDITIONAL(ENABLE_X86_AVX512_INTRINSICS_EXTRA_CFLAGS,
+	       test "$gcry_cv_cc_x86_avx512_intrinsics" = "yes")
+
+# Restore flags.
+CFLAGS=$_gcc_cflags_save;
 
 
 #
@@ -1732,17 +1818,17 @@ fi
 
 
 #
-# Check whether GCC assembler supports features needed for our amd64
+# Check whether GCC assembler supports features needed for our i386/amd64
 # implementations
 #
 if test $amd64_as_feature_detection = yes; then
-  AC_CACHE_CHECK([whether GCC assembler is compatible for amd64 assembly implementations],
-       [gcry_cv_gcc_amd64_platform_as_ok],
+  AC_CACHE_CHECK([whether GCC assembler is compatible for i386/amd64 assembly implementations],
+       [gcry_cv_gcc_x86_platform_as_ok],
        [if test "$mpi_cpu_arch" != "x86" ||
            test "$try_asm_modules" != "yes" ; then
-          gcry_cv_gcc_amd64_platform_as_ok="n/a"
+          gcry_cv_gcc_x86_platform_as_ok="n/a"
         else
-          gcry_cv_gcc_amd64_platform_as_ok=no
+          gcry_cv_gcc_x86_platform_as_ok=no
           AC_LINK_IFELSE([AC_LANG_PROGRAM(
           [[__asm__(
                 /* Test if '.type' and '.size' are supported.  */
@@ -1758,13 +1844,19 @@ if test $amd64_as_feature_detection = yes; then
                  "xorl \$(123456789/12345678), %ebp;\n\t"
             );
             void asmfunc(void);]], [ asmfunc(); ])],
-          [gcry_cv_gcc_amd64_platform_as_ok=yes])
+          [gcry_cv_gcc_x86_platform_as_ok=yes])
         fi])
-  if test "$gcry_cv_gcc_amd64_platform_as_ok" = "yes" ; then
-     AC_DEFINE(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS,1,
+  if test "$gcry_cv_gcc_x86_platform_as_ok" = "yes" &&
+     test "$ac_cv_sizeof_unsigned_long" = "8"; then
+    AC_DEFINE(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS,1,
               [Defined if underlying assembler is compatible with amd64 assembly implementations])
   fi
-  if test "$gcry_cv_gcc_amd64_platform_as_ok" = "no" &&
+  if test "$gcry_cv_gcc_x86_platform_as_ok" = "yes" &&
+     test "$ac_cv_sizeof_unsigned_long" = "4"; then
+    AC_DEFINE(HAVE_COMPATIBLE_GCC_I386_PLATFORM_AS,1,
+              [Defined if underlying assembler is compatible with i386 assembly implementations])
+  fi
+  if test "$gcry_cv_gcc_x86_platform_as_ok" = "no" &&
      test "$gcry_cv_gcc_attribute_sysv_abi" = "yes" &&
      test "$gcry_cv_gcc_default_abi_is_ms_abi" = "yes"; then
     AC_CACHE_CHECK([whether GCC assembler is compatible for WIN64 assembly implementations],
@@ -1782,6 +1874,25 @@ if test $amd64_as_feature_detection = yes; then
     if test "$gcry_cv_gcc_win64_platform_as_ok" = "yes" ; then
       AC_DEFINE(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS,1,
                 [Defined if underlying assembler is compatible with WIN64 assembly implementations])
+    fi
+  fi
+  if test "$gcry_cv_gcc_x86_platform_as_ok" = "no" &&
+     test "$ac_cv_sizeof_unsigned_long" = "4"; then
+    AC_CACHE_CHECK([whether GCC assembler is compatible for WIN32 assembly implementations],
+      [gcry_cv_gcc_win32_platform_as_ok],
+      [gcry_cv_gcc_win32_platform_as_ok=no
+      AC_LINK_IFELSE([AC_LANG_PROGRAM(
+        [[__asm__(
+              ".text\n\t"
+              ".globl _asmfunc\n\t"
+              "_asmfunc:\n\t"
+              "xorl \$(1234), %ebp;\n\t"
+          );
+          void asmfunc(void);]], [ asmfunc(); ])],
+        [gcry_cv_gcc_win32_platform_as_ok=yes])])
+    if test "$gcry_cv_gcc_win32_platform_as_ok" = "yes" ; then
+      AC_DEFINE(HAVE_COMPATIBLE_GCC_WIN32_PLATFORM_AS,1,
+                [Defined if underlying assembler is compatible with WIN32 assembly implementations])
     fi
   fi
 fi
@@ -1871,10 +1982,10 @@ AC_CACHE_CHECK([whether GCC inline assembler supports NEON instructions],
                 ".fpu neon\n\t"
                 ".text\n\t"
                 "testfn:\n\t"
-                "vld1.64 {%q0-%q1}, [%r0]!;\n\t"
-                "vrev64.8 %q0, %q3;\n\t"
-                "vadd.u64 %q0, %q1;\n\t"
-                "vadd.s64 %d3, %d2, %d3;\n\t"
+                "vld1.64 {q0-q1}, [r0]!;\n\t"
+                "vrev64.8 q0, q3;\n\t"
+                "vadd.u64 q0, q1;\n\t"
+                "vadd.s64 d3, d2, d3;\n\t"
                 );
             void testfn(void);
             ]], [ testfn(); ])],
@@ -2013,9 +2124,220 @@ fi
 
 
 #
-# Check whether PowerPC AltiVec/VSX intrinsics
+# Check whether GCC inline assembler supports AArch64 SVE instructions
 #
-AC_CACHE_CHECK([whether compiler supports PowerPC AltiVec/VSX intrinsics],
+AC_CACHE_CHECK([whether GCC inline assembler supports AArch64 SVE instructions],
+       [gcry_cv_gcc_inline_asm_aarch64_sve],
+       [if test "$mpi_cpu_arch" != "aarch64" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_aarch64_sve="n/a"
+        else
+          gcry_cv_gcc_inline_asm_aarch64_sve=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[__asm__(
+                ".cpu generic+simd+sve\n\t"
+                ".text\n\t"
+                "testfn:\n\t"
+                "mov x0, \#60;\n\t"
+                "whilelo p0.s, xzr, x0;\n\t"
+                "mov z0.s, p0/z, \#55;\n\t"
+                "ld1b {z0.b}, p0/z, [x1];\n\t"
+                );
+            void testfn(void);
+            ]], [ testfn(); ])],
+          [gcry_cv_gcc_inline_asm_aarch64_sve=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_aarch64_sve" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_AARCH64_SVE,1,
+     [Defined if inline assembler supports AArch64 SVE instructions])
+fi
+
+
+#
+# Check whether GCC inline assembler supports AArch64 SVE2 instructions
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports AArch64 SVE2 instructions],
+       [gcry_cv_gcc_inline_asm_aarch64_sve2],
+       [if test "$mpi_cpu_arch" != "aarch64" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_aarch64_sve2="n/a"
+        else
+          gcry_cv_gcc_inline_asm_aarch64_sve2=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[__asm__(
+                ".cpu generic+simd+sve2\n\t"
+                ".text\n\t"
+                "testfn:\n\t"
+                ";\n\t"
+                "eor3 z0.d, z0.d, z1.d, z2.d;\n\t"
+                "ext z8.b, {z20.b, z21.b}, \#3;\n\t"
+                "adclt z0.d, z1.d, z2.d;\n\t"
+                "tbl z0.b, {z8.b, z9.b}, z1.b;\n\t"
+                "addhnb z16.s, z17.d, z18.d;\n\t"
+                "mov z0.s, p0/z, \#55;\n\t"
+                "ld1b {z0.b}, p0/z, [x1];\n\t"
+                );
+            void testfn(void);
+            ]], [ testfn(); ])],
+          [gcry_cv_gcc_inline_asm_aarch64_sve2=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_aarch64_sve2" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_AARCH64_SVE2,1,
+     [Defined if inline assembler supports AArch64 SVE2 instructions])
+fi
+
+
+#
+# Check whether GCC inline assembler supports AArch64 SHA3/SHA512/SM3/SM4 instructions
+#
+AC_CACHE_CHECK([whether GCC inline assembler supports AArch64 SHA3/SHA512/SM3/SM4 instructions],
+       [gcry_cv_gcc_inline_asm_aarch64_sha3_sha512_sm3_sm4],
+       [if test "$mpi_cpu_arch" != "aarch64" ||
+           test "$try_asm_modules" != "yes" ; then
+          gcry_cv_gcc_inline_asm_aarch64_sha3_sha512_sm3_sm4="n/a"
+        else
+          gcry_cv_gcc_inline_asm_aarch64_sha3_sha512_sm3_sm4=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[__asm__(
+                ".arch armv8.2-a+sha3+sm4\n\t"
+                ".text\n\t"
+                "testfn:\n\t"
+
+                /* Test for SHA512 instructions */
+                "sha512h q0, q0, v0.2d;\n\t"
+                "sha512h2 q0, q0, v0.2d;\n\t"
+                "sha512su0 v0.2d, v0.2d;\n\t"
+                "sha512su1 v0.2d, v0.2d, v31.2d;\n\t"
+
+                /* Test for SHA3 instructions */
+                "bcax v0.16b, v1.16b, v2.16b, v3.16b;\n\t"
+                "eor3 v0.16b, v1.16b, v2.16b, v3.16b;\n\t"
+                "rax1 v0.2d, v1.2d, v2.2d;\n\t"
+                "xar v0.2d, v1.2d, v2.2d, \#1;\n\t"
+
+                /* Test for SM3 instructions */
+                "sm3partw1 v0.4s, v1.4s, v2.4s;\n\t"
+                "sm3partw2 v0.4s, v1.4s, v2.4s;\n\t"
+                "sm3ss1 v0.4s, v1.4s, v2.4s, v3.4s;\n\t"
+                "sm3tt1a v0.4s, v1.4s, v2.s[0];\n\t"
+                "sm3tt1b v0.4s, v1.4s, v2.s[0];\n\t"
+                "sm3tt2a v0.4s, v1.4s, v2.s[0];\n\t"
+                "sm3tt2b v0.4s, v1.4s, v2.s[0];\n\t"
+
+                /* Test for SM4 instructions */
+                "sm4e v0.4s, v1.4s;\n\t"
+                "sm4ekey v0.4s, v1.4s, v2.4s;\n\t"
+                );
+            void testfn(void);
+            ]], [ testfn(); ])],
+          [gcry_cv_gcc_inline_asm_aarch64_sha3_sha512_sm3_sm4=yes])
+        fi])
+if test "$gcry_cv_gcc_inline_asm_aarch64_sha3_sha512_sm3_sm4" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_INLINE_ASM_AARCH64_SHA3_SHA512_SM3_SM4,1,
+     [Defined if inline assembler supports AArch64 SHA3/SHA512/SM3/SM4 instructions])
+fi
+
+
+#
+# Check whether compiler supports AArch64/NEON/crypto intrinsics
+#
+AC_CACHE_CHECK([whether compiler supports AArch64/NEON/crypto intrinsics],
+      [gcry_cv_cc_aarch64_neon_intrinsics],
+      [if test "$mpi_cpu_arch" != "aarch64" ||
+	  test "$try_asm_modules" != "yes" ; then
+	gcry_cv_cc_aarch64_neon_intrinsics="n/a"
+      else
+	gcry_cv_cc_aarch64_neon_intrinsics=no
+	AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+	[[#include <arm_neon.h>
+	  #define __m128i uint64x2_t
+	  #define vpsrldq128(s, a, o) \
+	    ({ uint64x2_t __tmp = { 0, 0 }; \
+		o = (__m128i)vextq_u8((uint8x16_t)a, \
+				      (uint8x16_t)__tmp, (s) & 15); })
+	  #define vaesenclast128(a, b, o) \
+	    (o = (__m128i)vaeseq_u8((uint8x16_t)b, (uint8x16_t)a))
+	  #define memory_barrier_with_vec(a) __asm__("" : "+w"(a) :: "memory")
+	  static inline __attribute__((always_inline)) __m128i
+	  fn2(__m128i a)
+	  {
+	    vpsrldq128(2, a, a);
+	    return a;
+	  }
+	  __m128i fn(__m128i in)
+	  {
+	    __m128i x;
+	    memory_barrier_with_vec(in);
+	    x = fn2(in);
+	    memory_barrier_with_vec(x);
+	    vaesenclast128(in, x, in);
+	    memory_barrier_with_vec(in);
+	    return in;
+	  }
+	  ]])],
+	[gcry_cv_cc_aarch64_neon_intrinsics=yes])
+      fi])
+if test "$gcry_cv_cc_aarch64_neon_intrinsics" = "yes" ; then
+    AC_DEFINE(HAVE_COMPATIBLE_CC_AARCH64_NEON_INTRINSICS,1,
+	    [Defined if underlying compiler supports AArch64/NEON/crypto intrinsics])
+fi
+
+_gcc_cflags_save=$CFLAGS
+CFLAGS="$CFLAGS -O2 -march=armv8-a+crypto"
+
+if test "$gcry_cv_cc_aarch64_neon_intrinsics" = "no" &&
+   test "$mpi_cpu_arch" = "aarch64" &&
+   test "$try_asm_modules" = "yes" ; then
+  AC_CACHE_CHECK([whether compiler supports AArch64/NEON/crypto intrinsics with extra GCC flags],
+    [gcry_cv_cc_aarch64_neon_intrinsics_cflags],
+    [gcry_cv_cc_aarch64_neon_intrinsics_cflags=no
+    AC_COMPILE_IFELSE([AC_LANG_SOURCE(
+      [[#include <arm_neon.h>
+	#define __m128i uint64x2_t
+	#define vpsrldq128(s, a, o) \
+	  ({ uint64x2_t __tmp = { 0, 0 }; \
+	      o = (__m128i)vextq_u8((uint8x16_t)a, \
+				    (uint8x16_t)__tmp, (s) & 15); })
+	#define vaesenclast128(a, b, o) \
+	  (o = (__m128i)vaeseq_u8((uint8x16_t)b, (uint8x16_t)a))
+	#define memory_barrier_with_vec(a) __asm__("" : "+w"(a) :: "memory")
+	static inline __attribute__((always_inline)) __m128i
+	fn2(__m128i a)
+	{
+	  vpsrldq128(2, a, a);
+	  return a;
+	}
+	__m128i fn(__m128i in)
+	{
+	  __m128i x;
+	  memory_barrier_with_vec(in);
+	  x = fn2(in);
+	  memory_barrier_with_vec(x);
+	  vaesenclast128(in, x, in);
+	  memory_barrier_with_vec(in);
+	  return in;
+	}
+	]])],
+      [gcry_cv_cc_aarch64_neon_intrinsics_cflags=yes])])
+  if test "$gcry_cv_cc_aarch64_neon_intrinsics_cflags" = "yes" ; then
+    AC_DEFINE(HAVE_COMPATIBLE_CC_AARCH64_NEON_INTRINSICS,1,
+	      [Defined if underlying compiler supports AArch64/NEON/crypto intrinsics])
+    AC_DEFINE(HAVE_COMPATIBLE_CC_AARCH64_NEON_INTRINSICS_WITH_CFLAGS,1,
+	      [Defined if underlying compiler supports AArch64/NEON/crypto intrinsics with extra GCC flags])
+  fi
+fi
+
+AM_CONDITIONAL(ENABLE_AARCH64_NEON_INTRINSICS_EXTRA_CFLAGS,
+	       test "$gcry_cv_cc_aarch64_neon_intrinsics_cflags" = "yes")
+
+# Restore flags.
+CFLAGS=$_gcc_cflags_save;
+
+
+#
+# Check whether compiler supports PowerPC AltiVec/VSX intrinsics
+#
+AC_CACHE_CHECK([whether compiler supports PowerPC AltiVec/VSX/crypto intrinsics],
       [gcry_cv_cc_ppc_altivec],
       [if test "$mpi_cpu_arch" != "ppc" ||
 	  test "$try_asm_modules" != "yes" ; then
@@ -2026,10 +2348,16 @@ AC_CACHE_CHECK([whether compiler supports PowerPC AltiVec/VSX intrinsics],
 	[[#include <altivec.h>
 	  typedef vector unsigned char block;
 	  typedef vector unsigned int vecu32;
+	  static inline __attribute__((always_inline)) vecu32
+	  vec_sld_u32(vecu32 a, vecu32 b, unsigned int idx)
+	  {
+	    return vec_sld (a, b, (4 * idx) & 15);
+	  }
 	  block fn(block in)
 	  {
 	    block t = vec_perm (in, in, vec_vsx_ld (0, (unsigned char*)0));
 	    vecu32 y = vec_vsx_ld (0, (unsigned int*)0);
+	    y = vec_sld_u32 (y, y, 3);
 	    return vec_cipher_be (t, in) ^ (block)y;
 	  }
 	  ]])],
@@ -2041,11 +2369,11 @@ if test "$gcry_cv_cc_ppc_altivec" = "yes" ; then
 fi
 
 _gcc_cflags_save=$CFLAGS
-CFLAGS="$CFLAGS -maltivec -mvsx -mcrypto"
+CFLAGS="$CFLAGS -O2 -maltivec -mvsx -mcrypto"
 
 if test "$gcry_cv_cc_ppc_altivec" = "no" &&
-    test "$mpi_cpu_arch" = "ppc" &&
-    test "$try_asm_modules" == "yes" ; then
+   test "$mpi_cpu_arch" = "ppc" &&
+   test "$try_asm_modules" = "yes" ; then
   AC_CACHE_CHECK([whether compiler supports PowerPC AltiVec/VSX/crypto intrinsics with extra GCC flags],
     [gcry_cv_cc_ppc_altivec_cflags],
     [gcry_cv_cc_ppc_altivec_cflags=no
@@ -2053,12 +2381,19 @@ if test "$gcry_cv_cc_ppc_altivec" = "no" &&
       [[#include <altivec.h>
 	typedef vector unsigned char block;
 	typedef vector unsigned int vecu32;
+	static inline __attribute__((always_inline)) vecu32
+	vec_sld_u32(vecu32 a, vecu32 b, unsigned int idx)
+	{
+	  return vec_sld (a, b, (4 * idx) & 15);
+	}
 	block fn(block in)
 	{
 	  block t = vec_perm (in, in, vec_vsx_ld (0, (unsigned char*)0));
 	  vecu32 y = vec_vsx_ld (0, (unsigned int*)0);
+	  y = vec_sld_u32 (y, y, 3);
 	  return vec_cipher_be (t, in) ^ (block)y;
-	}]])],
+	}
+	]])],
       [gcry_cv_cc_ppc_altivec_cflags=yes])])
   if test "$gcry_cv_cc_ppc_altivec_cflags" = "yes" ; then
     AC_DEFINE(HAVE_COMPATIBLE_CC_PPC_ALTIVEC,1,
@@ -2131,6 +2466,52 @@ AC_CACHE_CHECK([whether GCC inline assembler supports PowerISA 3.00 instructions
 if test "$gcry_cv_gcc_inline_asm_ppc_arch_3_00" = "yes" ; then
    AC_DEFINE(HAVE_GCC_INLINE_ASM_PPC_ARCH_3_00,1,
      [Defined if inline assembler supports PowerISA 3.00 instructions])
+fi
+
+
+#
+# Check whether compiler supports GCC PowerPC target attributes
+#
+AC_CACHE_CHECK([whether compiler supports GCC PowerPC target attributes],
+       [gcry_cv_gcc_attribute_ppc_target],
+       [if test "$mpi_cpu_arch" != "ppc" ; then
+          gcry_cv_gcc_attribute_ppc_target="n/a"
+        else
+          gcry_cv_gcc_attribute_ppc_target=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[void __attribute__((always_inline)) inline aifn(void) {}
+            void __attribute__((target("cpu=power8"))) testfn8(void) {aifn();}
+            void __attribute__((target("cpu=power9"))) testfn9(void)
+            { testfn8(); aifn(); }
+            ]], [ testfn9(); aifn(); ])],
+          [gcry_cv_gcc_attribute_ppc_target=yes])
+        fi])
+if test "$gcry_cv_gcc_attribute_ppc_target" = "yes" ; then
+   AC_DEFINE(HAVE_GCC_ATTRIBUTE_PPC_TARGET,1,
+     [Defined if compiler supports GCC PowerPC target attributes])
+fi
+
+
+#
+# Check whether compiler supports clang PowerPC target attributes
+#
+AC_CACHE_CHECK([whether compiler supports clang PowerPC target attributes],
+       [gcry_cv_clang_attribute_ppc_target],
+       [if test "$mpi_cpu_arch" != "ppc" ; then
+          gcry_cv_clang_attribute_ppc_target="n/a"
+        else
+          gcry_cv_clang_attribute_ppc_target=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM(
+          [[void __attribute__((always_inline)) inline aifn(void) {}
+            void __attribute__((target("arch=pwr8"))) testfn8(void) {aifn();}
+            void __attribute__((target("arch=pwr9"))) testfn9(void)
+            { testfn8(); aifn(); }
+            ]], [ testfn9(); aifn(); ])],
+          [gcry_cv_clang_attribute_ppc_target=yes])
+        fi])
+if test "$gcry_cv_clang_attribute_ppc_target" = "yes" ; then
+   AC_DEFINE(HAVE_CLANG_ATTRIBUTE_PPC_TARGET,1,
+     [Defined if compiler supports clang PowerPC target attributes])
 fi
 
 
@@ -2238,7 +2619,7 @@ AC_CHECK_FUNCS(strtoul memmove stricmp atexit raise)
 AC_CHECK_FUNCS(strerror rand mmap getpagesize sysconf waitpid wait4)
 AC_CHECK_FUNCS(gettimeofday getrusage gethrtime clock_gettime syslog)
 AC_CHECK_FUNCS(syscall fcntl ftruncate flockfile getauxval elf_aux_info)
-AC_CHECK_FUNCS(explicit_bzero explicit_memset getentropy)
+AC_CHECK_FUNCS(explicit_bzero explicit_memset getentropy sysctlbyname)
 
 GNUPG_CHECK_MLOCK
 
@@ -2466,6 +2847,16 @@ if test x"$avx2support" = xyes ; then
     avx2support="no (unsupported by compiler)"
   fi
 fi
+if test x"$avx512support" = xyes ; then
+  if test "$gcry_cv_gcc_inline_asm_avx512" != "yes" ; then
+    avx512support="no (unsupported by compiler)"
+  fi
+fi
+if test x"$gfnisupport" = xyes ; then
+  if test "$gcry_cv_gcc_inline_asm_gfni" != "yes" ; then
+    gfnisupport="no (unsupported by compiler)"
+  fi
+fi
 if test x"$neonsupport" = xyes ; then
   if test "$gcry_cv_gcc_inline_asm_neon" != "yes" ; then
     if test "$gcry_cv_gcc_inline_asm_aarch64_neon" != "yes" ; then
@@ -2476,7 +2867,21 @@ fi
 if test x"$armcryptosupport" = xyes ; then
   if test "$gcry_cv_gcc_inline_asm_aarch32_crypto" != "yes" ; then
     if test "$gcry_cv_gcc_inline_asm_aarch64_crypto" != "yes" ; then
-      neonsupport="no (unsupported by compiler)"
+      armcryptosupport="no (unsupported by compiler)"
+    fi
+  fi
+fi
+if test x"$svesupport" = xyes ; then
+  if test "$gcry_cv_gcc_inline_asm_sve" != "yes" ; then
+    if test "$gcry_cv_gcc_inline_asm_aarch64_sve" != "yes" ; then
+      svesupport="no (unsupported by compiler)"
+    fi
+  fi
+fi
+if test x"$sve2support" = xyes ; then
+  if test "$gcry_cv_gcc_inline_asm_sve2" != "yes" ; then
+    if test "$gcry_cv_gcc_inline_asm_aarch64_sve2" != "yes" ; then
+      sve2support="no (unsupported by compiler)"
     fi
   fi
 fi
@@ -2505,6 +2910,14 @@ if test x"$avx2support" = xyes ; then
   AC_DEFINE(ENABLE_AVX2_SUPPORT,1,
             [Enable support for Intel AVX2 instructions.])
 fi
+if test x"$avx512support" = xyes ; then
+  AC_DEFINE(ENABLE_AVX512_SUPPORT,1,
+            [Enable support for Intel AVX512 instructions.])
+fi
+if test x"$gfnisupport" = xyes ; then
+  AC_DEFINE(ENABLE_GFNI_SUPPORT,1,
+            [Enable support for Intel GFNI instructions.])
+fi
 if test x"$neonsupport" = xyes ; then
   AC_DEFINE(ENABLE_NEON_SUPPORT,1,
             [Enable support for ARM NEON instructions.])
@@ -2512,6 +2925,14 @@ fi
 if test x"$armcryptosupport" = xyes ; then
   AC_DEFINE(ENABLE_ARM_CRYPTO_SUPPORT,1,
             [Enable support for ARMv8 Crypto Extension instructions.])
+fi
+if test x"$svesupport" = xyes ; then
+  AC_DEFINE(ENABLE_SVE_SUPPORT,1,
+            [Enable support for ARMv8 SVE instructions.])
+fi
+if test x"$sve2support" = xyes ; then
+  AC_DEFINE(ENABLE_SVE2_SUPPORT,1,
+            [Enable support for ARMv9 SVE2 instructions.])
 fi
 if test x"$ppccryptosupport" = xyes ; then
   AC_DEFINE(ENABLE_PPC_CRYPTO_SUPPORT,1,
@@ -2669,6 +3090,10 @@ if test "$found" = "1" ; then
 
          # Build with the Padlock implementation
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-padlock.lo"
+
+         # Build with the VAES/AVX2 implementation
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-vaes-i386.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS rijndael-vaes-avx2-i386.lo"
       ;;
    esac
 fi
@@ -2716,6 +3141,11 @@ if test "$found" = "1" ; then
       GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-avx2-amd64.lo"
    fi
 
+   if test x"$avx512support" = xyes ; then
+      # Build with the AVX512 implementation
+      GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-avx512-x86.lo"
+   fi
+
    if test x"$neonsupport" = xyes ; then
       # Build with the NEON implementation
       GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS serpent-armv7-neon.lo"
@@ -2747,6 +3177,12 @@ if test "$found" = "1" ; then
       aarch64-*-*)
          # Build with the assembly implementation
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-aarch64-ce.lo"
+      ;;
+      powerpc64le-*-*)
+         # Build with the POWER vector implementations
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-ppc8le.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-ppc9le.lo"
       ;;
    esac
 
@@ -2764,6 +3200,12 @@ if test "$found" = "1" ; then
 
         # Build with the VAES/AVX2 implementation
         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-vaes-avx2-amd64.lo"
+
+        # Build with the GFNI/AVX2 implementation
+        GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-gfni-avx2-amd64.lo"
+
+        # Build with the GFNI/AVX512 implementation
+        GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS camellia-gfni-avx512-amd64.lo"
       fi
    fi
 fi
@@ -2808,6 +3250,7 @@ if test "$found" = "1" ; then
          # Build with the assembly implementation
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-amd64-ssse3.lo"
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-amd64-avx2.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-amd64-avx512.lo"
       ;;
       aarch64-*-*)
          # Build with the assembly implementation
@@ -2816,6 +3259,11 @@ if test "$found" = "1" ; then
       powerpc64le-*-*)
          # Build with the ppc8 vector implementation
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-ppc.lo"
+         # Build with the assembly implementation
+         if test "$gcry_cv_gcc_inline_asm_ppc_altivec" = "yes" &&
+            test "$gcry_cv_gcc_inline_asm_ppc_arch_3_00" = "yes" ; then
+            GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS chacha20-p10le-8x.lo"
+         fi
       ;;
       powerpc64-*-*)
          # Build with the ppc8 vector implementation
@@ -2847,6 +3295,33 @@ if test "$found" = "1" ; then
          # Build with the assembly implementation
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-aesni-avx-amd64.lo"
          GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-aesni-avx2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-gfni-avx2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-gfni-avx512-amd64.lo"
+      ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-aarch64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-armv8-aarch64-ce.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-armv9-aarch64-sve-ce.lo"
+      ;;
+      powerpc64le-*-*)
+         # Build with the ppc64le vector implementation
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS sm4-ppc.lo"
+      ;;
+   esac
+fi
+
+LIST_MEMBER(aria, $enabled_ciphers)
+if test "$found" = "1" ; then
+   GCRYPT_CIPHERS="$GCRYPT_CIPHERS aria.lo"
+   AC_DEFINE(USE_ARIA, 1, [Defined if this module should be included])
+
+   case "${host}" in
+      x86_64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS aria-aesni-avx-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS aria-aesni-avx2-amd64.lo"
+         GCRYPT_ASM_CIPHERS="$GCRYPT_ASM_CIPHERS aria-gfni-avx512-amd64.lo"
       ;;
    esac
 fi
@@ -3003,6 +3478,7 @@ if test "$found" = "1" ; then
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-ssse3-amd64.lo"
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-avx-amd64.lo"
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-avx2-bmi2-amd64.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-avx512-amd64.lo"
       ;;
       i?86-*-*)
          # Build with the assembly implementation
@@ -3011,6 +3487,10 @@ if test "$found" = "1" ; then
       arm*-*-*)
          # Build with the assembly implementation
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-arm.lo"
+      ;;
+      aarch64-*-*)
+         # Build with the assembly implementation
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sha512-armv8-aarch64-ce.lo"
       ;;
       powerpc64le-*-*)
          # Build with the crypto extension implementation
@@ -3041,7 +3521,7 @@ if test "$found" = "1" ; then
    case "${host}" in
       x86_64-*-*)
          # Build with the assembly implementation
-         :
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS keccak-amd64-avx512.lo"
       ;;
    esac
 
@@ -3079,7 +3559,9 @@ if test "$found" = "1" ; then
       x86_64-*-*)
          # Build with the assembly implementation
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2b-amd64-avx2.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2b-amd64-avx512.lo"
          GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2s-amd64-avx.lo"
+         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS blake2s-amd64-avx512.lo"
       ;;
    esac
 fi
@@ -3097,6 +3579,7 @@ if test "$found" = "1" ; then
      aarch64-*-*)
         # Build with the assembly implementation
         GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sm3-aarch64.lo"
+        GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS sm3-armv8-aarch64-ce.lo"
      ;;
    esac
 fi
@@ -3153,6 +3636,16 @@ esac
 case "${host}" in
   s390x-*-*)
     GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS poly1305-s390x.lo"
+  ;;
+  x86_64-*-*)
+    GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS poly1305-amd64-avx512.lo"
+  ;;
+  powerpc64le-*-*)
+    # Build with the assembly implementation
+    if test "$gcry_cv_gcc_inline_asm_ppc_altivec" = "yes" &&
+       test "$gcry_cv_gcc_inline_asm_ppc_arch_3_00" = "yes" ; then
+       GCRYPT_ASM_DIGESTS="$GCRYPT_ASM_DIGESTS poly1305-p10le.lo"
+    fi
   ;;
 esac
 
@@ -3332,6 +3825,7 @@ src/libgcrypt.pc
 src/versioninfo.rc
 tests/Makefile
 ])
+AC_CONFIG_FILES([tests/hashtest-6g], [chmod +x tests/hashtest-6g])
 AC_CONFIG_FILES([tests/hashtest-256g], [chmod +x tests/hashtest-256g])
 AC_CONFIG_FILES([tests/basic-disable-all-hwf], [chmod +x tests/basic-disable-all-hwf])
 AC_OUTPUT
@@ -3362,8 +3856,12 @@ GCRY_MSG_SHOW([Try using Intel SSE4.1:   ],[$sse41support])
 GCRY_MSG_SHOW([Try using DRNG (RDRAND):  ],[$drngsupport])
 GCRY_MSG_SHOW([Try using Intel AVX:      ],[$avxsupport])
 GCRY_MSG_SHOW([Try using Intel AVX2:     ],[$avx2support])
+GCRY_MSG_SHOW([Try using Intel AVX512:   ],[$avx512support])
+GCRY_MSG_SHOW([Try using Intel GFNI:     ],[$gfnisupport])
 GCRY_MSG_SHOW([Try using ARM NEON:       ],[$neonsupport])
 GCRY_MSG_SHOW([Try using ARMv8 crypto:   ],[$armcryptosupport])
+GCRY_MSG_SHOW([Try using ARMv8 SVE:      ],[$svesupport])
+GCRY_MSG_SHOW([Try using ARMv9 SVE2:     ],[$sve2support])
 GCRY_MSG_SHOW([Try using PPC crypto:     ],[$ppccryptosupport])
 GCRY_MSG_SHOW([],[])
 
@@ -3383,12 +3881,4 @@ cat <<G10EOF
    aligned attribute. Using this software may evoke bus errors.
 
 G10EOF
-fi
-
-if test -n "$gpl"; then
-  echo "Please note that you are building a version of Libgcrypt with"
-  echo "  $gpl"
-  echo "included.  These parts are licensed under the GPL and thus the"
-  echo "use of this library has to comply with the conditions of the GPL."
-  echo ""
 fi

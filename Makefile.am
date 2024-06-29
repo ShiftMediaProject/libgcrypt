@@ -14,13 +14,13 @@
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
-# License along with this program; if not, see <http://www.gnu.org/licenses/>.
+# License along with this program; if not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 # Location of the released tarball archives.  This is prefixed by
 # the variable RELEASE_ARCHIVE in ~/.gnupg-autogen.rc.  For example:
 # RELEASE_ARCHIVE=wk@somehost:archive/tarballs
-RELEASE_ARCHIVE_SUFFIX  = libgcrypt/v1.10
+RELEASE_ARCHIVE_SUFFIX  = libgcrypt/v1.11
 # The variable RELEASE_SIGNING_KEY in ~/.gnupg-autogen.rc is used
 # to specify the key for signing.  For example:
 # RELEASE_SIGNKEY=D8692123C4065DEA5E0F3AB5249B39D24F25E3B6

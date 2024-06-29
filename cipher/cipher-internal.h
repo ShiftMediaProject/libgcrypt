@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -71,6 +71,22 @@
 #  endif
 # endif
 #endif /* GCM_USE_INTEL_PCLMUL */
+
+/* GCM_USE_INTEL_VPCLMUL_AVX2 indicates whether to compile GCM with Intel
+   VPCLMUL/AVX2 code.  */
+#undef GCM_USE_INTEL_VPCLMUL_AVX2
+#if defined(__x86_64__) && defined(GCM_USE_INTEL_PCLMUL) && \
+    defined(ENABLE_AVX2_SUPPORT) && defined(HAVE_GCC_INLINE_ASM_VAES_VPCLMUL)
+# define GCM_USE_INTEL_VPCLMUL_AVX2 1
+#endif /* GCM_USE_INTEL_VPCLMUL_AVX2 */
+
+/* GCM_USE_INTEL_VPCLMUL_AVX512 indicates whether to compile GCM with Intel
+   VPCLMUL/AVX512 code.  */
+#undef GCM_USE_INTEL_VPCLMUL_AVX512
+#if defined(__x86_64__) && defined(GCM_USE_INTEL_VPCLMUL_AVX2) && \
+    defined(ENABLE_AVX512_SUPPORT) && defined(HAVE_GCC_INLINE_ASM_AVX512)
+# define GCM_USE_INTEL_VPCLMUL_AVX512 1
+#endif /* GCM_USE_INTEL_VPCLMUL_AVX512 */
 
 /* GCM_USE_ARM_PMULL indicates whether to compile GCM with ARMv8 PMULL code. */
 #undef GCM_USE_ARM_PMULL
@@ -145,6 +161,8 @@ typedef struct cipher_mode_ops
    not NULL.  */
 typedef struct cipher_bulk_ops
 {
+  void (*ecb_crypt)(void *context, void *outbuf_arg, const void *inbuf_arg,
+		    size_t nblocks, int encrypt);
   void (*cfb_enc)(void *context, unsigned char *iv, void *outbuf_arg,
 		  const void *inbuf_arg, size_t nblocks);
   void (*cfb_dec)(void *context, unsigned char *iv, void *outbuf_arg,
@@ -228,6 +246,14 @@ struct gcry_cipher_handle
 
   int mode;
   unsigned int flags;
+
+  struct {
+    int geniv_method;
+    unsigned char fixed[MAX_BLOCKSIZE];
+    unsigned char dynamic[MAX_BLOCKSIZE];
+    size_t fixed_iv_len;
+    size_t dynamic_iv_len;
+  } aead;
 
   struct {
     unsigned int key:1; /* Set to 1 if a key has been set.  */
@@ -355,6 +381,9 @@ struct gcry_cipher_handle
 
       /* Key length used for GCM-SIV key generating key. */
       unsigned int siv_keylen;
+
+      /* Flags for accelerated implementations. */
+      unsigned int hw_impl_flags;
     } gcm;
 
     /* Mode specific storage for OCB mode. */

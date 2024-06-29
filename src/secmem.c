@@ -6,7 +6,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -291,48 +291,7 @@ print_warn (void)
 static void
 lock_pool_pages (void *p, size_t n)
 {
-#if defined(USE_CAPABILITIES) && defined(HAVE_MLOCK)
-  int err;
-
-  {
-    cap_t cap;
-
-    if (!no_priv_drop)
-      {
-        cap = cap_from_text ("cap_ipc_lock+ep");
-        cap_set_proc (cap);
-        cap_free (cap);
-      }
-    err = no_mlock? 0 : mlock (p, n);
-    if (err && errno)
-      err = errno;
-    if (!no_priv_drop)
-      {
-        cap = cap_from_text ("cap_ipc_lock+p");
-        cap_set_proc (cap);
-        cap_free(cap);
-      }
-  }
-
-  if (err)
-    {
-      if (err != EPERM
-#ifdef EAGAIN	/* BSD and also Linux may return EAGAIN */
-	  && err != EAGAIN
-#endif
-#ifdef ENOSYS	/* Some SCOs return this (function not implemented) */
-	  && err != ENOSYS
-#endif
-#ifdef ENOMEM  /* Linux might return this. */
-            && err != ENOMEM
-#endif
-	  )
-	log_error ("can't lock memory: %s\n", strerror (err));
-      show_warning = 1;
-      not_locked = 1;
-    }
-
-#elif defined(HAVE_MLOCK)
+#if defined(HAVE_MLOCK)
   uid_t uid;
   int err;
 
@@ -346,18 +305,14 @@ lock_pool_pages (void *p, size_t n)
   if (uid)
     {
       errno = EPERM;
-      err = errno;
+      err = -1;
     }
   else
     {
       err = no_mlock? 0 : mlock (p, n);
-      if (err && errno)
-	err = errno;
     }
 #else /* !HAVE_BROKEN_MLOCK */
   err = no_mlock? 0 : mlock (p, n);
-  if (err && errno)
-    err = errno;
 #endif /* !HAVE_BROKEN_MLOCK */
 
   /* Test whether we are running setuid(0).  */
@@ -375,18 +330,18 @@ lock_pool_pages (void *p, size_t n)
 
   if (err)
     {
-      if (err != EPERM
+      if (errno != EPERM
 #ifdef EAGAIN	/* BSD and also Linux may return this. */
-	  && err != EAGAIN
+	  && errno != EAGAIN
 #endif
 #ifdef ENOSYS	/* Some SCOs return this (function not implemented). */
-	  && err != ENOSYS
+	  && errno != ENOSYS
 #endif
 #ifdef ENOMEM  /* Linux might return this. */
-            && err != ENOMEM
+            && errno != ENOMEM
 #endif
 	  )
-	log_error ("can't lock memory: %s\n", strerror (err));
+	log_error ("can't lock memory: %s\n", strerror (errno));
       show_warning = 1;
       not_locked = 1;
     }
@@ -401,12 +356,6 @@ lock_pool_pages (void *p, size_t n)
 #elif defined (HAVE_DOSISH_SYSTEM) || defined (__CYGWIN__)
     /* It does not make sense to print such a warning, given the fact that
      * this whole Windows !@#$% and their user base are inherently insecure. */
-  (void)p;
-  (void)n;
-#elif defined (__riscos__)
-    /* No virtual memory on RISC OS, so no pages are swapped to disc,
-     * besides we don't have mmap, so we don't use it! ;-)
-     * But don't complain, as explained above.  */
   (void)p;
   (void)n;
 #else
@@ -617,7 +566,7 @@ _gcry_secmem_init (size_t n)
 
 
 gcry_err_code_t
-_gcry_secmem_module_init ()
+_gcry_secmem_module_init (void)
 {
   /* Not anymore needed.  */
   return 0;
@@ -768,7 +717,7 @@ _gcry_secmem_free_internal (void *a)
   /* This does not make much sense: probably this memory is held in the
    * cache. We do it anyway: */
 #define MB_WIPE_OUT(byte) \
-  wipememory2 (((char *) mb + BLOCK_HEAD_SIZE), (byte), size);
+  wipememory2 (((char *) mb + BLOCK_HEAD_SIZE), (byte), size)
 
   MB_WIPE_OUT (0xff);
   MB_WIPE_OUT (0xaa);
@@ -811,7 +760,7 @@ _gcry_secmem_realloc_internal (void *p, size_t newsize, int xhint)
   void *a;
 
   mb = (memblock_t *) (void *) ((char *) p
-				- ((size_t) &((memblock_t *) 0)->aligned.c));
+				- offsetof (memblock_t, aligned.c));
   size = mb->size;
   if (newsize < size)
     {
@@ -878,7 +827,7 @@ _gcry_private_is_secure (const void *p)
  *	     there is no chance to get the secure memory cleaned.
  */
 void
-_gcry_secmem_term ()
+_gcry_secmem_term (void)
 {
   pooldesc_t *pool, *next;
 

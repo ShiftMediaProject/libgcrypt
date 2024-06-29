@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -35,9 +35,5 @@ _gcry_kdf_scrypt (const unsigned char *passwd, size_t passwdlen,
                   const unsigned char *salt, size_t saltlen,
                   unsigned long iterations,
                   size_t dklen, unsigned char *dk);
-
-/*-- blake2.c --*/
-gcry_err_code_t
-blake2b_vl_hash (const void *in, size_t inlen, size_t outputlen, void *output);
 
 #endif /*GCRY_KDF_INTERNAL_H*/

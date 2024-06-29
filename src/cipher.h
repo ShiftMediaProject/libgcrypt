@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -14,8 +14,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 #ifndef G10_CIPHER_H
 #define G10_CIPHER_H
@@ -119,6 +119,8 @@ void _gcry_sha1_hash_buffer (void *outbuf,
                              const void *buffer, size_t length);
 
 /*-- blake2.c --*/
+gcry_err_code_t blake2b_vl_hash (const void *in, size_t inlen,
+                                 size_t outputlen, void *output);
 gcry_err_code_t _gcry_blake2_init_with_key(void *ctx, unsigned int flags,
 					   const unsigned char *key,
 					   size_t keylen, int algo);
@@ -139,6 +141,10 @@ void _gcry_register_pk_ecc_progress (gcry_handler_progress_t cbc,
 /*-- primegen.c --*/
 void _gcry_register_primegen_progress (gcry_handler_progress_t cb,
                                        void *cb_data);
+
+/*-- keccak.c --*/
+gpg_err_code_t _gcry_cshake_customize (void *context,
+                                       struct gcry_cshake_customization *p);
 
 /*-- pubkey.c --*/
 
@@ -169,6 +175,9 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_gost28147;
 extern gcry_cipher_spec_t _gcry_cipher_spec_gost28147_mesh;
 extern gcry_cipher_spec_t _gcry_cipher_spec_chacha20;
 extern gcry_cipher_spec_t _gcry_cipher_spec_sm4;
+extern gcry_cipher_spec_t _gcry_cipher_spec_aria128;
+extern gcry_cipher_spec_t _gcry_cipher_spec_aria192;
+extern gcry_cipher_spec_t _gcry_cipher_spec_aria256;
 
 /* Declarations for the digest specifications.  */
 extern const gcry_md_spec_t _gcry_digest_spec_crc32;
@@ -195,6 +204,8 @@ extern const gcry_md_spec_t _gcry_digest_spec_sha3_512;
 extern const gcry_md_spec_t _gcry_digest_spec_sha3_384;
 extern const gcry_md_spec_t _gcry_digest_spec_shake128;
 extern const gcry_md_spec_t _gcry_digest_spec_shake256;
+extern const gcry_md_spec_t _gcry_digest_spec_cshake128;
+extern const gcry_md_spec_t _gcry_digest_spec_cshake256;
 extern const gcry_md_spec_t _gcry_digest_spec_tiger;
 extern const gcry_md_spec_t _gcry_digest_spec_tiger1;
 extern const gcry_md_spec_t _gcry_digest_spec_tiger2;
@@ -212,9 +223,9 @@ extern const gcry_md_spec_t _gcry_digest_spec_sm3;
 /* Declarations for the pubkey cipher specifications.  */
 extern gcry_pk_spec_t _gcry_pubkey_spec_rsa;
 extern gcry_pk_spec_t _gcry_pubkey_spec_elg;
-extern gcry_pk_spec_t _gcry_pubkey_spec_elg_e;
 extern gcry_pk_spec_t _gcry_pubkey_spec_dsa;
 extern gcry_pk_spec_t _gcry_pubkey_spec_ecc;
+extern gcry_pk_spec_t _gcry_pubkey_spec_kem;
 
 
 #endif /*G10_CIPHER_H*/

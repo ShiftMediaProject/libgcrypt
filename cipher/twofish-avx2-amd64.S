@@ -39,14 +39,20 @@
 /* register macros */
 #define CTX	%rdi
 
-#define RROUND  %rbp
-#define RROUNDd %ebp
+#define RROUND  %r13
+#define RROUNDd %r13d
 #define RS0	CTX
 #define RS1	%r8
 #define RS2	%r9
 #define RS3	%r10
 #define RK	%r11
-#define RW	%rax
+#define RW	%r12
+#define RIDX0	%rax
+#define RIDX0d	%eax
+#define RIDX1	%rbx
+#define RIDX1d	%ebx
+#define RIDX2	%r14
+#define RIDX3	%r15
 
 #define RA0	%ymm8
 #define RB0	%ymm9
@@ -63,14 +69,14 @@
 #define RX1	%ymm2
 #define RY1	%ymm3
 #define RT0	%ymm4
-#define RIDX	%ymm5
+#define RT1	%ymm5
 
 #define RX0x	%xmm0
 #define RY0x	%xmm1
 #define RX1x	%xmm2
 #define RY1x	%xmm3
 #define RT0x	%xmm4
-#define RIDXx	%xmm5
+#define RT1x	%xmm5
 
 #define RTMP0   RX0
 #define RTMP0x  RX0x
@@ -80,8 +86,8 @@
 #define RTMP2x  RY0x
 #define RTMP3   RY1
 #define RTMP3x  RY1x
-#define RTMP4   RIDX
-#define RTMP4x  RIDXx
+#define RTMP4   RT1
+#define RTMP4x  RT1x
 
 /* vpgatherdd mask and '-1' */
 #define RNOT	%ymm6
@@ -102,48 +108,42 @@
 	leaq s2(CTX), RS2; \
 	leaq s3(CTX), RS3; \
 
+#define do_gather(stoffs, byteoffs, rs, out) \
+	movzbl (stoffs + 0*4 + byteoffs)(%rsp), RIDX0d; \
+	movzbl (stoffs + 1*4 + byteoffs)(%rsp), RIDX1d; \
+	movzbq (stoffs + 2*4 + byteoffs)(%rsp), RIDX2; \
+	movzbq (stoffs + 3*4 + byteoffs)(%rsp), RIDX3; \
+	vmovd (rs, RIDX0, 4), RT1x; \
+	movzbl (stoffs + 4*4 + byteoffs)(%rsp), RIDX0d; \
+	vmovd (rs, RIDX0, 4), RT0x; \
+	vpinsrd $1, (rs, RIDX1, 4), RT1x, RT1x; \
+	movzbl (stoffs + 5*4 + byteoffs)(%rsp), RIDX1d; \
+	vpinsrd $1, (rs, RIDX1, 4), RT0x, RT0x; \
+	vpinsrd $2, (rs, RIDX2, 4), RT1x, RT1x; \
+	movzbq (stoffs + 6*4 + byteoffs)(%rsp), RIDX2; \
+	vpinsrd $2, (rs, RIDX2, 4), RT0x, RT0x; \
+	vpinsrd $3, (rs, RIDX3, 4), RT1x, RT1x; \
+	movzbq (stoffs + 7*4 + byteoffs)(%rsp), RIDX3; \
+	vpinsrd $3, (rs, RIDX3, 4), RT0x, RT0x; \
+	vinserti128 $1, RT0x, RT1, out;
+
 #define g16(ab, rs0, rs1, rs2, rs3, xy) \
-	vpand RBYTE, ab ## 0, RIDX; \
-	vpgatherdd RNOT, (rs0, RIDX, 4), xy ## 0; \
-	vpcmpeqd RNOT, RNOT, RNOT; \
-		\
-		vpand RBYTE, ab ## 1, RIDX; \
-		vpgatherdd RNOT, (rs0, RIDX, 4), xy ## 1; \
-		vpcmpeqd RNOT, RNOT, RNOT; \
-	\
-	vpsrld $8, ab ## 0, RIDX; \
-	vpand RBYTE, RIDX, RIDX; \
-	vpgatherdd RNOT, (rs1, RIDX, 4), RT0; \
-	vpcmpeqd RNOT, RNOT, RNOT; \
-	vpxor RT0, xy ## 0, xy ## 0; \
-		\
-		vpsrld $8, ab ## 1, RIDX; \
-		vpand RBYTE, RIDX, RIDX; \
-		vpgatherdd RNOT, (rs1, RIDX, 4), RT0; \
-		vpcmpeqd RNOT, RNOT, RNOT; \
-		vpxor RT0, xy ## 1, xy ## 1; \
-	\
-	vpsrld $16, ab ## 0, RIDX; \
-	vpand RBYTE, RIDX, RIDX; \
-	vpgatherdd RNOT, (rs2, RIDX, 4), RT0; \
-	vpcmpeqd RNOT, RNOT, RNOT; \
-	vpxor RT0, xy ## 0, xy ## 0; \
-		\
-		vpsrld $16, ab ## 1, RIDX; \
-		vpand RBYTE, RIDX, RIDX; \
-		vpgatherdd RNOT, (rs2, RIDX, 4), RT0; \
-		vpcmpeqd RNOT, RNOT, RNOT; \
-		vpxor RT0, xy ## 1, xy ## 1; \
-	\
-	vpsrld $24, ab ## 0, RIDX; \
-	vpgatherdd RNOT, (rs3, RIDX, 4), RT0; \
-	vpcmpeqd RNOT, RNOT, RNOT; \
-	vpxor RT0, xy ## 0, xy ## 0; \
-		\
-		vpsrld $24, ab ## 1, RIDX; \
-		vpgatherdd RNOT, (rs3, RIDX, 4), RT0; \
-		vpcmpeqd RNOT, RNOT, RNOT; \
-		vpxor RT0, xy ## 1, xy ## 1;
+	vmovdqa ab ## 0, 0(%rsp); \
+	vmovdqa ab ## 1, 32(%rsp); \
+	do_gather(0*32, 0, rs0, xy ## 0); \
+		do_gather(1*32, 0, rs0, xy ## 1); \
+	do_gather(0*32, 1, rs1, RT1); \
+	vpxor RT1, xy ## 0, xy ## 0; \
+		do_gather(1*32, 1, rs1, RT1); \
+		vpxor RT1, xy ## 1, xy ## 1; \
+	do_gather(0*32, 2, rs2, RT1); \
+	vpxor RT1, xy ## 0, xy ## 0; \
+		do_gather(1*32, 2, rs2, RT1); \
+		vpxor RT1, xy ## 1, xy ## 1; \
+	do_gather(0*32, 3, rs3, RT1); \
+	vpxor RT1, xy ## 0, xy ## 0; \
+		do_gather(1*32, 3, rs3, RT1); \
+		vpxor RT1, xy ## 1, xy ## 1;
 
 #define g1_16(a, x) \
 	g16(a, RS0, RS1, RS2, RS3, x);
@@ -154,9 +154,9 @@
 #define encrypt_round_end16(a, b, c, d, nk, r) \
 	vpaddd RY0, RX0, RX0; \
 	vpaddd RX0, RY0, RY0; \
-	vpbroadcastd ((nk)+((r)*8))(RK), RT0; \
+	vpbroadcastd ((nk))(RK,r), RT0; \
 	vpaddd RT0, RX0, RX0; \
-	vpbroadcastd 4+((nk)+((r)*8))(RK), RT0; \
+	vpbroadcastd 4+((nk))(RK,r), RT0; \
 	vpaddd RT0, RY0, RY0; \
 	\
 	vpxor RY0, d ## 0, d ## 0; \
@@ -168,9 +168,9 @@
 	\
 		vpaddd RY1, RX1, RX1; \
 		vpaddd RX1, RY1, RY1; \
-		vpbroadcastd ((nk)+((r)*8))(RK), RT0; \
+		vpbroadcastd ((nk))(RK,r), RT0; \
 		vpaddd RT0, RX1, RX1; \
-		vpbroadcastd 4+((nk)+((r)*8))(RK), RT0; \
+		vpbroadcastd 4+((nk))(RK,r), RT0; \
 		vpaddd RT0, RY1, RY1; \
 		\
 		vpxor RY1, d ## 1, d ## 1; \
@@ -216,9 +216,9 @@
 #define decrypt_round_end16(a, b, c, d, nk, r) \
 	vpaddd RY0, RX0, RX0; \
 	vpaddd RX0, RY0, RY0; \
-	vpbroadcastd ((nk)+((r)*8))(RK), RT0; \
+	vpbroadcastd ((nk))(RK,r), RT0; \
 	vpaddd RT0, RX0, RX0; \
-	vpbroadcastd 4+((nk)+((r)*8))(RK), RT0; \
+	vpbroadcastd 4+((nk))(RK,r), RT0; \
 	vpaddd RT0, RY0, RY0; \
 	\
 	vpxor RX0, c ## 0, c ## 0; \
@@ -230,9 +230,9 @@
 	\
 		vpaddd RY1, RX1, RX1; \
 		vpaddd RX1, RY1, RY1; \
-		vpbroadcastd ((nk)+((r)*8))(RK), RT0; \
+		vpbroadcastd ((nk))(RK,r), RT0; \
 		vpaddd RT0, RX1, RX1; \
-		vpbroadcastd 4+((nk)+((r)*8))(RK), RT0; \
+		vpbroadcastd 4+((nk))(RK,r), RT0; \
 		vpaddd RT0, RY1, RY1; \
 		\
 		vpxor RX1, c ## 1, c ## 1; \
@@ -275,30 +275,6 @@
 	\
 	decrypt_round_end16(a, b, c, d, nk, r);
 
-#define encrypt_cycle16(r) \
-	encrypt_round16(RA, RB, RC, RD, 0, r); \
-	encrypt_round16(RC, RD, RA, RB, 8, r);
-
-#define encrypt_cycle_first16(r) \
-	encrypt_round_first16(RA, RB, RC, RD, 0, r); \
-	encrypt_round16(RC, RD, RA, RB, 8, r);
-
-#define encrypt_cycle_last16(r) \
-	encrypt_round16(RA, RB, RC, RD, 0, r); \
-	encrypt_round_last16(RC, RD, RA, RB, 8, r);
-
-#define decrypt_cycle16(r) \
-	decrypt_round16(RC, RD, RA, RB, 8, r); \
-	decrypt_round16(RA, RB, RC, RD, 0, r);
-
-#define decrypt_cycle_first16(r) \
-	decrypt_round_first16(RC, RD, RA, RB, 8, r); \
-	decrypt_round16(RA, RB, RC, RD, 0, r);
-
-#define decrypt_cycle_last16(r) \
-	decrypt_round16(RC, RD, RA, RB, 8, r); \
-	decrypt_round_last16(RA, RB, RC, RD, 0, r);
-
 #define transpose_4x4(x0,x1,x2,x3,t1,t2) \
 	vpunpckhdq x1, x0, t2; \
 	vpunpckldq x1, x0, x0; \
@@ -311,22 +287,6 @@
 	\
 	vpunpckhqdq x2, t2, x3; \
 	vpunpcklqdq x2,	t2, x2;
-
-#define read_blocks8(offs,a,b,c,d) \
-	vmovdqu 16*offs(RIO), a; \
-	vmovdqu 16*offs+32(RIO), b; \
-	vmovdqu 16*offs+64(RIO), c; \
-	vmovdqu 16*offs+96(RIO), d; \
-	\
-	transpose_4x4(a, b, c, d, RX0, RY0);
-
-#define write_blocks8(offs,a,b,c,d) \
-	transpose_4x4(a, b, c, d, RX0, RY0); \
-	\
-	vmovdqu a, 16*offs(RIO); \
-	vmovdqu b, 16*offs+32(RIO); \
-	vmovdqu c, 16*offs+64(RIO); \
-	vmovdqu d, 16*offs+96(RIO);
 
 #define inpack_enc8(a,b,c,d) \
 	vpbroadcastd 4*0(RW), RT0; \
@@ -402,7 +362,7 @@
 	outunpack_dec8(a ## 0, b ## 0, c ## 0, d ## 0); \
 	outunpack_dec8(a ## 1, b ## 1, c ## 1, d ## 1);
 
-.align 8
+.align 16
 ELF(.type __twofish_enc_blk16,@function;)
 __twofish_enc_blk16:
 	/* input:
@@ -414,28 +374,68 @@ __twofish_enc_blk16:
 	 *						ciphertext blocks
 	 */
 	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+	subq $(64 + 5 * 8), %rsp;
+	andq $-64, %rsp;
+
+	movq %rbx, (64 + 0 * 8)(%rsp);
+	movq %r12, (64 + 1 * 8)(%rsp);
+	movq %r13, (64 + 2 * 8)(%rsp);
+	movq %r14, (64 + 3 * 8)(%rsp);
+	movq %r15, (64 + 4 * 8)(%rsp);
+	CFI_REG_ON_STACK(rbx, 64 + 0 * 8);
+	CFI_REG_ON_STACK(r12, 64 + 1 * 8);
+	CFI_REG_ON_STACK(r13, 64 + 2 * 8);
+	CFI_REG_ON_STACK(r14, 64 + 3 * 8);
+	CFI_REG_ON_STACK(r15, 64 + 4 * 8);
+
 	init_round_constants();
 
 	transpose4x4_16(RA, RB, RC, RD);
 	inpack_enc16(RA, RB, RC, RD);
 
-	encrypt_cycle_first16(0);
-	encrypt_cycle16(2);
-	encrypt_cycle16(4);
-	encrypt_cycle16(6);
-	encrypt_cycle16(8);
-	encrypt_cycle16(10);
-	encrypt_cycle16(12);
-	encrypt_cycle_last16(14);
+	xorl RROUNDd, RROUNDd;
+
+	encrypt_round_first16(RA, RB, RC, RD, 0, RROUND);
+
+.align 16
+.Loop_enc16:
+	encrypt_round16(RC, RD, RA, RB, 8, RROUND);
+	encrypt_round16(RA, RB, RC, RD, 16, RROUND);
+	leal 16(RROUNDd), RROUNDd;
+	cmpl $8*14, RROUNDd;
+	jb .Loop_enc16;
+
+	encrypt_round_last16(RC, RD, RA, RB, 8, RROUND);
 
 	outunpack_enc16(RA, RB, RC, RD);
 	transpose4x4_16(RA, RB, RC, RD);
+
+	movq (64 + 0 * 8)(%rsp), %rbx;
+	movq (64 + 1 * 8)(%rsp), %r12;
+	movq (64 + 2 * 8)(%rsp), %r13;
+	movq (64 + 3 * 8)(%rsp), %r14;
+	movq (64 + 4 * 8)(%rsp), %r15;
+	CFI_RESTORE(%rbx);
+	CFI_RESTORE(%r12);
+	CFI_RESTORE(%r13);
+	CFI_RESTORE(%r14);
+	CFI_RESTORE(%r15);
+	vpxor RT0, RT0, RT0;
+	vmovdqa RT0, 0(%rsp);
+	vmovdqa RT0, 32(%rsp);
+	leave;
+	CFI_LEAVE();
 
 	ret_spec_stop;
 	CFI_ENDPROC();
 ELF(.size __twofish_enc_blk16,.-__twofish_enc_blk16;)
 
-.align 8
+.align 16
 ELF(.type __twofish_dec_blk16,@function;)
 __twofish_dec_blk16:
 	/* input:
@@ -447,26 +447,111 @@ __twofish_dec_blk16:
 	 *						ciphertext blocks
 	 */
 	CFI_STARTPROC();
+
+	pushq %rbp;
+	CFI_PUSH(%rbp);
+	movq %rsp, %rbp;
+	CFI_DEF_CFA_REGISTER(%rbp);
+	subq $(64 + 5 * 8), %rsp;
+	andq $-64, %rsp;
+
+	movq %rbx, (64 + 0 * 8)(%rsp);
+	movq %r12, (64 + 1 * 8)(%rsp);
+	movq %r13, (64 + 2 * 8)(%rsp);
+	movq %r14, (64 + 3 * 8)(%rsp);
+	movq %r15, (64 + 4 * 8)(%rsp);
+	CFI_REG_ON_STACK(rbx, 64 + 0 * 8);
+	CFI_REG_ON_STACK(r12, 64 + 1 * 8);
+	CFI_REG_ON_STACK(r13, 64 + 2 * 8);
+	CFI_REG_ON_STACK(r14, 64 + 3 * 8);
+	CFI_REG_ON_STACK(r15, 64 + 4 * 8);
+
 	init_round_constants();
 
 	transpose4x4_16(RA, RB, RC, RD);
 	inpack_dec16(RA, RB, RC, RD);
 
-	decrypt_cycle_first16(14);
-	decrypt_cycle16(12);
-	decrypt_cycle16(10);
-	decrypt_cycle16(8);
-	decrypt_cycle16(6);
-	decrypt_cycle16(4);
-	decrypt_cycle16(2);
-	decrypt_cycle_last16(0);
+	movl $14*8, RROUNDd;
+
+	decrypt_round_first16(RC, RD, RA, RB, 8, RROUND);
+
+.align 16
+.Loop_dec16:
+	decrypt_round16(RA, RB, RC, RD, 0, RROUND);
+	decrypt_round16(RC, RD, RA, RB, -8, RROUND);
+	subl $16, RROUNDd;
+	jnz .Loop_dec16;
+
+	decrypt_round_last16(RA, RB, RC, RD, 0, RROUND);
 
 	outunpack_dec16(RA, RB, RC, RD);
 	transpose4x4_16(RA, RB, RC, RD);
 
+	movq (64 + 0 * 8)(%rsp), %rbx;
+	movq (64 + 1 * 8)(%rsp), %r12;
+	movq (64 + 2 * 8)(%rsp), %r13;
+	movq (64 + 3 * 8)(%rsp), %r14;
+	movq (64 + 4 * 8)(%rsp), %r15;
+	CFI_RESTORE(%rbx);
+	CFI_RESTORE(%r12);
+	CFI_RESTORE(%r13);
+	CFI_RESTORE(%r14);
+	CFI_RESTORE(%r15);
+	vpxor RT0, RT0, RT0;
+	vmovdqa RT0, 0(%rsp);
+	vmovdqa RT0, 32(%rsp);
+	leave;
+	CFI_LEAVE();
+
 	ret_spec_stop;
 	CFI_ENDPROC();
 ELF(.size __twofish_dec_blk16,.-__twofish_dec_blk16;)
+
+.align 16
+.globl _gcry_twofish_avx2_blk16
+ELF(.type   _gcry_twofish_avx2_blk16,@function;)
+_gcry_twofish_avx2_blk16:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (16 blocks)
+	 *	%rdx: src (16 blocks)
+	 *	%ecx: encrypt
+	 */
+	CFI_STARTPROC();
+
+	vzeroupper;
+
+	vmovdqu (0 * 32)(%rdx), RA0;
+	vmovdqu (1 * 32)(%rdx), RB0;
+	vmovdqu (2 * 32)(%rdx), RC0;
+	vmovdqu (3 * 32)(%rdx), RD0;
+	vmovdqu (4 * 32)(%rdx), RA1;
+	vmovdqu (5 * 32)(%rdx), RB1;
+	vmovdqu (6 * 32)(%rdx), RC1;
+	vmovdqu (7 * 32)(%rdx), RD1;
+
+	testl %ecx, %ecx;
+	jz .Lblk16_dec;
+		call __twofish_enc_blk16;
+		jmp .Lblk16_end;
+	.Lblk16_dec:
+		call __twofish_dec_blk16;
+
+.Lblk16_end:
+	vmovdqu RA0, (0 * 32)(%rsi);
+	vmovdqu RB0, (1 * 32)(%rsi);
+	vmovdqu RC0, (2 * 32)(%rsi);
+	vmovdqu RD0, (3 * 32)(%rsi);
+	vmovdqu RA1, (4 * 32)(%rsi);
+	vmovdqu RB1, (5 * 32)(%rsi);
+	vmovdqu RC1, (6 * 32)(%rsi);
+	vmovdqu RD1, (7 * 32)(%rsi);
+
+	vzeroall;
+
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_twofish_avx2_blk16,.-_gcry_twofish_avx2_blk16;)
 
 #define inc_le128(x, minus_one, tmp) \
 	vpcmpeqq minus_one, x, tmp; \
@@ -474,7 +559,7 @@ ELF(.size __twofish_dec_blk16,.-__twofish_dec_blk16;)
 	vpslldq $8, tmp, tmp; \
 	vpsubq tmp, x, x;
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_ctr_enc
 ELF(.type   _gcry_twofish_avx2_ctr_enc,@function;)
 _gcry_twofish_avx2_ctr_enc:
@@ -586,7 +671,7 @@ _gcry_twofish_avx2_ctr_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_ctr_enc,.-_gcry_twofish_avx2_ctr_enc;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_cbc_dec
 ELF(.type   _gcry_twofish_avx2_cbc_dec,@function;)
 _gcry_twofish_avx2_cbc_dec:
@@ -639,7 +724,7 @@ _gcry_twofish_avx2_cbc_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_cbc_dec,.-_gcry_twofish_avx2_cbc_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_cfb_dec
 ELF(.type   _gcry_twofish_avx2_cfb_dec,@function;)
 _gcry_twofish_avx2_cfb_dec:
@@ -694,7 +779,7 @@ _gcry_twofish_avx2_cfb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_cfb_dec,.-_gcry_twofish_avx2_cfb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_ocb_enc
 ELF(.type _gcry_twofish_avx2_ocb_enc,@function;)
 
@@ -808,7 +893,7 @@ _gcry_twofish_avx2_ocb_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_ocb_enc,.-_gcry_twofish_avx2_ocb_enc;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_ocb_dec
 ELF(.type _gcry_twofish_avx2_ocb_dec,@function;)
 
@@ -933,7 +1018,7 @@ _gcry_twofish_avx2_ocb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_ocb_dec,.-_gcry_twofish_avx2_ocb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_avx2_ocb_auth
 ELF(.type _gcry_twofish_avx2_ocb_auth,@function;)
 
@@ -1036,10 +1121,13 @@ _gcry_twofish_avx2_ocb_auth:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_avx2_ocb_auth,.-_gcry_twofish_avx2_ocb_auth;)
 
+SECTION_RODATA
+
 .align 16
 
 /* For CTR-mode IV byteswap */
- _gcry_twofish_bswap128_mask:
+ELF(.type _gcry_twofish_bswap128_mask,@object)
+_gcry_twofish_bswap128_mask:
 .Lbswap128_mask:
 	.byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 ELF(.size _gcry_twofish_bswap128_mask,.-_gcry_twofish_bswap128_mask;)

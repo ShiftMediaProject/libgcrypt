@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -234,6 +234,9 @@ extern const gcry_mac_spec_t _gcry_mac_type_spec_gost28147_imit;
 #if USE_SM4
 extern const gcry_mac_spec_t _gcry_mac_type_spec_cmac_sm4;
 #endif
+#if USE_ARIA
+extern const gcry_mac_spec_t _gcry_mac_type_spec_cmac_aria;
+#endif
 
 /*
  * The GMAC algorithm specifications (mac-gmac.c).
@@ -252,6 +255,12 @@ extern const gcry_mac_spec_t _gcry_mac_type_spec_gmac_seed;
 #endif
 #if USE_CAMELLIA
 extern const gcry_mac_spec_t _gcry_mac_type_spec_gmac_camellia;
+#endif
+#if USE_SM4
+extern const gcry_mac_spec_t _gcry_mac_type_spec_gmac_sm4;
+#endif
+#if USE_ARIA
+extern const gcry_mac_spec_t _gcry_mac_type_spec_gmac_aria;
 #endif
 
 /*
@@ -272,4 +281,10 @@ extern const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_serpent;
 #endif
 #if USE_SEED
 extern const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_seed;
+#endif
+#if USE_SM4
+extern const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_sm4;
+#endif
+#if USE_ARIA
+extern const gcry_mac_spec_t _gcry_mac_type_spec_poly1305mac_aria;
 #endif

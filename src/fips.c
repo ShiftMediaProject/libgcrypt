@@ -429,6 +429,8 @@ _gcry_fips_indicator_md (va_list arg_ptr)
     case GCRY_MD_SHA3_512:
     case GCRY_MD_SHAKE128:
     case GCRY_MD_SHAKE256:
+    case GCRY_MD_CSHAKE128:
+    case GCRY_MD_CSHAKE256:
       return GPG_ERR_NO_ERROR;
     default:
       return GPG_ERR_NOT_SUPPORTED;
@@ -471,6 +473,7 @@ static const char *valid_string_in_sexp[] = {
   "data",
   "e",
   "ecdsa",
+  "eddsa",
   "flags",
   "genkey",
   "hash",
@@ -676,8 +679,12 @@ run_pubkey_selftests (int extended)
 {
   static int algos[] =
     {
+#if USE_RSA
       GCRY_PK_RSA,
+#endif /* USE_RSA */
+#if USE_ECC
       GCRY_PK_ECC,
+#endif /* USE_ECC */
       0
     };
   int idx;

@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -62,6 +62,14 @@
     (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
      defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
 # define USE_AVX2 1
+#endif
+
+/* USE_AVX512 indicates whether to compile with Intel AVX512 code. */
+#undef USE_AVX512
+#if defined(__x86_64__) && defined(HAVE_GCC_INLINE_ASM_AVX512) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_AVX512 1
 #endif
 
 /* USE_ARMV7_NEON indicates whether to enable ARMv7 NEON assembly code. */
@@ -123,8 +131,11 @@ typedef struct CHACHA20_context_s
   unsigned int unused; /* bytes in the pad.  */
   unsigned int use_ssse3:1;
   unsigned int use_avx2:1;
+  unsigned int use_avx512:1;
   unsigned int use_neon:1;
   unsigned int use_ppc:1;
+  unsigned int use_p9:1;
+  unsigned int use_p10:1;
   unsigned int use_s390x:1;
 } CHACHA20_context_t;
 
@@ -161,7 +172,21 @@ unsigned int _gcry_chacha20_poly1305_amd64_avx2_blocks8(
 
 #endif /* USE_AVX2 */
 
+#ifdef USE_AVX512
+
+unsigned int _gcry_chacha20_amd64_avx512_blocks(u32 *state, byte *dst,
+                                                const byte *src,
+                                                size_t nblks) ASM_FUNC_ABI;
+
+#endif /* USE_AVX2 */
+
 #ifdef USE_PPC_VEC
+
+#ifndef WORDS_BIGENDIAN
+unsigned int _gcry_chacha20_p10le_8x(u32 *state, byte *dst,
+				     const byte *src,
+				     size_t len);
+#endif
 
 unsigned int _gcry_chacha20_ppc8_blocks4(u32 *state, byte *dst,
 					 const byte *src,
@@ -171,10 +196,22 @@ unsigned int _gcry_chacha20_ppc8_blocks1(u32 *state, byte *dst,
 					 const byte *src,
 					 size_t nblks);
 
+unsigned int _gcry_chacha20_ppc9_blocks4(u32 *state, byte *dst,
+					 const byte *src,
+					 size_t nblks);
+
+unsigned int _gcry_chacha20_ppc9_blocks1(u32 *state, byte *dst,
+					 const byte *src,
+					 size_t nblks);
+
 #undef USE_PPC_VEC_POLY1305
 #if SIZEOF_UNSIGNED_LONG == 8
 #define USE_PPC_VEC_POLY1305 1
 unsigned int _gcry_chacha20_poly1305_ppc8_blocks4(
+		u32 *state, byte *dst, const byte *src, size_t nblks,
+		POLY1305_STATE *st, const byte *poly1305_src);
+
+unsigned int _gcry_chacha20_poly1305_ppc9_blocks4(
 		u32 *state, byte *dst, const byte *src, size_t nblks,
 		POLY1305_STATE *st, const byte *poly1305_src);
 #endif /* SIZEOF_UNSIGNED_LONG == 8 */
@@ -328,6 +365,13 @@ static unsigned int
 chacha20_blocks (CHACHA20_context_t *ctx, byte *dst, const byte *src,
 		 size_t nblks)
 {
+#ifdef USE_AVX512
+  if (ctx->use_avx512)
+    {
+      return _gcry_chacha20_amd64_avx512_blocks(ctx->input, dst, src, nblks);
+    }
+#endif
+
 #ifdef USE_SSSE3
   if (ctx->use_ssse3)
     {
@@ -338,7 +382,10 @@ chacha20_blocks (CHACHA20_context_t *ctx, byte *dst, const byte *src,
 #ifdef USE_PPC_VEC
   if (ctx->use_ppc)
     {
-      return _gcry_chacha20_ppc8_blocks1(ctx->input, dst, src, nblks);
+      if (ctx->use_p9)
+	return _gcry_chacha20_ppc9_blocks1(ctx->input, dst, src, nblks);
+      else
+	return _gcry_chacha20_ppc8_blocks1(ctx->input, dst, src, nblks);
     }
 #endif
 
@@ -464,6 +511,9 @@ chacha20_do_setkey (CHACHA20_context_t *ctx,
 #ifdef USE_SSSE3
   ctx->use_ssse3 = (features & HWF_INTEL_SSSE3) != 0;
 #endif
+#ifdef USE_AVX512
+  ctx->use_avx512 = (features & HWF_INTEL_AVX512) != 0;
+#endif
 #ifdef USE_AVX2
   ctx->use_avx2 = (features & HWF_INTEL_AVX2) != 0;
 #endif
@@ -475,6 +525,15 @@ chacha20_do_setkey (CHACHA20_context_t *ctx,
 #endif
 #ifdef USE_PPC_VEC
   ctx->use_ppc = (features & HWF_PPC_ARCH_2_07) != 0;
+  ctx->use_p9  = (features & HWF_PPC_ARCH_3_00) != 0;
+# ifndef WORDS_BIGENDIAN
+  ctx->use_p10 = (features & HWF_PPC_ARCH_3_10) != 0;
+#  ifdef ENABLE_FORCE_SOFT_HWFEATURES
+  /* HWF_PPC_ARCH_3_10 above is used as soft HW-feature indicator for P10.
+   * Actual implementation works with HWF_PPC_ARCH_3_00 also. */
+  ctx->use_p10 |= (features & HWF_PPC_ARCH_3_00) != 0;
+#  endif
+# endif
 #endif
 #ifdef USE_S390X_VX
   ctx->use_s390x = (features & HWF_S390X_VX) != 0;
@@ -509,6 +568,19 @@ do_chacha20_encrypt_stream_tail (CHACHA20_context_t *ctx, byte *outbuf,
 {
   static const unsigned char zero_pad[CHACHA20_BLOCK_SIZE] = { 0, };
   unsigned int nburn, burn = 0;
+
+#ifdef USE_AVX512
+  if (ctx->use_avx512 && length >= CHACHA20_BLOCK_SIZE)
+    {
+      size_t nblocks = length / CHACHA20_BLOCK_SIZE;
+      nburn = _gcry_chacha20_amd64_avx512_blocks(ctx->input, outbuf, inbuf,
+                                                 nblocks);
+      burn = nburn > burn ? nburn : burn;
+      length %= CHACHA20_BLOCK_SIZE;
+      outbuf += nblocks * CHACHA20_BLOCK_SIZE;
+      inbuf  += nblocks * CHACHA20_BLOCK_SIZE;
+    }
+#endif
 
 #ifdef USE_AVX2
   if (ctx->use_avx2 && length >= CHACHA20_BLOCK_SIZE * 8)
@@ -571,7 +643,29 @@ do_chacha20_encrypt_stream_tail (CHACHA20_context_t *ctx, byte *outbuf,
     {
       size_t nblocks = length / CHACHA20_BLOCK_SIZE;
       nblocks -= nblocks % 4;
-      nburn = _gcry_chacha20_ppc8_blocks4(ctx->input, outbuf, inbuf, nblocks);
+      if (0)
+        {}
+#ifndef WORDS_BIGENDIAN
+      /*
+       * A workaround to skip counter overflow. This is rare.
+       */
+      else if (ctx->use_p10 && nblocks >= 8
+               && ((u64)ctx->input[12] + nblocks) <= 0xffffffffU)
+        {
+          size_t len = nblocks * CHACHA20_BLOCK_SIZE;
+          nburn = _gcry_chacha20_p10le_8x(ctx->input, outbuf, inbuf, len);
+        }
+#endif
+      else if (ctx->use_p9)
+        {
+          nburn = _gcry_chacha20_ppc9_blocks4(ctx->input, outbuf, inbuf,
+                                              nblocks);
+        }
+      else
+        {
+          nburn = _gcry_chacha20_ppc8_blocks4(ctx->input, outbuf, inbuf,
+                                              nblocks);
+        }
       burn = nburn > burn ? nburn : burn;
       length -= nblocks * CHACHA20_BLOCK_SIZE;
       outbuf += nblocks * CHACHA20_BLOCK_SIZE;
@@ -598,7 +692,7 @@ do_chacha20_encrypt_stream_tail (CHACHA20_context_t *ctx, byte *outbuf,
       size_t nblocks = length / CHACHA20_BLOCK_SIZE;
       nburn = chacha20_blocks(ctx, outbuf, inbuf, nblocks);
       burn = nburn > burn ? nburn : burn;
-      length -= nblocks * CHACHA20_BLOCK_SIZE;
+      length %= CHACHA20_BLOCK_SIZE;
       outbuf += nblocks * CHACHA20_BLOCK_SIZE;
       inbuf  += nblocks * CHACHA20_BLOCK_SIZE;
     }
@@ -703,6 +797,13 @@ _gcry_chacha20_poly1305_encrypt(gcry_cipher_hd_t c, byte *outbuf,
 
   if (0)
     { }
+#ifdef USE_AVX512
+  else if (ctx->use_avx512)
+    {
+      /* Skip stitched chacha20-poly1305 for AVX512. */
+      authptr = NULL;
+    }
+#endif
 #ifdef USE_AVX2
   else if (ctx->use_avx2 && length >= CHACHA20_BLOCK_SIZE * 8)
     {
@@ -760,9 +861,17 @@ _gcry_chacha20_poly1305_encrypt(gcry_cipher_hd_t c, byte *outbuf,
     }
 #endif
 #ifdef USE_PPC_VEC_POLY1305
+  else if (ctx->use_ppc && ctx->use_p10)
+    {
+      /* Skip stitched chacha20-poly1305 for P10. */
+      authptr = NULL;
+    }
   else if (ctx->use_ppc && length >= CHACHA20_BLOCK_SIZE * 4)
     {
-      nburn = _gcry_chacha20_ppc8_blocks4(ctx->input, outbuf, inbuf, 4);
+      if (ctx->use_p9)
+        nburn = _gcry_chacha20_ppc9_blocks4(ctx->input, outbuf, inbuf, 4);
+      else
+	nburn = _gcry_chacha20_ppc8_blocks4(ctx->input, outbuf, inbuf, 4);
       burn = nburn > burn ? nburn : burn;
 
       authptr = outbuf;
@@ -904,7 +1013,12 @@ _gcry_chacha20_poly1305_encrypt(gcry_cipher_hd_t c, byte *outbuf,
 	  size_t nblocks = length / CHACHA20_BLOCK_SIZE;
 	  nblocks -= nblocks % 4;
 
-	  nburn = _gcry_chacha20_poly1305_ppc8_blocks4(
+	  if (ctx->use_p9)
+	    nburn = _gcry_chacha20_poly1305_ppc9_blocks4(
+		      ctx->input, outbuf, inbuf, nblocks,
+		      &c->u_mode.poly1305.ctx.state, authptr);
+	  else
+	    nburn = _gcry_chacha20_poly1305_ppc8_blocks4(
 		      ctx->input, outbuf, inbuf, nblocks,
 		      &c->u_mode.poly1305.ctx.state, authptr);
 	  burn = nburn > burn ? nburn : burn;
@@ -969,8 +1083,10 @@ _gcry_chacha20_poly1305_encrypt(gcry_cipher_hd_t c, byte *outbuf,
       size_t currlen = length;
 
       /* Since checksumming is done after encryption, process input in 24KiB
-       * chunks to keep data loaded in L1 cache for checksumming. */
-      if (currlen > 24 * 1024)
+       * chunks to keep data loaded in L1 cache for checksumming.  However
+       * only do splitting if input is large enough so that last chunks does
+       * not end up being short. */
+      if (currlen > 32 * 1024)
 	currlen = 24 * 1024;
 
       nburn = do_chacha20_encrypt_stream_tail (ctx, outbuf, inbuf, currlen);
@@ -998,6 +1114,11 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 {
   CHACHA20_context_t *ctx = (void *) &c->context.c;
   unsigned int nburn, burn = 0;
+#if defined(USE_AVX512) || defined(USE_PPC_VEC_POLY1305)                  \
+  || defined(USE_AVX2) || defined(USE_SSSE3) || defined(USE_AARCH64_SIMD) \
+  || defined(USE_S390X_VX_POLY1305)
+  int skip_stitched = 0;
+#endif
 
   if (!length)
     return 0;
@@ -1033,8 +1154,23 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 
   gcry_assert (c->u_mode.poly1305.ctx.leftover == 0);
 
+#ifdef USE_AVX512
+  if (ctx->use_avx512)
+    {
+      /* Skip stitched chacha20-poly1305 for AVX512. */
+      skip_stitched = 1;
+    }
+#endif
+#ifdef USE_PPC_VEC_POLY1305
+  if (ctx->use_ppc && ctx->use_p10)
+    {
+      /* Skip stitched chacha20-poly1305 for P10. */
+      skip_stitched = 1;
+    }
+#endif
+
 #ifdef USE_AVX2
-  if (ctx->use_avx2 && length >= 8 * CHACHA20_BLOCK_SIZE)
+  if (!skip_stitched && ctx->use_avx2 && length >= 8 * CHACHA20_BLOCK_SIZE)
     {
       size_t nblocks = length / CHACHA20_BLOCK_SIZE;
       nblocks -= nblocks % 8;
@@ -1051,7 +1187,7 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 #endif
 
 #ifdef USE_SSSE3
-  if (ctx->use_ssse3)
+  if (!skip_stitched && ctx->use_ssse3)
     {
       if (length >= 4 * CHACHA20_BLOCK_SIZE)
 	{
@@ -1085,7 +1221,7 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 #endif
 
 #ifdef USE_AARCH64_SIMD
-  if (ctx->use_neon && length >= 4 * CHACHA20_BLOCK_SIZE)
+  if (!skip_stitched && ctx->use_neon && length >= 4 * CHACHA20_BLOCK_SIZE)
     {
       size_t nblocks = length / CHACHA20_BLOCK_SIZE;
       nblocks -= nblocks % 4;
@@ -1102,14 +1238,20 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 #endif
 
 #ifdef USE_PPC_VEC_POLY1305
-  if (ctx->use_ppc && length >= 4 * CHACHA20_BLOCK_SIZE)
+  /* skip stitch for p10 */
+  if (!skip_stitched && ctx->use_ppc && length >= 4 * CHACHA20_BLOCK_SIZE)
     {
       size_t nblocks = length / CHACHA20_BLOCK_SIZE;
       nblocks -= nblocks % 4;
 
-      nburn = _gcry_chacha20_poly1305_ppc8_blocks4(
-			ctx->input, outbuf, inbuf, nblocks,
-			&c->u_mode.poly1305.ctx.state, inbuf);
+      if (ctx->use_p9)
+	nburn = _gcry_chacha20_poly1305_ppc9_blocks4(
+			  ctx->input, outbuf, inbuf, nblocks,
+			  &c->u_mode.poly1305.ctx.state, inbuf);
+      else
+	nburn = _gcry_chacha20_poly1305_ppc8_blocks4(
+			  ctx->input, outbuf, inbuf, nblocks,
+			  &c->u_mode.poly1305.ctx.state, inbuf);
       burn = nburn > burn ? nburn : burn;
 
       length -= nblocks * CHACHA20_BLOCK_SIZE;
@@ -1119,7 +1261,7 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
 #endif
 
 #ifdef USE_S390X_VX_POLY1305
-  if (ctx->use_s390x)
+  if (!skip_stitched && ctx->use_s390x)
     {
       if (length >= 8 * CHACHA20_BLOCK_SIZE)
 	{
@@ -1157,8 +1299,10 @@ _gcry_chacha20_poly1305_decrypt(gcry_cipher_hd_t c, byte *outbuf,
       size_t currlen = length;
 
       /* Since checksumming is done before decryption, process input in 24KiB
-       * chunks to keep data loaded in L1 cache for decryption. */
-      if (currlen > 24 * 1024)
+       * chunks to keep data loaded in L1 cache for decryption.  However only
+       * do splitting if input is large enough so that last chunks does not
+       * end up being short. */
+      if (currlen > 32 * 1024)
 	currlen = 24 * 1024;
 
       nburn = _gcry_poly1305_update_burn (&c->u_mode.poly1305.ctx, inbuf,

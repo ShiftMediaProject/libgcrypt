@@ -84,6 +84,9 @@ static const struct
     { "brainpoolP320r1", "1.3.36.3.3.2.8.1.1.9" },
     { "brainpoolP384r1", "1.3.36.3.3.2.8.1.1.11"},
     { "brainpoolP512r1", "1.3.36.3.3.2.8.1.1.13"},
+    { "brainpoolP256r1", "bp256" },         /* Short names from GnuPG.  */
+    { "brainpoolP384r1", "bp384" },
+    { "brainpoolP512r1", "bp512" },
 
     { "GOST2001-test", "1.2.643.2.2.35.0" },
     { "GOST2001-CryptoPro-A", "1.2.643.2.2.35.1" },
@@ -147,7 +150,7 @@ static const ecc_domain_parms_t domain_parms[] =
   {
     {
       /* (-x^2 + y^2 = 1 + dx^2y^2) */
-      "Ed25519", 255, 0,
+      "Ed25519", 255, 1,
       MPI_EC_EDWARDS, ECC_DIALECT_ED25519,
       "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED",
       "-0x01",
@@ -176,7 +179,7 @@ static const ecc_domain_parms_t domain_parms[] =
     },
     {
       /* (x^2 + y^2 = 1 + dx^2y^2) */
-      "Ed448", 448, 0,
+      "Ed448", 448, 1,
       MPI_EC_EDWARDS, ECC_DIALECT_SAFECURVE,
       "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE"
       "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
@@ -778,8 +781,7 @@ _gcry_ecc_update_curve_param (const char *name,
 }
 
 
-/* Return the name matching the parameters in PKEY.  This works only
-   with curves described by the Weierstrass equation. */
+/* Return the name matching the parameters in PKEY.  */
 const char *
 _gcry_ecc_get_curve (gcry_sexp_t keyparms, int iterator, unsigned int *r_nbits)
 {

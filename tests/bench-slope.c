@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -467,7 +467,7 @@ slope_benchmark (struct bench_obj *obj)
     goto err_free;
   /* Get aligned buffer */
   buffer = real_buffer;
-  buffer += 128 - ((real_buffer - (unsigned char *) 0) & (128 - 1));
+  buffer += 128 - ((uintptr_t)real_buffer & (128 - 1));
   if (unaligned_mode)
     buffer += unaligned_mode; /* Make buffer unaligned */
 
@@ -515,6 +515,8 @@ err_free:
 
 /********************************************* CPU frequency auto-detection. */
 
+static volatile size_t vone = 1;
+
 static int
 auto_ghz_init (struct bench_obj *obj)
 {
@@ -535,6 +537,9 @@ auto_ghz_free (struct bench_obj *obj)
 static void
 auto_ghz_bench (struct bench_obj *obj, void *buf, size_t buflen)
 {
+  size_t one = vone;
+  size_t two = one + vone;
+
   (void)obj;
   (void)buf;
 
@@ -544,20 +549,23 @@ auto_ghz_bench (struct bench_obj *obj, void *buf, size_t buflen)
    * function will give cycles/iteration result 1024.0 on high-end CPUs.
    * With turbo, result will be less and can be used detect turbo-clock. */
 
+  /* Auto-ghz operation takes two CPU cycles to perform. Variables are
+   * generated through volatile object and therefore compiler is unable
+   * to optimize these operations to immediate values. */
 #ifdef HAVE_GCC_ASM_VOLATILE_MEMORY
   /* Auto-ghz operation takes two CPU cycles to perform. Memory barriers
    * are used to prevent compiler from optimizing this loop away. */
   #define AUTO_GHZ_OPERATION \
-	asm volatile ("":"+r"(buflen)::"memory"); \
-	buflen ^= 1; \
-	asm volatile ("":"+r"(buflen)::"memory"); \
-	buflen -= 2
+	asm volatile ("":"+r"(buflen),"+r"(one),"+r"(two)::"memory"); \
+	buflen ^= one; \
+	asm volatile ("":"+r"(buflen),"+r"(one),"+r"(two)::"memory"); \
+	buflen -= two
 #else
   /* TODO: Needs alternative way of preventing compiler optimizations.
    *       Mix of XOR and subtraction appears to do the trick for now. */
   #define AUTO_GHZ_OPERATION \
-	buflen ^= 1; \
-	buflen -= 2
+	buflen ^= one; \
+	buflen -= two
 #endif
 
 #define AUTO_GHZ_OPERATION_2 \
@@ -982,6 +990,35 @@ struct bench_cipher_mode
 };
 
 
+static void
+bench_set_cipher_key (gcry_cipher_hd_t hd, int keylen)
+{
+  char *key;
+  int err, i;
+
+  key = malloc (keylen);
+  if (!key)
+    {
+      fprintf (stderr, PGM ": couldn't allocate %d bytes\n", keylen);
+      gcry_cipher_close (hd);
+      exit (1);
+    }
+
+  for (i = 0; i < keylen; i++)
+    key[i] = 0x33 ^ (11 - i);
+
+  err = gcry_cipher_setkey (hd, key, keylen);
+  free (key);
+  if (err)
+    {
+      fprintf (stderr, PGM ": gcry_cipher_setkey failed: %s\n",
+                gpg_strerror (err));
+      gcry_cipher_close (hd);
+      exit (1);
+    }
+}
+
+
 static int
 bench_encrypt_init (struct bench_obj *obj)
 {
@@ -1010,20 +1047,7 @@ bench_encrypt_init (struct bench_obj *obj)
 
   if (keylen)
     {
-      char key[keylen];
-      int i;
-
-      for (i = 0; i < keylen; i++)
-	key[i] = 0x33 ^ (11 - i);
-
-      err = gcry_cipher_setkey (hd, key, keylen);
-      if (err)
-	{
-	  fprintf (stderr, PGM ": gcry_cipher_setkey failed: %s\n",
-		   gpg_strerror (err));
-	  gcry_cipher_close (hd);
-	  exit (1);
-	}
+      bench_set_cipher_key (hd, keylen);
     }
   else
     {
@@ -1119,20 +1143,7 @@ bench_xts_encrypt_init (struct bench_obj *obj)
   keylen = gcry_cipher_get_algo_keylen (mode->algo) * 2;
   if (keylen)
     {
-      char key[keylen];
-      int i;
-
-      for (i = 0; i < keylen; i++)
-	key[i] = 0x33 ^ (11 - i);
-
-      err = gcry_cipher_setkey (hd, key, keylen);
-      if (err)
-	{
-	  fprintf (stderr, PGM ": gcry_cipher_setkey failed: %s\n",
-		   gpg_strerror (err));
-	  gcry_cipher_close (hd);
-	  exit (1);
-	}
+      bench_set_cipher_key (hd, keylen);
     }
   else
     {
@@ -1989,7 +2000,9 @@ hash_bench (char **argv, int argc)
   else
     {
       for (i = 1; i < 400; i++)
-	if (!gcry_md_test_algo (i))
+        if (i == GCRY_MD_CSHAKE128 || i == GCRY_MD_CSHAKE256)
+          ; /* Skip the bench. */
+        else if (!gcry_md_test_algo (i))
 	  _hash_bench (i);
     }
 
@@ -2060,6 +2073,8 @@ bench_mac_init (struct bench_obj *obj)
     case GCRY_MAC_POLY1305_TWOFISH:
     case GCRY_MAC_POLY1305_SERPENT:
     case GCRY_MAC_POLY1305_SEED:
+    case GCRY_MAC_POLY1305_SM4:
+    case GCRY_MAC_POLY1305_ARIA:
       gcry_mac_setiv (hd, key, 16);
       break;
     }
@@ -2282,6 +2297,9 @@ kdf_bench (char **argv, int argc)
 	{
 	  for (j = 1; j < 400; j++)
 	    {
+              if (i == GCRY_MD_CSHAKE128 || i == GCRY_MD_CSHAKE256)
+                continue; /* Skip the bench. */
+
 	      if (gcry_md_test_algo (j))
 		continue;
 
@@ -2296,7 +2314,9 @@ kdf_bench (char **argv, int argc)
   else
     {
       for (i = 1; i < 400; i++)
-	if (!gcry_md_test_algo (i))
+        if (i == GCRY_MD_CSHAKE128 || i == GCRY_MD_CSHAKE256)
+          ; /* Skip the bench. */
+	else if (!gcry_md_test_algo (i))
 	  kdf_bench_one (GCRY_KDF_PBKDF2, i);
     }
 
@@ -2367,16 +2387,16 @@ ecc_algo_fips_allowed (int algo)
       case ECC_ALGO_NIST_P256:
       case ECC_ALGO_NIST_P384:
       case ECC_ALGO_NIST_P521:
-	return 1;
-      case ECC_ALGO_SECP256K1:
-      case ECC_ALGO_BRAINP256R1:
       case ECC_ALGO_ED25519:
       case ECC_ALGO_ED448:
+        return 1;
+      case ECC_ALGO_SECP256K1:
+      case ECC_ALGO_BRAINP256R1:
       case ECC_ALGO_X25519:
       case ECC_ALGO_X448:
       case ECC_ALGO_NIST_P192:
       default:
-	return 0;
+        return 0;
     }
 }
 
@@ -2931,13 +2951,310 @@ ecc_bench (char **argv, int argc)
 #endif
 }
 
+/************************************************************ MPI benchmarks. */
+
+#define MPI_START_SIZE 64
+#define MPI_END_SIZE 1024
+#define MPI_STEP_SIZE 8
+#define MPI_NUM_STEPS (((MPI_END_SIZE - MPI_START_SIZE) / MPI_STEP_SIZE) + 1)
+
+enum bench_mpi_test
+{
+  MPI_TEST_ADD = 0,
+  MPI_TEST_SUB,
+  MPI_TEST_RSHIFT3,
+  MPI_TEST_LSHIFT3,
+  MPI_TEST_RSHIFT65,
+  MPI_TEST_LSHIFT65,
+  MPI_TEST_MUL4,
+  MPI_TEST_MUL8,
+  MPI_TEST_MUL16,
+  MPI_TEST_MUL32,
+  MPI_TEST_DIV4,
+  MPI_TEST_DIV8,
+  MPI_TEST_DIV16,
+  MPI_TEST_DIV32,
+  MPI_TEST_MOD4,
+  MPI_TEST_MOD8,
+  MPI_TEST_MOD16,
+  MPI_TEST_MOD32,
+  __MAX_MPI_TEST
+};
+
+static const char * const mpi_test_names[] =
+{
+  "add",
+  "sub",
+  "rshift3",
+  "lshift3",
+  "rshift65",
+  "lshift65",
+  "mul4",
+  "mul8",
+  "mul16",
+  "mul32",
+  "div4",
+  "div8",
+  "div16",
+  "div32",
+  "mod4",
+  "mod8",
+  "mod16",
+  "mod32",
+  NULL,
+};
+
+struct bench_mpi_mode
+{
+  const char *name;
+  struct bench_ops *ops;
+
+  enum bench_mpi_test test_id;
+};
+
+struct bench_mpi_hd
+{
+  gcry_mpi_t bytes[MPI_NUM_STEPS + 1];
+  gcry_mpi_t y;
+};
+
+static int
+bench_mpi_init (struct bench_obj *obj)
+{
+  struct bench_mpi_mode *mode = obj->priv;
+  struct bench_mpi_hd *hd;
+  int y_bytes;
+  int i, j;
+
+  (void)mode;
+
+  obj->min_bufsize = MPI_START_SIZE;
+  obj->max_bufsize = MPI_END_SIZE;
+  obj->step_size = MPI_STEP_SIZE;
+  obj->num_measure_repetitions = num_measurement_repetitions;
+
+  hd = calloc (1, sizeof(*hd));
+  if (!hd)
+    return -1;
+
+  /* Generate input MPIs for benchmark. */
+  for (i = MPI_START_SIZE, j = 0; j < DIM(hd->bytes); i += MPI_STEP_SIZE, j++)
+    {
+      hd->bytes[j] = gcry_mpi_new (i * 8);
+      gcry_mpi_randomize (hd->bytes[j], i * 8, GCRY_WEAK_RANDOM);
+      gcry_mpi_set_bit (hd->bytes[j], i * 8 - 1);
+    }
+
+  switch (mode->test_id)
+    {
+      case MPI_TEST_MUL4:
+      case MPI_TEST_DIV4:
+      case MPI_TEST_MOD4:
+	y_bytes = 4;
+	break;
+
+      case MPI_TEST_MUL8:
+      case MPI_TEST_DIV8:
+      case MPI_TEST_MOD8:
+	y_bytes = 8;
+	break;
+
+      case MPI_TEST_MUL16:
+      case MPI_TEST_DIV16:
+      case MPI_TEST_MOD16:
+	y_bytes = 16;
+	break;
+
+      case MPI_TEST_MUL32:
+      case MPI_TEST_DIV32:
+      case MPI_TEST_MOD32:
+	y_bytes = 32;
+	break;
+
+      default:
+	y_bytes = 0;
+	break;
+    }
+
+  hd->y = gcry_mpi_new (y_bytes * 8);
+  if (y_bytes)
+    {
+      gcry_mpi_randomize (hd->y, y_bytes * 8, GCRY_WEAK_RANDOM);
+      gcry_mpi_set_bit (hd->y, y_bytes * 8 - 1);
+    }
+
+  obj->hd = hd;
+  return 0;
+}
+
+static void
+bench_mpi_free (struct bench_obj *obj)
+{
+  struct bench_mpi_hd *hd = obj->hd;
+  int i;
+
+  gcry_mpi_release (hd->y);
+  for (i = DIM(hd->bytes) - 1; i >= 0; i--)
+    gcry_mpi_release (hd->bytes[i]);
+
+  free(hd);
+}
+
+static void
+bench_mpi_do_bench (struct bench_obj *obj, void *buf, size_t buflen)
+{
+  struct bench_mpi_hd *hd = obj->hd;
+  struct bench_mpi_mode *mode = obj->priv;
+  int bytes_idx = (buflen - MPI_START_SIZE) / MPI_STEP_SIZE;
+  gcry_mpi_t x;
+
+  (void)buf;
+
+  x = gcry_mpi_new (2 * (MPI_END_SIZE + 1) * 8);
+
+  switch (mode->test_id)
+    {
+      case MPI_TEST_ADD:
+	gcry_mpi_add (x, hd->bytes[bytes_idx], hd->bytes[bytes_idx]);
+	break;
+
+      case MPI_TEST_SUB:
+	gcry_mpi_sub (x, hd->bytes[bytes_idx + 1], hd->bytes[bytes_idx]);
+	break;
+
+      case MPI_TEST_RSHIFT3:
+	gcry_mpi_rshift (x, hd->bytes[bytes_idx], 3);
+	break;
+
+      case MPI_TEST_LSHIFT3:
+	gcry_mpi_lshift (x, hd->bytes[bytes_idx], 3);
+	break;
+
+      case MPI_TEST_RSHIFT65:
+	gcry_mpi_rshift (x, hd->bytes[bytes_idx], 65);
+	break;
+
+      case MPI_TEST_LSHIFT65:
+	gcry_mpi_lshift (x, hd->bytes[bytes_idx], 65);
+	break;
+
+      case MPI_TEST_MUL4:
+      case MPI_TEST_MUL8:
+      case MPI_TEST_MUL16:
+      case MPI_TEST_MUL32:
+	gcry_mpi_mul (x, hd->bytes[bytes_idx], hd->y);
+	break;
+
+      case MPI_TEST_DIV4:
+      case MPI_TEST_DIV8:
+      case MPI_TEST_DIV16:
+      case MPI_TEST_DIV32:
+	gcry_mpi_div (x, NULL, hd->bytes[bytes_idx], hd->y, 0);
+	break;
+
+      case MPI_TEST_MOD4:
+      case MPI_TEST_MOD8:
+      case MPI_TEST_MOD16:
+      case MPI_TEST_MOD32:
+	gcry_mpi_mod (x, hd->bytes[bytes_idx], hd->y);
+	break;
+
+      default:
+	break;
+    }
+
+  gcry_mpi_release (x);
+}
+
+static struct bench_ops mpi_ops = {
+  &bench_mpi_init,
+  &bench_mpi_free,
+  &bench_mpi_do_bench
+};
+
+
+static struct bench_mpi_mode mpi_modes[] = {
+  {"", &mpi_ops},
+  {0},
+};
+
+
+static void
+mpi_bench_one (int test_id, struct bench_mpi_mode *pmode)
+{
+  struct bench_mpi_mode mode = *pmode;
+  struct bench_obj obj = { 0 };
+  double result;
+
+  mode.test_id = test_id;
+
+  if (mode.name[0] == '\0')
+    bench_print_algo (-18, mpi_test_names[test_id]);
+  else
+    bench_print_algo (18, mode.name);
+
+  obj.ops = mode.ops;
+  obj.priv = &mode;
+
+  result = do_slope_benchmark (&obj);
+
+  bench_print_result (result);
+}
+
+static void
+_mpi_bench (int test_id)
+{
+  int i;
+
+  for (i = 0; mpi_modes[i].name; i++)
+    mpi_bench_one (test_id, &mpi_modes[i]);
+}
+
+static int
+mpi_match_test(const char *name)
+{
+  int i;
+
+  for (i = 0; i < __MAX_MPI_TEST; i++)
+    if (strcmp(name, mpi_test_names[i]) == 0)
+      return i;
+
+  return -1;
+}
+
+void
+mpi_bench (char **argv, int argc)
+{
+  int i, test_id;
+
+  bench_print_section ("mpi", "MPI");
+  bench_print_header (18, "");
+
+  if (argv && argc)
+    {
+      for (i = 0; i < argc; i++)
+	{
+	  test_id = mpi_match_test (argv[i]);
+	  if (test_id >= 0)
+	    _mpi_bench (test_id);
+	}
+    }
+  else
+    {
+      for (i = 0; i < __MAX_MPI_TEST; i++)
+	_mpi_bench (i);
+    }
+
+  bench_print_footer (18);
+}
+
 /************************************************************** Main program. */
 
 void
 print_help (void)
 {
   static const char *help_lines[] = {
-    "usage: bench-slope [options] [hash|mac|cipher|kdf|ecc [algonames]]",
+    "usage: bench-slope [options] [hash|mac|cipher|kdf|ecc|mpi [algonames]]",
     "",
     " options:",
     "   --cpu-mhz <mhz>           Set CPU speed for calculating cycles",
@@ -2963,6 +3280,9 @@ static void
 warm_up_cpu (void)
 {
   struct nsec_time start, end;
+
+  if (in_regression_test)
+    return;
 
   get_nsec_time (&start);
   do
@@ -3123,6 +3443,7 @@ main (int argc, char **argv)
       cipher_bench (NULL, 0);
       kdf_bench (NULL, 0);
       ecc_bench (NULL, 0);
+      mpi_bench (NULL, 0);
     }
   else if (!strcmp (*argv, "hash"))
     {
@@ -3163,6 +3484,14 @@ main (int argc, char **argv)
 
       warm_up_cpu ();
       ecc_bench ((argc == 0) ? NULL : argv, argc);
+    }
+  else if (!strcmp (*argv, "mpi"))
+    {
+      argc--;
+      argv++;
+
+      warm_up_cpu ();
+      mpi_bench ((argc == 0) ? NULL : argv, argc);
     }
   else
     {

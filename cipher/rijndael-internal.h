@@ -89,7 +89,7 @@
 # endif
 #endif /* ENABLE_AESNI_SUPPORT */
 
-/* USE_VAES inidicates whether to compile with Intel VAES code.  */
+/* USE_VAES inidicates whether to compile with AMD64 VAES code.  */
 #undef USE_VAES
 #if (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
      defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS)) && \
@@ -97,6 +97,16 @@
      defined(HAVE_GCC_INLINE_ASM_VAES_VPCLMUL) && \
      defined(USE_AESNI)
 # define USE_VAES 1
+#endif
+
+/* USE_VAES_I386 inidicates whether to compile with i386 VAES code.  */
+#undef USE_VAES_I386
+#if (defined(HAVE_COMPATIBLE_GCC_I386_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN32_PLATFORM_AS)) && \
+     defined(__i386__) && defined(ENABLE_AVX2_SUPPORT) && \
+     defined(HAVE_GCC_INLINE_ASM_VAES_VPCLMUL) && \
+     defined(USE_AESNI)
+# define USE_VAES_I386 1
 #endif
 
 /* USE_ARM_CE indicates whether to enable ARMv8 Crypto Extension assembly
@@ -160,6 +170,7 @@ typedef struct RIJNDAEL_context_s
     PROPERLY_ALIGNED_TYPE dummy;
     byte keyschedule[MAXROUNDS+1][4][4];
     u32 keyschedule32[MAXROUNDS+1][4];
+    u32 keyschedule32b[(MAXROUNDS+1)*4];
 #ifdef USE_PADLOCK
     /* The key as passed to the padlock engine.  It is only used if
        the padlock engine is used (USE_PADLOCK, below).  */
@@ -195,10 +206,11 @@ typedef struct RIJNDAEL_context_s
 } RIJNDAEL_context ATTR_ALIGNED_16;
 
 /* Macros defining alias for the keyschedules.  */
-#define keyschenc   u1.keyschedule
-#define keyschenc32 u1.keyschedule32
-#define keyschdec   u2.keyschedule
-#define keyschdec32 u2.keyschedule32
-#define padlockkey  u1.padlock_key
+#define keyschenc     u1.keyschedule
+#define keyschenc32   u1.keyschedule32
+#define keyschenc32b  u1.keyschedule32b
+#define keyschdec     u2.keyschedule
+#define keyschdec32   u2.keyschedule32
+#define padlockkey    u1.padlock_key
 
 #endif /* G10_RIJNDAEL_INTERNAL_H */

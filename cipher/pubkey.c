@@ -6,7 +6,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -48,6 +48,7 @@ static gcry_pk_spec_t * const pubkey_list[] =
 #if USE_ELGAMAL
     &_gcry_pubkey_spec_elg,
 #endif
+    &_gcry_pubkey_spec_kem,
     NULL
   };
 
@@ -452,23 +453,51 @@ _gcry_pk_sign (gcry_sexp_t *r_sig, gcry_sexp_t s_hash, gcry_sexp_t s_skey)
 }
 
 
-gcry_err_code_t
-_gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl, gcry_md_hd_t hd_orig,
-                  gcry_sexp_t s_skey, gcry_ctx_t ctx)
+#define MAX_CONTEXTS 2 /* Currently, input data and random_override */
+
+static gcry_err_code_t
+prepare_datasexp_to_be_signed (const char *tmpl, gcry_md_hd_t hd,
+                               gcry_ctx_t ctx, gcry_sexp_t *s_data_p)
 {
-  gcry_err_code_t rc;
-  gcry_pk_spec_t *spec;
-  gcry_sexp_t keyparms = NULL;
-  gcry_sexp_t s_hash = NULL;
-  int algo;
+  const char *s;
+  const char *digest_name = NULL;
   const unsigned char *digest;
   int digest_size;
-  gcry_error_t err;
-  gcry_md_hd_t hd;
-  const char *s;
-  char *hash_name;
+  int algo;
+  gcry_err_code_t rc;
 
-  *r_sig = NULL;
+  if (hd == NULL)
+    {
+      const unsigned char *data[MAX_CONTEXTS];
+      int data_size[MAX_CONTEXTS];
+      int i = 0;
+      void *argv[MAX_CONTEXTS*2];
+
+      while (1)
+        {
+          size_t len;
+
+          rc = _gcry_pk_get_single_data (&ctx, &data[i/2], &len);
+          if (rc)
+            return rc;
+
+          data_size[i/2] = (int)len;
+
+          argv[i] = (void *)&data_size[i/2];
+          argv[i+1] = (void *)&data[i/2];
+
+          i += 2;
+
+          if (!ctx)
+            break;
+
+          if (i >= MAX_CONTEXTS*2)
+            return GPG_ERR_EINVAL;
+        }
+
+      rc = _gcry_sexp_build_array (s_data_p, NULL, tmpl, argv);
+      return rc;
+    }
 
   /* Check if it has fixed hash name or %s */
   s = strstr (tmpl, "(hash ");
@@ -477,72 +506,59 @@ _gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl, gcry_md_hd_t hd_orig,
 
   s += 6;
   if (!strncmp (s, "%s", 2))
-    hash_name = NULL;
-  else
-    {
-      const char *p;
-
-      for (p = s; *p && *p != ' '; p++)
-	;
-
-      hash_name = xtrymalloc (p - s + 1);
-      if (!hash_name)
-	return gpg_error_from_syserror ();
-      memcpy (hash_name, s, p - s);
-      hash_name[p - s] = 0;
-    }
-
-  err = _gcry_md_copy (&hd, hd_orig);
-  if (err)
-    {
-      xfree (hash_name);
-      return gpg_err_code (err);
-    }
-
-  if (hash_name)
-    {
-      algo = _gcry_md_map_name (hash_name);
-      digest_size = (int) _gcry_md_get_algo_dlen (algo);
-
-      if (algo == 0 || digest_size == 0
-          || (fips_mode () && algo == GCRY_MD_SHA1))
-	{
-	  xfree (hash_name);
-	  _gcry_md_close (hd);
-	  return GPG_ERR_DIGEST_ALGO;
-	}
-
-      digest = _gcry_md_read (hd, algo);
-    }
-  else
     {
       algo = _gcry_md_get_algo (hd);
-      digest_size = (int) _gcry_md_get_algo_dlen (algo);
 
-      if (digest_size == 0 || (fips_mode () && algo == GCRY_MD_SHA1))
+      if (fips_mode () && algo == GCRY_MD_SHA1)
         {
           _gcry_md_close (hd);
           return GPG_ERR_DIGEST_ALGO;
         }
 
+      digest_name = _gcry_md_algo_name (algo);
+      digest_size = (int)_gcry_md_get_algo_dlen (algo);
       digest = _gcry_md_read (hd, 0);
+    }
+  else
+    {
+      const char *p;
+      char *digest_name_supplied;
+
+      for (p = s; *p && *p != ' '; p++)
+	;
+
+      digest_name_supplied = xtrymalloc (p - s + 1);
+      if (!digest_name_supplied)
+	return gpg_error_from_syserror ();
+      memcpy (digest_name_supplied, s, p - s);
+      digest_name_supplied[p - s] = 0;
+
+      algo = _gcry_md_map_name (digest_name_supplied);
+      xfree (digest_name_supplied);
+      if (algo == 0
+          || (fips_mode () && algo == GCRY_MD_SHA1))
+	{
+	  _gcry_md_close (hd);
+	  return GPG_ERR_DIGEST_ALGO;
+	}
+
+      digest_size = (int)_gcry_md_get_algo_dlen (algo);
+      digest = _gcry_md_read (hd, algo);
     }
 
   if (!digest)
     {
-      xfree (hash_name);
       _gcry_md_close (hd);
       return GPG_ERR_NOT_IMPLEMENTED;
     }
 
   if (!ctx)
     {
-      if (hash_name)
-	rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
+      if (!digest_name)
+	rc = _gcry_sexp_build (s_data_p, NULL, tmpl,
 			       digest_size, digest);
       else
-	rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-			       _gcry_md_algo_name (algo),
+	rc = _gcry_sexp_build (s_data_p, NULL, tmpl, digest_name,
 			       digest_size, digest);
     }
   else
@@ -550,26 +566,46 @@ _gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl, gcry_md_hd_t hd_orig,
       const unsigned char *p;
       size_t len;
 
-      rc = _gcry_pk_get_random_override (ctx, &p, &len);
+      rc = _gcry_pk_get_single_data (&ctx, &p, &len);
       if (rc)
-        {
-          _gcry_md_close (hd);
-          return rc;
-        }
+        return rc;
 
-      if (hash_name)
-	rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-			       digest_size, digest,
-			       (int) len, p);
+      if (!digest_name)
+	rc = _gcry_sexp_build (s_data_p, NULL, tmpl,
+                               digest_size, digest, (int) len, p);
       else
-	rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-			       _gcry_md_algo_name (algo),
-			       digest_size, digest,
-			       (int) len, p);
+	rc = _gcry_sexp_build (s_data_p, NULL, tmpl, digest_name,
+                               digest_size, digest, (int) len, p);
     }
 
-  xfree (hash_name);
   _gcry_md_close (hd);
+  return rc;
+}
+
+
+gcry_err_code_t
+_gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl, gcry_md_hd_t hd_orig,
+                  gcry_sexp_t s_skey, gcry_ctx_t ctx)
+{
+  gcry_err_code_t rc;
+  gcry_pk_spec_t *spec;
+  gcry_sexp_t keyparms = NULL;
+  gcry_sexp_t s_data = NULL;
+  gcry_error_t err;
+  gcry_md_hd_t hd;
+
+  *r_sig = NULL;
+
+  if (!hd_orig)
+    hd = NULL;
+  else
+    {
+      err = _gcry_md_copy (&hd, hd_orig);
+      if (err)
+        return gpg_err_code (err);
+    }
+
+  rc = prepare_datasexp_to_be_signed (tmpl, hd, ctx, &s_data);
   if (rc)
     return rc;
 
@@ -582,12 +618,12 @@ _gcry_pk_sign_md (gcry_sexp_t *r_sig, const char *tmpl, gcry_md_hd_t hd_orig,
   else if (!spec->flags.fips && fips_mode ())
     rc = GPG_ERR_PUBKEY_ALGO;
   else if (spec->sign)
-    rc = spec->sign (r_sig, s_hash, keyparms);
+    rc = spec->sign (r_sig, s_data, keyparms);
   else
     rc = GPG_ERR_NOT_IMPLEMENTED;
 
  leave:
-  sexp_release (s_hash);
+  sexp_release (s_data);
   sexp_release (keyparms);
   return rc;
 }
@@ -633,10 +669,7 @@ _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl, gcry_md_hd_t hd_orig,
   gcry_err_code_t rc;
   gcry_pk_spec_t *spec;
   gcry_sexp_t keyparms = NULL;
-  gcry_sexp_t s_hash = NULL;
-  int algo;
-  const unsigned char *digest;
-  int digest_size;
+  gcry_sexp_t s_data = NULL;
   gcry_error_t err;
   gcry_md_hd_t hd;
   const char *s;
@@ -664,84 +697,16 @@ _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl, gcry_md_hd_t hd_orig,
       hash_name[p - s] = 0;
     }
 
-  err = _gcry_md_copy (&hd, hd_orig);
-  if (err)
-    {
-      xfree (hash_name);
-      return gpg_err_code (err);
-    }
-
-  if (hash_name)
-    {
-      algo = _gcry_md_map_name (hash_name);
-      digest_size = (int) _gcry_md_get_algo_dlen (algo);
-
-      if (algo == 0 || digest_size == 0
-          || (fips_mode () && algo == GCRY_MD_SHA1))
-        {
-          xfree (hash_name);
-          _gcry_md_close (hd);
-          return GPG_ERR_DIGEST_ALGO;
-        }
-
-      digest = _gcry_md_read (hd, algo);
-    }
+  if (!hd_orig)
+    hd = NULL;
   else
     {
-      algo = _gcry_md_get_algo (hd);
-      digest_size = (int) _gcry_md_get_algo_dlen (algo);
-
-      if (digest_size == 0 || (fips_mode () && algo == GCRY_MD_SHA1))
-        {
-          _gcry_md_close (hd);
-          return GPG_ERR_DIGEST_ALGO;
-        }
-
-      digest = _gcry_md_read (hd, 0);
+      err = _gcry_md_copy (&hd, hd_orig);
+      if (err)
+        return gpg_err_code (err);
     }
 
-  if (!digest)
-    {
-      xfree (hash_name);
-      _gcry_md_close (hd);
-      return GPG_ERR_DIGEST_ALGO;
-    }
-
-  if (!ctx)
-    {
-      if (hash_name)
-        rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-                               digest_size, digest);
-      else
-        rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-                               _gcry_md_algo_name (algo),
-                               digest_size, digest);
-    }
-  else
-    {
-      const unsigned char *p;
-      size_t len;
-
-      rc = _gcry_pk_get_random_override (ctx, &p, &len);
-      if (rc)
-        {
-          _gcry_md_close (hd);
-          return rc;
-        }
-
-      if (hash_name)
-        rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-                               digest_size, digest,
-                               (int) len, p);
-      else
-        rc = _gcry_sexp_build (&s_hash, NULL, tmpl,
-                               _gcry_md_algo_name (algo),
-                               digest_size, digest,
-                               (int) len, p);
-    }
-
-  xfree (hash_name);
-  _gcry_md_close (hd);
+  rc = prepare_datasexp_to_be_signed (tmpl, hd, ctx, &s_data);
   if (rc)
     return rc;
 
@@ -754,12 +719,12 @@ _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl, gcry_md_hd_t hd_orig,
   else if (!spec->flags.fips && fips_mode ())
     rc = GPG_ERR_PUBKEY_ALGO;
   else if (spec->verify)
-    rc = spec->verify (s_sig, s_hash, keyparms);
+    rc = spec->verify (s_sig, s_data, keyparms);
   else
     rc = GPG_ERR_NOT_IMPLEMENTED;
 
  leave:
-  sexp_release (s_hash);
+  sexp_release (s_data);
   sexp_release (keyparms);
   return rc;
 }
@@ -800,38 +765,34 @@ _gcry_pk_testkey (gcry_sexp_t s_key)
 }
 
 
-/*
-  Create a public key pair and return it in r_key.
-  How the key is created depends on s_parms:
-  (genkey
-   (algo
-     (parameter_name_1 ....)
-      ....
-     (parameter_name_n ....)
-  ))
-  The key is returned in a format depending on the
-  algorithm. Both, private and secret keys are returned
-  and optionally some additional informatin.
-  For elgamal we return this structure:
-  (key-data
-   (public-key
-     (elg
- 	(p <mpi>)
- 	(g <mpi>)
- 	(y <mpi>)
-     )
-   )
-   (private-key
-     (elg
- 	(p <mpi>)
- 	(g <mpi>)
- 	(y <mpi>)
- 	(x <mpi>)
-     )
-   )
-   (misc-key-info
-      (pm1-factors n1 n2 ... nn)
-   ))
+
+/* Create a public key pair and return it as R_KEY.
+ * How the key is created depends on s_parms:
+ *
+ *   (genkey
+ *     (algo
+ *       (parameter_name_1 ....)
+ *       ....
+ *       (parameter_name_n ....)))
+ *
+ * The key is returned in a format depending on the algorithm. Both,
+ * private and secret keys are returned and optionally some additional
+ * information.  For example for Elgamal this structure is returned:
+ *
+ *   (key-data
+ *     (public-key
+ *       (elg
+ *         (p <mpi>)
+ *         (g <mpi>)
+ *         (y <mpi>)))
+ *     (private-key
+ *       (elg
+ *         (p <mpi>)
+ *         (g <mpi>)
+ *         (y <mpi>)
+ *         (x <mpi>)))
+ *     (misc-key-info
+ *        (pm1-factors n1 n2 ... nn)))
  */
 gcry_err_code_t
 _gcry_pk_genkey (gcry_sexp_t *r_key, gcry_sexp_t s_parms)
@@ -1273,47 +1234,50 @@ _gcry_pk_selftest (int algo, int extended, selftest_report_func_t report)
 }
 
 
-struct pk_random_override {
+struct pk_single_data {
   size_t len;
   unsigned char area[1];  /* In future, we may use flexible array member.  */
 };
 
 gpg_err_code_t
-_gcry_pk_random_override_new (gcry_ctx_t *r_ctx,
-                              const unsigned char *p, size_t len)
+_gcry_pk_single_data_push (gcry_ctx_t *r_ctx,
+                          const unsigned char *p, size_t len)
 {
   gcry_ctx_t ctx;
-  struct pk_random_override *pro;
+  struct pk_single_data *psd;
+  int data_type = CONTEXT_TYPE_SINGLE_DATA;
 
-  *r_ctx = NULL;
   if (!p)
     return GPG_ERR_EINVAL;
 
-  ctx = _gcry_ctx_alloc (CONTEXT_TYPE_RANDOM_OVERRIDE,
-                         offsetof (struct pk_random_override, area) + len,
-                         NULL);
+  ctx = _gcry_ctx_alloc (data_type,
+			 offsetof (struct pk_single_data, area) + len,
+                         NULL, *r_ctx);
   if (!ctx)
     return gpg_err_code_from_syserror ();
-  pro = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_RANDOM_OVERRIDE);
-  pro->len = len;
-  memcpy (pro->area, p, len);
+  psd = _gcry_ctx_get_pointer (ctx, data_type);
+  psd->len = len;
+  memcpy (psd->area, p, len);
 
   *r_ctx = ctx;
   return 0;
 }
 
 gpg_err_code_t
-_gcry_pk_get_random_override (gcry_ctx_t ctx,
-                              const unsigned char **r_p, size_t *r_len)
+_gcry_pk_get_single_data (gcry_ctx_t *r_ctx,
+                          const unsigned char **r_p, size_t *r_len)
 {
-  struct pk_random_override *pro;
+  struct pk_single_data *psd;
+  int data_type = CONTEXT_TYPE_SINGLE_DATA;
+  gcry_ctx_t ctx = *r_ctx;
 
-  pro = _gcry_ctx_find_pointer (ctx, CONTEXT_TYPE_RANDOM_OVERRIDE);
-  if (!pro)
+  psd = _gcry_ctx_find_pointer (ctx, data_type);
+  if (!psd)
     return GPG_ERR_EINVAL;
 
-  *r_p = pro->area;
-  *r_len = pro->len;
+  *r_p = psd->area;
+  *r_len = psd->len;
+  *r_ctx = _gcry_ctx_get_pointer (ctx, 0);
 
   return 0;
 }

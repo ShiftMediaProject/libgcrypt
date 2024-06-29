@@ -14,8 +14,8 @@
 ;; GNU Lesser General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU Lesser General Public
-;; License along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+;; License along with this program; if not, see <https://www.gnu.org/licenses/>.
+;; SPDX-License-Identifier: LGPL-2.1-or-later
 ;;
 
 ;; Note: This file should be updated manually and the ordinals shall
@@ -297,5 +297,14 @@ EXPORTS
       gcry_kdf_compute          @259
       gcry_kdf_final            @260
       gcry_kdf_close            @261
+
+      gcry_cipher_setup_geniv   @262
+      gcry_cipher_geniv         @263
+
+      gcry_kem_keypair          @264
+      gcry_kem_encap            @265
+      gcry_kem_decap            @266
+
+      gcry_md_hash_buffers_ext  @267
 
 ;; end of file with public symbols for Windows.

@@ -16,8 +16,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * Note: This code is heavily based on the GNU MP Library.
  *	 Actually it's the same code with only minor changes in the
@@ -29,27 +29,7 @@
 #include <config.h>
 
 #ifdef __i386__
-#ifdef HAVE_GCC_ASM_CFI_DIRECTIVES
-# define CFI_STARTPROC()            .cfi_startproc
-# define CFI_ENDPROC()              .cfi_endproc
-# define CFI_ADJUST_CFA_OFFSET(off) .cfi_adjust_cfa_offset off
-# define CFI_REL_OFFSET(reg,off)    .cfi_rel_offset reg, off
-# define CFI_RESTORE(reg)           .cfi_restore reg
-
-# define CFI_PUSH(reg) \
-	CFI_ADJUST_CFA_OFFSET(4); CFI_REL_OFFSET(reg, 0)
-# define CFI_POP(reg) \
-	CFI_ADJUST_CFA_OFFSET(-4); CFI_RESTORE(reg)
-#else
-# define CFI_STARTPROC()
-# define CFI_ENDPROC()
-# define CFI_ADJUST_CFA_OFFSET(off)
-# define CFI_REL_OFFSET(reg,off)
-# define CFI_RESTORE(reg)
-
-# define CFI_PUSH(reg)
-# define CFI_POP(reg)
-#endif
+#include "asm-common-i386.h"
 #endif
 
 #undef ALIGN

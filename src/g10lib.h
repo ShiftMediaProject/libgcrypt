@@ -5,7 +5,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -46,10 +46,10 @@
 
 #if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 5 )
 #define JNLIB_GCC_M_FUNCTION 1
-#define JNLIB_GCC_A_NR 	     __attribute__ ((noreturn))
+#define JNLIB_GCC_A_NR 	     __attribute__ ((__noreturn__))
 #define JNLIB_GCC_A_PRINTF( f, a )  __attribute__ ((format (printf,f,a)))
 #define JNLIB_GCC_A_NR_PRINTF( f, a ) \
-			    __attribute__ ((noreturn, format (printf,f,a)))
+			    __attribute__ ((__noreturn__, format (printf,f,a)))
 #define GCC_ATTR_NORETURN  __attribute__ ((__noreturn__))
 #else
 #define JNLIB_GCC_A_NR
@@ -113,7 +113,6 @@
 extern int _gcry_global_any_init_done;
 int _gcry_global_is_operational (void);
 gcry_err_code_t _gcry_vcontrol (enum gcry_ctl_cmds cmd, va_list arg_ptr);
-void _gcry_check_heap (const void *a);
 void _gcry_pre_syscall (void);
 void _gcry_post_syscall (void);
 int _gcry_get_debug_flag (unsigned int mask);
@@ -167,8 +166,9 @@ void _gcry_divide_by_zero (void) JNLIB_GCC_A_NR;
 
 const char *_gcry_gettext (const char *key) GCC_ATTR_FORMAT_ARG(1);
 void _gcry_fatal_error(int rc, const char *text ) JNLIB_GCC_A_NR;
-void _gcry_logv (int level,
-                 const char *fmt, va_list arg_ptr) JNLIB_GCC_A_PRINTF(2,0);
+void _gcry_set_gpgrt_post_log_handler (void);
+void _gcry_logv (int level, const char *fmt,
+                 va_list arg_ptr) JNLIB_GCC_A_PRINTF(2,0);
 void _gcry_log( int level, const char *fmt, ... ) JNLIB_GCC_A_PRINTF(2,3);
 void _gcry_log_bug( const char *fmt, ... )   JNLIB_GCC_A_NR_PRINTF(1,2);
 void _gcry_log_fatal( const char *fmt, ... ) JNLIB_GCC_A_NR_PRINTF(1,2);
@@ -238,6 +238,8 @@ char **_gcry_strtokenize (const char *string, const char *delim);
 #define HWF_INTEL_RDTSC         (1 << 15)
 #define HWF_INTEL_SHAEXT        (1 << 16)
 #define HWF_INTEL_VAES_VPCLMUL  (1 << 17)
+#define HWF_INTEL_AVX512        (1 << 18)
+#define HWF_INTEL_GFNI          (1 << 19)
 
 #elif defined(HAVE_CPU_ARCH_ARM)
 
@@ -246,6 +248,16 @@ char **_gcry_strtokenize (const char *string, const char *delim);
 #define HWF_ARM_SHA1            (1 << 2)
 #define HWF_ARM_SHA2            (1 << 3)
 #define HWF_ARM_PMULL           (1 << 4)
+#define HWF_ARM_SHA3            (1 << 5)
+#define HWF_ARM_SM3             (1 << 6)
+#define HWF_ARM_SM4             (1 << 7)
+#define HWF_ARM_SHA512          (1 << 8)
+#define HWF_ARM_SVE             (1 << 9)
+#define HWF_ARM_SVE2            (1 << 10)
+#define HWF_ARM_SVEAES          (1 << 11)
+#define HWF_ARM_SVEPMULL        (1 << 12)
+#define HWF_ARM_SVESHA3         (1 << 13)
+#define HWF_ARM_SVESM4          (1 << 14)
 
 #elif defined(HAVE_CPU_ARCH_PPC)
 
@@ -419,6 +431,7 @@ gcry_err_code_t _gcry_sexp_vbuild (gcry_sexp_t *retsexp, size_t *erroff,
 char *_gcry_sexp_nth_string (const gcry_sexp_t list, int number);
 gpg_err_code_t _gcry_sexp_vextract_param (gcry_sexp_t sexp, const char *path,
                                           const char *list, va_list arg_ptr);
+void *_gcry_hex2buffer (const char *string, size_t *r_length);
 
 
 /*-- fips.c --*/

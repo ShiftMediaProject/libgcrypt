@@ -29,18 +29,20 @@
 # define ELF(...) /*_*/
 #endif
 
+#ifdef _WIN32
+# define SECTION_RODATA .section .rdata
+#else
+# define SECTION_RODATA .section .rodata
+#endif
+
 #ifdef __APPLE__
 #define GET_DATA_POINTER(reg, name) \
 	adrp    reg, name@GOTPAGE ; \
 	add     reg, reg, name@GOTPAGEOFF ;
-#elif defined(_WIN32)
+#else
 #define GET_DATA_POINTER(reg, name) \
 	adrp    reg, name ; \
 	add     reg, reg, #:lo12:name ;
-#else
-#define GET_DATA_POINTER(reg, name) \
-	adrp    reg, :got:name ; \
-	ldr     reg, [reg, #:got_lo12:name] ;
 #endif
 
 #ifdef HAVE_GCC_ASM_CFI_DIRECTIVES
@@ -104,5 +106,27 @@
 /* 'ret' instruction replacement for straight-line speculation mitigation */
 #define ret_spec_stop \
 	ret; dsb sy; isb;
+
+#define CLEAR_REG(reg) movi reg.16b, #0;
+
+#define VPUSH_ABI \
+	stp d8, d9, [sp, #-16]!; \
+	CFI_ADJUST_CFA_OFFSET(16); \
+	stp d10, d11, [sp, #-16]!; \
+	CFI_ADJUST_CFA_OFFSET(16); \
+	stp d12, d13, [sp, #-16]!; \
+	CFI_ADJUST_CFA_OFFSET(16); \
+	stp d14, d15, [sp, #-16]!; \
+	CFI_ADJUST_CFA_OFFSET(16);
+
+#define VPOP_ABI \
+	ldp d14, d15, [sp], #16; \
+	CFI_ADJUST_CFA_OFFSET(-16); \
+	ldp d12, d13, [sp], #16; \
+	CFI_ADJUST_CFA_OFFSET(-16); \
+	ldp d10, d11, [sp], #16; \
+	CFI_ADJUST_CFA_OFFSET(-16); \
+	ldp d8, d9, [sp], #16; \
+	CFI_ADJUST_CFA_OFFSET(-16);
 
 #endif /* GCRY_ASM_COMMON_AARCH64_H */

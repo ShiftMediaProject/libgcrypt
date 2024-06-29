@@ -104,6 +104,7 @@ MARK_VISIBLEX (gcry_md_get_algo)
 MARK_VISIBLEX (gcry_md_get_algo_dlen)
 MARK_VISIBLEX (gcry_md_hash_buffer)
 MARK_VISIBLEX (gcry_md_hash_buffers)
+MARK_VISIBLEX (gcry_md_hash_buffers_ext)
 MARK_VISIBLEX (gcry_md_info)
 MARK_VISIBLEX (gcry_md_is_enabled)
 MARK_VISIBLEX (gcry_md_is_secure)
@@ -122,6 +123,8 @@ MARK_VISIBLEX (gcry_cipher_close)
 MARK_VISIBLEX (gcry_cipher_setkey)
 MARK_VISIBLEX (gcry_cipher_setiv)
 MARK_VISIBLEX (gcry_cipher_setctr)
+MARK_VISIBLEX (gcry_cipher_setup_geniv)
+MARK_VISIBLEX (gcry_cipher_geniv)
 MARK_VISIBLEX (gcry_cipher_authenticate)
 MARK_VISIBLEX (gcry_cipher_checktag)
 MARK_VISIBLEX (gcry_cipher_gettag)
@@ -176,6 +179,10 @@ MARK_VISIBLEX (gcry_kdf_open)
 MARK_VISIBLEX (gcry_kdf_compute)
 MARK_VISIBLEX (gcry_kdf_final)
 MARK_VISIBLEX (gcry_kdf_close)
+
+MARK_VISIBLEX (gcry_kem_keypair)
+MARK_VISIBLEX (gcry_kem_encap)
+MARK_VISIBLEX (gcry_kem_decap)
 
 MARK_VISIBLEX (gcry_prime_check)
 MARK_VISIBLEX (gcry_prime_generate)
@@ -344,6 +351,8 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_cipher_setctr          _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_cipher_algo_info       _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_cipher_algo_name       _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_cipher_setup_geniv     _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_cipher_geniv           _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_cipher_authenticate    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_cipher_checktag        _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_cipher_gettag          _gcry_USE_THE_UNDERSCORED_FUNCTION
@@ -388,6 +397,7 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_md_get_algo_dlen       _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_hash_buffer         _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_hash_buffers        _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_md_hash_buffers_ext    _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_info                _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_is_enabled          _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_md_is_secure           _gcry_USE_THE_UNDERSCORED_FUNCTION
@@ -420,6 +430,10 @@ MARK_VISIBLEX (_gcry_mpi_get_const)
 #define gcry_kdf_compute            _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_kdf_final              _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_kdf_close              _gcry_USE_THE_UNDERSCORED_FUNCTION
+
+#define gcry_kem_keypair            _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kem_encap              _gcry_USE_THE_UNDERSCORED_FUNCTION
+#define gcry_kem_decap              _gcry_USE_THE_UNDERSCORED_FUNCTION
 
 #define gcry_prime_check            _gcry_USE_THE_UNDERSCORED_FUNCTION
 #define gcry_prime_generate         _gcry_USE_THE_UNDERSCORED_FUNCTION

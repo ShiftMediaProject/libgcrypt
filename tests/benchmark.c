@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -71,6 +71,7 @@ static int with_progress;
 static int single_char_progress;
 
 
+#if USE_DSA
 static const char sample_private_dsa_key_1024[] =
 "(private-key\n"
 "  (dsa\n"
@@ -256,8 +257,10 @@ static const char sample_public_dsa_key_3072[] =
        "3DB98C4297CB678046ED55C0DBE60BF7142C594603E4D705DC3D17270F9F086EC561"
        "2703D518D8D49FF0EBE6#)\n"
 "))\n";
+#endif /* USE_DSA */
 
 
+#if USE_ELGAMAL
 static const char sample_public_elg_key_1024[] =
 "(public-key"
 "  (elg"
@@ -392,6 +395,7 @@ static const char sample_private_elg_key_3072[] =
 "   (x #03A73F0389E470AAC831B039F8AA0C4EBD3A47DD083E32EEA08E4911236CD597C272"
        "9823D47A51C8535DA52FE6DAB3E8D1C20D#)"
 "  ))";
+#endif /* USE_ELGAMAL */
 
 
 #define BUG() do {fprintf ( stderr, "Ooops at %s:%d\n", __FILE__ , __LINE__ );\
@@ -485,6 +489,8 @@ md_bench ( const char *algoname )
       for (i=1; i < 400; i++)
         if (in_fips_mode && i == GCRY_MD_MD5)
           ; /* Don't use MD5 in fips mode.  */
+        else if (i == GCRY_MD_CSHAKE128 || i == GCRY_MD_CSHAKE256)
+          ; /* Skip. */
         else if ( !gcry_md_test_algo (i) )
           md_bench (gcry_md_algo_name (i));
       return;
@@ -648,7 +654,7 @@ mac_bench ( const char *algoname )
   for (i=0; i < bufsize; i++)
     buf[i] = i;
 
-  if (algo >= GCRY_MAC_POLY1305_AES && algo <= GCRY_MAC_POLY1305_SEED)
+  if (algo >= GCRY_MAC_POLY1305_AES && algo <= GCRY_MAC_POLY1305_ARIA)
     {
       static const char iv[16] = { 1, 2, 3, 4, };
       err = gcry_mac_setiv(hd, iv, sizeof(iv));
@@ -715,15 +721,16 @@ mac_bench ( const char *algoname )
 
 static void ccm_aead_init(gcry_cipher_hd_t hd, size_t buflen, int authlen)
 {
-  const int _L = 4;
-  const int noncelen = 15 - _L;
-  char nonce[noncelen];
+  const char _L[4];
+  char nonce[15 - sizeof(_L)];
   u64 params[3];
   gcry_error_t err = GPG_ERR_NO_ERROR;
 
-  memset (nonce, 0x33, noncelen);
+  (void)_L;
 
-  err = gcry_cipher_setiv (hd, nonce, noncelen);
+  memset (nonce, 0x33, sizeof(nonce));
+
+  err = gcry_cipher_setiv (hd, nonce, sizeof(nonce));
   if (err)
     {
       fprintf (stderr, "gcry_cipher_setiv failed: %s\n",
@@ -1136,6 +1143,7 @@ cipher_bench ( const char *algoname )
 static void
 rsa_bench (int iterations, int print_header, int no_blinding)
 {
+#if USE_RSA
   gpg_error_t err;
   int p_sizes[] = { 1024, 2048, 3072, 4096 };
   int testno;
@@ -1257,12 +1265,18 @@ rsa_bench (int iterations, int print_header, int no_blinding)
       gcry_sexp_release (sec_key);
       gcry_sexp_release (pub_key);
     }
+#else /* USE_RSA */
+  (void) iterations;
+  (void) print_header;
+  (void) no_blinding;
+#endif /* USE_RSA */
 }
 
 
 static void
 elg_bench (int iterations, int print_header)
 {
+#ifdef USE_ELGAMAL
   gpg_error_t err;
   gcry_sexp_t pub_key[3], sec_key[3];
   int p_sizes[3] = { 1024, 2048, 3072 };
@@ -1374,12 +1388,17 @@ elg_bench (int iterations, int print_header)
       gcry_sexp_release (sec_key[i]);
       gcry_sexp_release (pub_key[i]);
     }
+#else /* USE_ELGAMAL */
+  (void) iterations;
+  (void) print_header;
+#endif /* USE_ELGAMAL */
 }
 
 
 static void
 dsa_bench (int iterations, int print_header)
 {
+#ifdef USE_DSA
   gpg_error_t err;
   gcry_sexp_t pub_key[3], sec_key[3];
   int p_sizes[3] = { 1024, 2048, 3072 };
@@ -1485,6 +1504,10 @@ dsa_bench (int iterations, int print_header)
       gcry_sexp_release (sec_key[i]);
       gcry_sexp_release (pub_key[i]);
     }
+#else
+  (void) iterations;
+  (void) print_header;
+#endif /* USE_DSA */
 }
 
 
@@ -1517,10 +1540,9 @@ ecc_bench (int iterations, int print_header)
       is_ed448 = !strcmp (p_sizes[testno], "Ed448");
       is_gost = !strncmp (p_sizes[testno], "gost", 4);
 
-      /* Only P-{224,256,384,521} are allowed in fips mode */
+      /* Only P-{224,256,384,521} and EdDSA curves are allowed in fips mode */
       if (gcry_fips_mode_active()
-          && (is_ed25519 || is_ed448 || is_gost
-              || !strcmp (p_sizes[testno], "192")))
+          && (is_gost || !strcmp (p_sizes[testno], "192")))
          continue;
 
       if (is_ed25519)
@@ -1648,6 +1670,9 @@ ecc_bench (int iterations, int print_header)
       gcry_sexp_release (sec_key);
       gcry_sexp_release (pub_key);
     }
+#else
+  (void) iterations;
+  (void) print_header;
 #endif /*USE_ECC*/
 }
 

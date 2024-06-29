@@ -1,6 +1,6 @@
 /* Rijndael (AES) for GnuPG - PowerPC Vector Crypto AES implementation
  * Copyright (C) 2019 Shawn Landden <shawn@git.icu>
- * Copyright (C) 2019-2020 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2019-2020, 2022 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -34,10 +34,22 @@
 #include "rijndael-ppc-common.h"
 
 
-#ifdef WORDS_BIGENDIAN
-static const block vec_bswap32_const =
-  { 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12 };
+#ifdef HAVE_GCC_ATTRIBUTE_OPTIMIZE
+# define FUNC_ATTR_OPT __attribute__((optimize("-O2")))
 #else
+# define FUNC_ATTR_OPT
+#endif
+
+#if defined(__clang__) && defined(HAVE_CLANG_ATTRIBUTE_PPC_TARGET)
+# define PPC_OPT_ATTR __attribute__((target("arch=pwr8"))) FUNC_ATTR_OPT
+#elif defined(HAVE_GCC_ATTRIBUTE_PPC_TARGET)
+# define PPC_OPT_ATTR __attribute__((target("cpu=power8"))) FUNC_ATTR_OPT
+#else
+# define PPC_OPT_ATTR FUNC_ATTR_OPT
+#endif
+
+
+#ifndef WORDS_BIGENDIAN
 static const block vec_bswap32_const_neg =
   { ~3, ~2, ~1, ~0, ~7, ~6, ~5, ~4, ~11, ~10, ~9, ~8, ~15, ~14, ~13, ~12 };
 #endif
@@ -104,138 +116,95 @@ asm_store_be_noswap(block vec, unsigned long offset, void *ptr)
 }
 
 
-static ASM_FUNC_ATTR_INLINE u32
-_gcry_aes_sbox4_ppc8(u32 fourbytes)
+static ASM_FUNC_ATTR_INLINE unsigned int
+keysched_idx(unsigned int in)
 {
-  union
-    {
-      PROPERLY_ALIGNED_TYPE dummy;
-      block data_vec;
-      u32 data32[4];
-    } u;
-
-  u.data32[0] = fourbytes;
-  u.data_vec = vec_sbox_be(u.data_vec);
-  return u.data32[0];
+#ifdef WORDS_BIGENDIAN
+  return in;
+#else
+  return (in & ~3U) | (3U - (in & 3U));
+#endif
 }
 
-void
+
+static ASM_FUNC_ATTR_INLINE vec_u32
+bcast_u32_to_vec(u32 x)
+{
+  vec_u32 v = { x, x, x, x };
+  return v;
+}
+
+
+static ASM_FUNC_ATTR_INLINE u32
+u32_from_vec(vec_u32 x)
+{
+#ifdef WORDS_BIGENDIAN
+  return x[1];
+#else
+  return x[2];
+#endif
+}
+
+
+void PPC_OPT_ATTR
 _gcry_aes_ppc8_setkey (RIJNDAEL_context *ctx, const byte *key)
 {
-  const block bige_const = asm_load_be_const();
-  union
-    {
-      PROPERLY_ALIGNED_TYPE dummy;
-      byte data[MAXKC][4];
-      u32 data32[MAXKC];
-    } tkk[2];
+  static const vec_u32 rotate24 = { 24, 24, 24, 24 };
+  static const vec_u32 rcon_const = { 0x1b, 0x1b, 0x1b, 0x1b };
+  vec_u32 tk_vu32[MAXKC];
   unsigned int rounds = ctx->rounds;
-  int KC = rounds - 6;
-  unsigned int keylen = KC * 4;
-  u128_t *ekey = (u128_t *)(void *)ctx->keyschenc;
-  unsigned int i, r, t;
-  byte rcon = 1;
-  int j;
-#define k      tkk[0].data
-#define k_u32  tkk[0].data32
-#define tk     tkk[1].data
-#define tk_u32 tkk[1].data32
-#define W      (ctx->keyschenc)
-#define W_u32  (ctx->keyschenc32)
+  unsigned int KC = rounds - 6;
+  u32 *W_u32 = ctx->keyschenc32b;
+  unsigned int i, j;
+  vec_u32 tk_prev;
+  vec_u32 rcon = { 1, 1, 1, 1 };
 
-  for (i = 0; i < keylen; i++)
+  for (i = 0; i < KC; i += 2)
     {
-      k[i >> 2][i & 3] = key[i];
+      unsigned int idx0 = keysched_idx(i + 0);
+      unsigned int idx1 = keysched_idx(i + 1);
+      tk_vu32[i + 0] = bcast_u32_to_vec(buf_get_le32(key + i * 4 + 0));
+      tk_vu32[i + 1] = bcast_u32_to_vec(buf_get_le32(key + i * 4 + 4));
+      W_u32[idx0] = u32_from_vec(vec_revb(tk_vu32[i + 0]));
+      W_u32[idx1] = u32_from_vec(vec_revb(tk_vu32[i + 1]));
     }
 
-  for (j = KC-1; j >= 0; j--)
+  for (i = KC, j = KC, tk_prev = tk_vu32[KC - 1];
+       i < 4 * (rounds + 1);
+       i += 2, j += 2)
     {
-      tk_u32[j] = k_u32[j];
-    }
-  r = 0;
-  t = 0;
-  /* Copy values into round key array.  */
-  for (j = 0; (j < KC) && (r < rounds + 1); )
-    {
-      for (; (j < KC) && (t < 4); j++, t++)
-        {
-          W_u32[r][t] = le_bswap32(tk_u32[j]);
-        }
-      if (t == 4)
-        {
-          r++;
-          t = 0;
-        }
-    }
-  while (r < rounds + 1)
-    {
-      tk_u32[0] ^=
-	le_bswap32(
-	  _gcry_aes_sbox4_ppc8(rol(le_bswap32(tk_u32[KC - 1]), 24)) ^ rcon);
+      unsigned int idx0 = keysched_idx(i + 0);
+      unsigned int idx1 = keysched_idx(i + 1);
+      vec_u32 temp0 = tk_prev;
+      vec_u32 temp1;
 
-      if (KC != 8)
+      if (j == KC)
         {
-          for (j = 1; j < KC; j++)
-            {
-              tk_u32[j] ^= tk_u32[j-1];
-            }
+          j = 0;
+          temp0 = (vec_u32)(asm_sbox_be((block)vec_rl(temp0, rotate24))) ^ rcon;
+          rcon = (vec_u32)(((block)rcon << 1)
+                           ^ (-((block)rcon >> 7) & (block)rcon_const));
         }
-      else
+      else if (KC == 8 && j == 4)
         {
-          for (j = 1; j < KC/2; j++)
-            {
-              tk_u32[j] ^= tk_u32[j-1];
-            }
-
-          tk_u32[KC/2] ^=
-	    le_bswap32(_gcry_aes_sbox4_ppc8(le_bswap32(tk_u32[KC/2 - 1])));
-
-          for (j = KC/2 + 1; j < KC; j++)
-            {
-              tk_u32[j] ^= tk_u32[j-1];
-            }
+          temp0 = (vec_u32)asm_sbox_be((block)temp0);
         }
 
-      /* Copy values into round key array.  */
-      for (j = 0; (j < KC) && (r < rounds + 1); )
-        {
-          for (; (j < KC) && (t < 4); j++, t++)
-            {
-              W_u32[r][t] = le_bswap32(tk_u32[j]);
-            }
-          if (t == 4)
-            {
-              r++;
-              t = 0;
-            }
-        }
+      temp1 = tk_vu32[j + 0];
 
-      rcon = (rcon << 1) ^ (-(rcon >> 7) & 0x1b);
+      tk_vu32[j + 0] = temp0 ^ temp1;
+      tk_vu32[j + 1] ^= temp0 ^ temp1;
+      tk_prev = tk_vu32[j + 1];
+
+      W_u32[idx0] = u32_from_vec(vec_revb(tk_vu32[j + 0]));
+      W_u32[idx1] = u32_from_vec(vec_revb(tk_vu32[j + 1]));
     }
 
-  /* Store in big-endian order. */
-  for (r = 0; r <= rounds; r++)
-    {
-#ifndef WORDS_BIGENDIAN
-      VEC_STORE_BE(ekey, r, ALIGNED_LOAD (ekey, r), bige_const);
-#else
-      block rvec = ALIGNED_LOAD (ekey, r);
-      ALIGNED_STORE (ekey, r,
-                     vec_perm(rvec, rvec, vec_bswap32_const));
-      (void)bige_const;
-#endif
-    }
-
-#undef W
-#undef tk
-#undef k
-#undef W_u32
-#undef tk_u32
-#undef k_u32
-  wipememory(&tkk, sizeof(tkk));
+  wipememory(tk_vu32, sizeof(tk_vu32));
 }
 
-void
+
+void PPC_OPT_ATTR
 _gcry_aes_ppc8_prepare_decryption (RIJNDAEL_context *ctx)
 {
   internal_aes_ppc_prepare_decryption (ctx);
@@ -245,6 +214,7 @@ _gcry_aes_ppc8_prepare_decryption (RIJNDAEL_context *ctx)
 #define GCRY_AES_PPC8 1
 #define ENCRYPT_BLOCK_FUNC	_gcry_aes_ppc8_encrypt
 #define DECRYPT_BLOCK_FUNC	_gcry_aes_ppc8_decrypt
+#define ECB_CRYPT_FUNC		_gcry_aes_ppc8_ecb_crypt
 #define CFB_ENC_FUNC		_gcry_aes_ppc8_cfb_enc
 #define CFB_DEC_FUNC		_gcry_aes_ppc8_cfb_dec
 #define CBC_ENC_FUNC		_gcry_aes_ppc8_cbc_enc
@@ -253,6 +223,7 @@ _gcry_aes_ppc8_prepare_decryption (RIJNDAEL_context *ctx)
 #define OCB_CRYPT_FUNC		_gcry_aes_ppc8_ocb_crypt
 #define OCB_AUTH_FUNC		_gcry_aes_ppc8_ocb_auth
 #define XTS_CRYPT_FUNC		_gcry_aes_ppc8_xts_crypt
+#define CTR32LE_ENC_FUNC	_gcry_aes_ppc8_ctr32le_enc
 
 #include <rijndael-ppc-functions.h>
 

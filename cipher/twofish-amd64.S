@@ -161,7 +161,7 @@
 	xorl (w + 4 * (m))(CTX), x; \
 	movl x, (4 * (n))(out);
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_encrypt_block
 ELF(.type   _gcry_twofish_amd64_encrypt_block,@function;)
 
@@ -215,7 +215,7 @@ _gcry_twofish_amd64_encrypt_block:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_encrypt_block,.-_gcry_twofish_amd64_encrypt_block;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_decrypt_block
 ELF(.type   _gcry_twofish_amd64_decrypt_block,@function;)
 
@@ -486,7 +486,7 @@ ELF(.size _gcry_twofish_amd64_encrypt_block,.-_gcry_twofish_amd64_encrypt_block;
 	rorq $32,			RAB2; \
 	outunpack3(RAB, 2);
 
-.align 8
+.align 16
 ELF(.type __twofish_enc_blk3,@function;)
 
 __twofish_enc_blk3:
@@ -515,7 +515,7 @@ __twofish_enc_blk3:
 	CFI_ENDPROC();
 ELF(.size __twofish_enc_blk3,.-__twofish_enc_blk3;)
 
-.align 8
+.align 16
 ELF(.type  __twofish_dec_blk3,@function;)
 
 __twofish_dec_blk3:
@@ -544,7 +544,81 @@ __twofish_dec_blk3:
 	CFI_ENDPROC();
 ELF(.size __twofish_dec_blk3,.-__twofish_dec_blk3;)
 
-.align 8
+.align 16
+.globl _gcry_twofish_amd64_blk3
+ELF(.type   _gcry_twofish_amd64_blk3,@function;)
+_gcry_twofish_amd64_blk3:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (3 blocks)
+	 *	%rdx: src (3 blocks)
+	 *	%ecx: encrypt (0 or 1)
+	 */
+	CFI_STARTPROC();
+	ENTER_SYSV_FUNC_PARAMS_0_4
+
+	subq $(8 * 8), %rsp;
+	CFI_ADJUST_CFA_OFFSET(8 * 8);
+	movq %rbp, (0 * 8)(%rsp);
+	movq %rbx, (1 * 8)(%rsp);
+	movq %r12, (2 * 8)(%rsp);
+	movq %r13, (3 * 8)(%rsp);
+	movq %r14, (4 * 8)(%rsp);
+	movq %r15, (5 * 8)(%rsp);
+	CFI_REL_OFFSET(%rbp, 0 * 8);
+	CFI_REL_OFFSET(%rbx, 1 * 8);
+	CFI_REL_OFFSET(%r12, 2 * 8);
+	CFI_REL_OFFSET(%r13, 3 * 8);
+	CFI_REL_OFFSET(%r14, 4 * 8);
+	CFI_REL_OFFSET(%r15, 5 * 8);
+
+	testl %ecx, %ecx;
+	movq %rdx, RX0;
+	movq %rsi, (6 * 8)(%rsp);
+
+	movq (0 * 8)(RX0), RAB0;
+	movq (1 * 8)(RX0), RCD0;
+	movq (2 * 8)(RX0), RAB1;
+	movq (3 * 8)(RX0), RCD1;
+	movq (4 * 8)(RX0), RAB2;
+	movq (5 * 8)(RX0), RCD2;
+
+	jz .Lblk1_3_dec;
+		call __twofish_enc_blk3;
+		jmp .Lblk1_3_end;
+	.Lblk1_3_dec:
+		call __twofish_dec_blk3;
+
+.Lblk1_3_end:
+	movq (6 * 8)(%rsp), RX0;
+	movq RCD0, (0 * 8)(RX0);
+	movq RAB0, (1 * 8)(RX0);
+	movq RCD1, (2 * 8)(RX0);
+	movq RAB1, (3 * 8)(RX0);
+	movq RCD2, (4 * 8)(RX0);
+	movq RAB2, (5 * 8)(RX0);
+
+	movq (0 * 8)(%rsp), %rbp;
+	movq (1 * 8)(%rsp), %rbx;
+	movq (2 * 8)(%rsp), %r12;
+	movq (3 * 8)(%rsp), %r13;
+	movq (4 * 8)(%rsp), %r14;
+	movq (5 * 8)(%rsp), %r15;
+	CFI_RESTORE(%rbp);
+	CFI_RESTORE(%rbx);
+	CFI_RESTORE(%r12);
+	CFI_RESTORE(%r13);
+	CFI_RESTORE(%r14);
+	CFI_RESTORE(%r15);
+	addq $(8 * 8), %rsp;
+	CFI_ADJUST_CFA_OFFSET(-8 * 8);
+
+	EXIT_SYSV_FUNC
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_twofish_amd64_blk3,.-_gcry_twofish_amd64_blk3;)
+
+.align 16
 .globl _gcry_twofish_amd64_ctr_enc
 ELF(.type   _gcry_twofish_amd64_ctr_enc,@function;)
 _gcry_twofish_amd64_ctr_enc:
@@ -645,7 +719,7 @@ _gcry_twofish_amd64_ctr_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_ctr_enc,.-_gcry_twofish_amd64_ctr_enc;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_cbc_dec
 ELF(.type   _gcry_twofish_amd64_cbc_dec,@function;)
 _gcry_twofish_amd64_cbc_dec:
@@ -730,7 +804,7 @@ _gcry_twofish_amd64_cbc_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_cbc_dec,.-_gcry_twofish_amd64_cbc_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_cfb_dec
 ELF(.type   _gcry_twofish_amd64_cfb_dec,@function;)
 _gcry_twofish_amd64_cfb_dec:
@@ -815,7 +889,7 @@ _gcry_twofish_amd64_cfb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_cfb_dec,.-_gcry_twofish_amd64_cfb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_ocb_enc
 ELF(.type   _gcry_twofish_amd64_ocb_enc,@function;)
 _gcry_twofish_amd64_ocb_enc:
@@ -941,7 +1015,7 @@ _gcry_twofish_amd64_ocb_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_ocb_enc,.-_gcry_twofish_amd64_ocb_enc;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_ocb_dec
 ELF(.type   _gcry_twofish_amd64_ocb_dec,@function;)
 _gcry_twofish_amd64_ocb_dec:
@@ -1075,7 +1149,7 @@ _gcry_twofish_amd64_ocb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_twofish_amd64_ocb_dec,.-_gcry_twofish_amd64_ocb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_twofish_amd64_ocb_auth
 ELF(.type   _gcry_twofish_amd64_ocb_auth,@function;)
 _gcry_twofish_amd64_ocb_auth:

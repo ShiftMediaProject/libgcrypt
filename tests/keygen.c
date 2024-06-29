@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include "../src/gcrypt-int.h"
 
@@ -69,6 +70,7 @@ show_sexp (const char *prefix, gcry_sexp_t a)
 }
 
 
+#if USE_RSA
 static void
 show_mpi (const char *prefix, gcry_mpi_t a)
 {
@@ -131,11 +133,13 @@ check_generated_rsa_key (gcry_sexp_t key, unsigned long expected_e)
       gcry_sexp_release (skey);
     }
 }
+#endif /* USE_RSA */
 
 
 static void
 check_rsa_keys (void)
 {
+#if USE_RSA
   gcry_sexp_t keyparm, key;
   int rc;
 
@@ -249,12 +253,14 @@ check_rsa_keys (void)
   if (!rc)
     check_generated_rsa_key (key, 0); /* We don't expect a constant exponent. */
   gcry_sexp_release (key);
+#endif /* USE_RSA */
 }
 
 
 static void
 check_elg_keys (void)
 {
+#if USE_ELGAMAL
   gcry_sexp_t keyparm, key;
   int rc;
 
@@ -276,12 +282,14 @@ check_elg_keys (void)
   if (verbose > 1)
     show_sexp ("1024 bit Elgamal key:\n", key);
   gcry_sexp_release (key);
+#endif /* USE_ELGAMAL */
 }
 
 
 static void
 check_dsa_keys (void)
 {
+#if USE_DSA
   gcry_sexp_t keyparm, key;
   int rc;
   int i;
@@ -389,9 +397,11 @@ check_dsa_keys (void)
   if (verbose > 1)
     show_sexp ("2048 bit DSA key:\n", key);
   gcry_sexp_release (key);
+#endif /* USE_DSA */
 }
 
 
+#if USE_ECC
 static void
 check_generated_ecc_key (gcry_sexp_t key)
 {
@@ -425,11 +435,13 @@ check_generated_ecc_key (gcry_sexp_t key)
       fail ("gcry_pk_testkey failed on key pair: %s\n", gpg_strerror (rc));
   }
 }
+#endif /* USE_ECC */
 
 
 static void
 check_ecc_keys (void)
 {
+#if USE_ECC
   const char *curves[] = { "NIST P-521", "NIST P-384", "NIST P-256",
                            "Ed25519", NULL };
   int testno;
@@ -442,9 +454,6 @@ check_ecc_keys (void)
         info ("creating ECC key using curve %s\n", curves[testno]);
       if (!strcmp (curves[testno], "Ed25519"))
         {
-          /* Ed25519 isn't allowed in fips mode */
-          if (in_fips_mode)
-            continue;
           rc = gcry_sexp_build (&keyparm, NULL,
                                 "(genkey(ecc(curve %s)(flags param eddsa)))",
                                 curves[testno]);
@@ -476,15 +485,9 @@ check_ecc_keys (void)
     die ("error creating S-expression: %s\n", gpg_strerror (rc));
   rc = gcry_pk_genkey (&key, keyparm);
   gcry_sexp_release (keyparm);
-  if (rc && !in_fips_mode)
+  if (rc)
     die ("error generating ECC key using curve Ed25519 for ECDSA: %s\n",
          gpg_strerror (rc));
-  else if (!rc && in_fips_mode)
-    fail ("generating Ed25519 key must not work!");
-
-  if (verbose && rc && in_fips_mode)
-    info ("... correctly rejected key creation in FIPS mode (%s)\n",
-          gpg_strerror (rc));
 
   if (!rc)
     {
@@ -503,16 +506,11 @@ check_ecc_keys (void)
     die ("error creating S-expression: %s\n", gpg_strerror (rc));
   rc = gcry_pk_genkey (&key, keyparm);
   gcry_sexp_release (keyparm);
-  if (rc && !in_fips_mode)
+  if (rc)
     die ("error generating ECC key using curve Ed25519 for ECDSA"
          " (nocomp): %s\n",
          gpg_strerror (rc));
-  else if (!rc && in_fips_mode)
-    fail ("generating Ed25519 key must not work in FIPS mode!");
 
-  if (verbose && rc && in_fips_mode)
-    info ("... correctly rejected key creation in FIPS mode (%s)\n",
-          gpg_strerror (rc));
   gcry_sexp_release (key);
 
   if (verbose)
@@ -564,16 +562,10 @@ check_ecc_keys (void)
     die ("error creating S-expression: %s\n", gpg_strerror (rc));
   rc = gcry_pk_genkey (&key, keyparm);
   gcry_sexp_release (keyparm);
-  if (rc && !in_fips_mode)
+  if (rc)
     die ("error generating ECC key using curve Ed25519 for ECDSA"
          " (transient-key): %s\n",
          gpg_strerror (rc));
-  else if (!rc && in_fips_mode)
-    fail ("generating Ed25519 key must not work in FIPS mode!");
-
-  if (verbose && rc && in_fips_mode)
-    info ("... correctly rejected key creation in FIPS mode (%s)\n",
-          gpg_strerror (rc));
 
   if (!rc)
     {
@@ -593,16 +585,10 @@ check_ecc_keys (void)
     die ("error creating S-expression: %s\n", gpg_strerror (rc));
   rc = gcry_pk_genkey (&key, keyparm);
   gcry_sexp_release (keyparm);
-  if (rc && !in_fips_mode)
+  if (rc)
     die ("error generating ECC key using curve Ed25519 for ECDSA"
          " (transient-key no-keytest): %s\n",
          gpg_strerror (rc));
-  else if (!rc && in_fips_mode)
-    fail ("generating Ed25519 key must not work in FIPS mode!");
-
-  if (verbose && rc && in_fips_mode)
-    info ("... correctly rejected key creation in FIPS mode (%s)\n",
-          gpg_strerror (rc));
 
   if (!rc)
     {
@@ -611,6 +597,119 @@ check_ecc_keys (void)
       check_generated_ecc_key (key);
     }
   gcry_sexp_release (key);
+#endif /* USE_ECC */
+}
+
+
+static void
+check_generated_kem_key (gcry_sexp_t key, const char *algoname)
+{
+  gpg_error_t err;
+  gcry_sexp_t skey, pkey;
+  unsigned char keygrip_pk[20];
+  unsigned char keygrip_all[20];
+  int n, nbits;
+  const char *s;
+
+  pkey = gcry_sexp_find_token (key, "public-key", 0);
+  if (!pkey)
+    fail ("public part missing in return value\n");
+  else
+    {
+      if (!gcry_pk_get_keygrip (pkey, keygrip_pk))
+        fail ("gcry_pk_get_keyrip for pubkey failed\n");
+      gcry_sexp_release (pkey);
+    }
+
+  skey = gcry_sexp_find_token (key, "private-key", 0);
+  if (!skey)
+    fail ("private part missing in return value\n");
+  else
+    {
+      err = gcry_pk_testkey (skey);
+      if (gpg_err_code (err) == GPG_ERR_NOT_IMPLEMENTED)
+        info ("note: gcry_pk_testkey has not yet been implemented\n");
+      else if (err)
+        fail ("gcry_pk_testkey failed: %s\n", gpg_strerror (err));
+      gcry_sexp_release (skey);
+    }
+
+  /* Finally check that gcry_pk_testkey also works on the entire
+     S-expression.  */
+  err = gcry_pk_testkey (key);
+  if (gpg_err_code (err) == GPG_ERR_NOT_IMPLEMENTED)
+    info ("note: gcry_pk_testkey has not yet been implemented\n");
+  else if (err)
+    fail ("gcry_pk_testkey failed on keypair: %s\n", gpg_strerror (err));
+
+  if (!gcry_pk_get_keygrip (key, keygrip_all))
+    fail ("gcry_pk_get_keyrip for all failed\n");
+
+  if (memcmp (keygrip_pk, keygrip_all, 20))
+    fail ("keygrips do not match\n");
+
+  /* Simple hack to check nbits.  */
+  nbits = gcry_pk_get_nbits (key);
+  n = 0;
+  for (s=algoname; !isdigit (*s); s++)
+    ;
+  n = atoi (s);
+  if (n != nbits)
+    fail ("gcry_pk_get_nbits returned a wrong value n=%d nbits=%d\n", n, nbits);
+
+}
+
+
+#define TEST_NOFIPS         (1 << 0)
+
+static void
+check_kem_keys (void)
+{
+  const struct {
+    const char *algonames;
+    int flags;
+  } tv[] = {
+    { "sntrup761", TEST_NOFIPS },
+    { "kyber512", TEST_NOFIPS },
+    { "kyber768", TEST_NOFIPS },
+    { "kyber1024", TEST_NOFIPS },
+  };
+
+  int testno;
+  gcry_sexp_t keyparm, key;
+  int rc;
+
+  for (testno=0; testno < DIM (tv); testno++)
+    {
+      if (verbose)
+        info ("creating KEM key using algo %s\n", tv[testno].algonames);
+      rc = gcry_sexp_build (&keyparm, NULL, "(genkey(%s))",
+                            tv[testno].algonames);
+      if (rc)
+        die ("error creating S-expression: %s\n", gpg_strerror (rc));
+      rc = gcry_pk_genkey (&key, keyparm);
+      gcry_sexp_release (keyparm);
+      if (in_fips_mode && (tv[testno].flags & TEST_NOFIPS))
+        {
+          if (!rc)
+            die ("KEM: creating %s key should have failed in fips mode\n",
+                 tv[testno].algonames);
+          continue;
+        }
+      else
+        {
+          if (rc)
+            die ("error creating KEM key using algo %s: %s\n",
+                 tv[testno].algonames, gpg_strerror (rc));
+        }
+
+      if (verbose > 1)
+        show_sexp ("KEM key:\n", key);
+
+      check_generated_kem_key (key, tv[testno].algonames);
+
+      gcry_sexp_release (key);
+    }
 }
 
 
@@ -772,6 +871,7 @@ main (int argc, char **argv)
       check_elg_keys ();
       check_dsa_keys ();
       check_ecc_keys ();
+      check_kem_keys ();
       check_nonce ();
     }
   else
@@ -785,6 +885,8 @@ main (int argc, char **argv)
           check_dsa_keys ();
         else if (!strcmp (*argv, "ecc"))
           check_ecc_keys ();
+        else if (!strcmp (*argv, "kem"))
+          check_kem_keys ();
         else if (!strcmp (*argv, "nonce"))
           check_nonce ();
         else

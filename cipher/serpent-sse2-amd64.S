@@ -423,7 +423,7 @@
 
 .text
 
-.align 8
+.align 16
 ELF(.type   __serpent_enc_blk8,@function;)
 __serpent_enc_blk8:
 	/* input:
@@ -513,7 +513,7 @@ __serpent_enc_blk8:
 	CFI_ENDPROC();
 ELF(.size __serpent_enc_blk8,.-__serpent_enc_blk8;)
 
-.align 8
+.align 16
 ELF(.type   __serpent_dec_blk8,@function;)
 __serpent_dec_blk8:
 	/* input:
@@ -605,7 +605,72 @@ __serpent_dec_blk8:
 	CFI_ENDPROC();
 ELF(.size __serpent_dec_blk8,.-__serpent_dec_blk8;)
 
-.align 8
+.align 16
+.globl _gcry_serpent_sse2_blk8
+ELF(.type   _gcry_serpent_sse2_blk8,@function;)
+_gcry_serpent_sse2_blk8:
+	/* input:
+	 *	%rdi: ctx, CTX
+	 *	%rsi: dst (8 blocks)
+	 *	%rdx: src (8 blocks)
+	 *	%ecx: encrypt
+	 */
+	CFI_STARTPROC();
+
+	movdqu (0 * 16)(%rdx), RA0;
+	movdqu (1 * 16)(%rdx), RA1;
+	movdqu (2 * 16)(%rdx), RA2;
+	movdqu (3 * 16)(%rdx), RA3;
+	movdqu (4 * 16)(%rdx), RB0;
+	movdqu (5 * 16)(%rdx), RB1;
+	movdqu (6 * 16)(%rdx), RB2;
+	movdqu (7 * 16)(%rdx), RB3;
+
+	testl %ecx, %ecx;
+	jz .Lblk8_dec;
+		call __serpent_enc_blk8;
+		movdqu RA4, (0 * 16)(%rsi);
+		movdqu RA1, (1 * 16)(%rsi);
+		movdqu RA2, (2 * 16)(%rsi);
+		movdqu RA0, (3 * 16)(%rsi);
+		movdqu RB4, (4 * 16)(%rsi);
+		movdqu RB1, (5 * 16)(%rsi);
+		movdqu RB2, (6 * 16)(%rsi);
+		movdqu RB0, (7 * 16)(%rsi);
+		jmp .Lblk8_end;
+	.Lblk8_dec:
+		call __serpent_dec_blk8;
+		movdqu RA0, (0 * 16)(%rsi);
+		movdqu RA1, (1 * 16)(%rsi);
+		movdqu RA2, (2 * 16)(%rsi);
+		movdqu RA3, (3 * 16)(%rsi);
+		movdqu RB0, (4 * 16)(%rsi);
+		movdqu RB1, (5 * 16)(%rsi);
+		movdqu RB2, (6 * 16)(%rsi);
+		movdqu RB3, (7 * 16)(%rsi);
+
+.Lblk8_end:
+	/* clear the used registers */
+	pxor RA0, RA0;
+	pxor RA1, RA1;
+	pxor RA2, RA2;
+	pxor RA3, RA3;
+	pxor RA4, RA4;
+	pxor RB0, RB0;
+	pxor RB1, RB1;
+	pxor RB2, RB2;
+	pxor RB3, RB3;
+	pxor RB4, RB4;
+	pxor RTMP0, RTMP0;
+	pxor RTMP1, RTMP1;
+	pxor RTMP2, RTMP2;
+	pxor RNOT, RNOT;
+
+	ret_spec_stop;
+	CFI_ENDPROC();
+ELF(.size _gcry_serpent_sse2_blk8,.-_gcry_serpent_sse2_blk8;)
+
+.align 16
 .globl _gcry_serpent_sse2_ctr_enc
 ELF(.type   _gcry_serpent_sse2_ctr_enc,@function;)
 _gcry_serpent_sse2_ctr_enc:
@@ -737,7 +802,7 @@ _gcry_serpent_sse2_ctr_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_sse2_ctr_enc,.-_gcry_serpent_sse2_ctr_enc;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_sse2_cbc_dec
 ELF(.type   _gcry_serpent_sse2_cbc_dec,@function;)
 _gcry_serpent_sse2_cbc_dec:
@@ -800,7 +865,7 @@ _gcry_serpent_sse2_cbc_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_sse2_cbc_dec,.-_gcry_serpent_sse2_cbc_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_sse2_cfb_dec
 ELF(.type   _gcry_serpent_sse2_cfb_dec,@function;)
 _gcry_serpent_sse2_cfb_dec:
@@ -866,7 +931,7 @@ _gcry_serpent_sse2_cfb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_sse2_cfb_dec,.-_gcry_serpent_sse2_cfb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_sse2_ocb_enc
 ELF(.type _gcry_serpent_sse2_ocb_enc,@function;)
 
@@ -980,7 +1045,7 @@ _gcry_serpent_sse2_ocb_enc:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_sse2_ocb_enc,.-_gcry_serpent_sse2_ocb_enc;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_sse2_ocb_dec
 ELF(.type _gcry_serpent_sse2_ocb_dec,@function;)
 
@@ -1104,7 +1169,7 @@ _gcry_serpent_sse2_ocb_dec:
 	CFI_ENDPROC();
 ELF(.size _gcry_serpent_sse2_ocb_dec,.-_gcry_serpent_sse2_ocb_dec;)
 
-.align 8
+.align 16
 .globl _gcry_serpent_sse2_ocb_auth
 ELF(.type _gcry_serpent_sse2_ocb_auth,@function;)
 

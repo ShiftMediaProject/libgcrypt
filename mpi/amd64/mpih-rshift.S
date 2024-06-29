@@ -17,8 +17,8 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  * Note: This code is heavily based on the GNU MP Library.
  *	 Actually it's the same code with only minor changes in the
@@ -39,7 +39,8 @@
  *		   unsigned cnt)	rcx
  */
 
-.text
+	TEXT
+	ALIGN(4)
 	.globl C_SYMBOL_NAME(_gcry_mpih_rshift)
 C_SYMBOL_NAME(_gcry_mpih_rshift:)
 	FUNC_ENTRY()
@@ -51,7 +52,7 @@ C_SYMBOL_NAME(_gcry_mpih_rshift:)
 	movd	%eax, %xmm0
 	movdqa	%xmm4, %xmm3
 	psllq	%xmm0, %xmm4
-	movd	%xmm4, %rax
+	movq	%xmm4, %rax
 	leaq	(%rsi,%rdx,8), %rsi
 	leaq	(%rdi,%rdx,8), %rdi
 	negq	%rdx

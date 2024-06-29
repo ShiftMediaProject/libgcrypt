@@ -11,12 +11,11 @@
  * Libgcrypt is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA.
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
 /* I put all the libgcrypt-specific stuff in this file to keep the
@@ -64,7 +63,7 @@
 #include "camellia.h"
 #include "bufhelp.h"
 #include "cipher-internal.h"
-#include "cipher-selftest.h"
+#include "bulkhelp.h"
 
 /* Helper macro to force alignment to 16 bytes.  */
 #ifdef HAVE_GCC_ATTRIBUTE_ALIGNED
@@ -97,6 +96,38 @@
 # define USE_VAES_AVX2 1
 #endif
 
+/* USE_GFNI_AVX2 inidicates whether to compile with Intel GFNI/AVX2 code. */
+#undef USE_GFNI_AVX2
+#if defined(USE_AESNI_AVX2) && defined(ENABLE_GFNI_SUPPORT)
+# define USE_GFNI_AVX2 1
+#endif
+
+/* USE_GFNI_AVX512 inidicates whether to compile with Intel GFNI/AVX512 code. */
+#undef USE_GFNI_AVX512
+#if defined(USE_GFNI_AVX2) && defined(ENABLE_AVX512_SUPPORT)
+# define USE_GFNI_AVX512 1
+#endif
+
+/* USE_PPC_CRYPTO indicates whether to enable PowerPC vector crypto
+ * accelerated code. */
+#undef USE_PPC_CRYPTO
+#if !defined(WORDS_BIGENDIAN) && defined(ENABLE_PPC_CRYPTO_SUPPORT) && \
+    defined(HAVE_COMPATIBLE_CC_PPC_ALTIVEC) && \
+    defined(HAVE_GCC_INLINE_ASM_PPC_ALTIVEC) && \
+    (SIZEOF_UNSIGNED_LONG == 8) && (__GNUC__ >= 4)
+# define USE_PPC_CRYPTO 1
+#endif
+
+/* USE_AARCH64_CE indicates whether to enable ARMv8/CE accelerated code. */
+#undef USE_AARCH64_CE
+#if defined(__AARCH64EL__) && \
+    defined(HAVE_COMPATIBLE_GCC_AARCH64_PLATFORM_AS) && \
+    defined(HAVE_GCC_INLINE_ASM_AARCH64_CRYPTO) && \
+    defined(HAVE_COMPATIBLE_CC_AARCH64_NEON_INTRINSICS) && \
+    (__GNUC__ >= 4)
+# define USE_AARCH64_CE 1
+#endif
+
 typedef struct
 {
   KEY_TABLE_TYPE keytable;
@@ -105,9 +136,20 @@ typedef struct
   unsigned int use_aesni_avx:1;	/* AES-NI/AVX implementation shall be used.  */
 #endif /*USE_AESNI_AVX*/
 #ifdef USE_AESNI_AVX2
+  unsigned int use_avx2:1; /* If any of AVX2 implementation is enabled.  */
   unsigned int use_aesni_avx2:1;/* AES-NI/AVX2 implementation shall be used.  */
   unsigned int use_vaes_avx2:1; /* VAES/AVX2 implementation shall be used.  */
+  unsigned int use_gfni_avx2:1; /* GFNI/AVX2 implementation shall be used.  */
+  unsigned int use_gfni_avx512:1; /* GFNI/AVX512 implementation shall be used.  */
 #endif /*USE_AESNI_AVX2*/
+#ifdef USE_PPC_CRYPTO
+  unsigned int use_ppc:1;
+  unsigned int use_ppc8:1;
+  unsigned int use_ppc9:1;
+#endif /*USE_PPC_CRYPTO*/
+#ifdef USE_AARCH64_CE
+  unsigned int use_aarch64ce:1;
+#endif /*USE_AARCH64_CE*/
 } CAMELLIA_context;
 
 /* Assembly implementations use SystemV ABI, ABI conversion and additional
@@ -126,7 +168,7 @@ typedef struct
 
 #ifdef USE_AESNI_AVX
 /* Assembler implementations of Camellia using AES-NI and AVX.  Process data
-   in 16 block same time.
+   in 16 blocks same time.
  */
 extern void _gcry_camellia_aesni_avx_ctr_enc(CAMELLIA_context *ctx,
 					     unsigned char *out,
@@ -158,19 +200,33 @@ extern void _gcry_camellia_aesni_avx_ocb_dec(CAMELLIA_context *ctx,
 					     const u64 Ls[16]) ASM_FUNC_ABI;
 
 extern void _gcry_camellia_aesni_avx_ocb_auth(CAMELLIA_context *ctx,
-					     const unsigned char *abuf,
-					     unsigned char *offset,
-					     unsigned char *checksum,
-					     const u64 Ls[16]) ASM_FUNC_ABI;
+					      const unsigned char *abuf,
+					      unsigned char *offset,
+					      unsigned char *checksum,
+					      const u64 Ls[16]) ASM_FUNC_ABI;
 
 extern void _gcry_camellia_aesni_avx_keygen(CAMELLIA_context *ctx,
 					    const unsigned char *key,
 					    unsigned int keylen) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_aesni_avx_ecb_enc(const CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in)
+					     ASM_FUNC_ABI;
+
+extern void _gcry_camellia_aesni_avx_ecb_dec(const CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in)
+					     ASM_FUNC_ABI;
+
+static const int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE + 16 +
+                                        2 * sizeof(void *) + ASM_EXTRA_STACK;
+
 #endif
 
 #ifdef USE_AESNI_AVX2
 /* Assembler implementations of Camellia using AES-NI and AVX2.  Process data
-   in 32 block same time.
+   in 32 blocks same time.
  */
 extern void _gcry_camellia_aesni_avx2_ctr_enc(CAMELLIA_context *ctx,
 					      unsigned char *out,
@@ -206,11 +262,27 @@ extern void _gcry_camellia_aesni_avx2_ocb_auth(CAMELLIA_context *ctx,
 					       unsigned char *offset,
 					       unsigned char *checksum,
 					       const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_aesni_avx2_enc_blk1_32(const CAMELLIA_context *ctx,
+                                                  unsigned char *out,
+                                                  const unsigned char *in,
+                                                  unsigned int nblocks)
+                                                  ASM_FUNC_ABI;
+
+extern void _gcry_camellia_aesni_avx2_dec_blk1_32(const CAMELLIA_context *ctx,
+                                                  unsigned char *out,
+                                                  const unsigned char *in,
+                                                  unsigned int nblocks)
+                                                  ASM_FUNC_ABI;
+
+static const int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE + 16 +
+                                         2 * sizeof(void *) + ASM_EXTRA_STACK;
+
 #endif
 
 #ifdef USE_VAES_AVX2
 /* Assembler implementations of Camellia using VAES and AVX2.  Process data
-   in 32 block same time.
+   in 32 blocks same time.
  */
 extern void _gcry_camellia_vaes_avx2_ctr_enc(CAMELLIA_context *ctx,
 					     unsigned char *out,
@@ -246,7 +318,201 @@ extern void _gcry_camellia_vaes_avx2_ocb_auth(CAMELLIA_context *ctx,
 					      unsigned char *offset,
 					      unsigned char *checksum,
 					      const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_vaes_avx2_enc_blk1_32(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in,
+                                                 unsigned int nblocks)
+                                                 ASM_FUNC_ABI;
+
+extern void _gcry_camellia_vaes_avx2_dec_blk1_32(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in,
+                                                 unsigned int nblocks)
+                                                 ASM_FUNC_ABI;
 #endif
+
+#ifdef USE_GFNI_AVX2
+/* Assembler implementations of Camellia using GFNI and AVX2.  Process data
+   in 32 blocks same time.
+ */
+extern void _gcry_camellia_gfni_avx2_ctr_enc(CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in,
+					     unsigned char *ctr) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_cbc_dec(CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in,
+					     unsigned char *iv) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_cfb_dec(CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in,
+					     unsigned char *iv) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_ocb_enc(CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in,
+					     unsigned char *offset,
+					     unsigned char *checksum,
+					     const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_ocb_dec(CAMELLIA_context *ctx,
+					     unsigned char *out,
+					     const unsigned char *in,
+					     unsigned char *offset,
+					     unsigned char *checksum,
+					     const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_ocb_auth(CAMELLIA_context *ctx,
+					      const unsigned char *abuf,
+					      unsigned char *offset,
+					      unsigned char *checksum,
+					      const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_enc_blk1_32(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in,
+                                                 unsigned int nblocks)
+                                                 ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx2_dec_blk1_32(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in,
+                                                 unsigned int nblocks)
+                                                 ASM_FUNC_ABI;
+#endif
+
+#ifdef USE_GFNI_AVX512
+/* Assembler implementations of Camellia using GFNI and AVX512.  Process data
+   in 64 blocks same time.
+ */
+extern void _gcry_camellia_gfni_avx512_ctr_enc(CAMELLIA_context *ctx,
+                                               unsigned char *out,
+                                               const unsigned char *in,
+                                               unsigned char *ctr) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_cbc_dec(CAMELLIA_context *ctx,
+                                               unsigned char *out,
+                                               const unsigned char *in,
+                                               unsigned char *iv) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_cfb_dec(CAMELLIA_context *ctx,
+                                               unsigned char *out,
+                                               const unsigned char *in,
+                                               unsigned char *iv) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_ocb_enc(CAMELLIA_context *ctx,
+                                               unsigned char *out,
+                                               const unsigned char *in,
+                                               unsigned char *offset,
+                                               unsigned char *checksum,
+                                               const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_ocb_dec(CAMELLIA_context *ctx,
+                                               unsigned char *out,
+                                               const unsigned char *in,
+                                               unsigned char *offset,
+                                               unsigned char *checksum,
+                                               const u64 Ls[32]) ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_enc_blk64(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in)
+                                                 ASM_FUNC_ABI;
+
+extern void _gcry_camellia_gfni_avx512_dec_blk64(const CAMELLIA_context *ctx,
+                                                 unsigned char *out,
+                                                 const unsigned char *in)
+                                                 ASM_FUNC_ABI;
+
+/* Stack not used by AVX512 implementation. */
+static const int avx512_burn_stack_depth = 0;
+#endif
+
+#ifdef USE_PPC_CRYPTO
+extern void _gcry_camellia_ppc8_encrypt_blk16(const void *key_table,
+					      void *out,
+					      const void *in,
+					      int key_length);
+
+extern void _gcry_camellia_ppc8_decrypt_blk16(const void *key_table,
+					      void *out,
+					      const void *in,
+					      int key_length);
+
+extern void _gcry_camellia_ppc9_encrypt_blk16(const void *key_table,
+					      void *out,
+					      const void *in,
+					      int key_length);
+
+extern void _gcry_camellia_ppc9_decrypt_blk16(const void *key_table,
+					      void *out,
+					      const void *in,
+					      int key_length);
+
+extern void _gcry_camellia_ppc8_keygen(void *key_table, const void *vkey,
+				       unsigned int keylen);
+
+extern void _gcry_camellia_ppc9_keygen(void *key_table, const void *vkey,
+				       unsigned int keylen);
+
+void camellia_ppc_enc_blk16(const CAMELLIA_context *ctx, unsigned char *out,
+                            const unsigned char *in)
+{
+  if (ctx->use_ppc9)
+    _gcry_camellia_ppc9_encrypt_blk16 (ctx->keytable, out, in,
+				       ctx->keybitlength / 8);
+  else
+    _gcry_camellia_ppc8_encrypt_blk16 (ctx->keytable, out, in,
+				       ctx->keybitlength / 8);
+}
+
+void camellia_ppc_dec_blk16(const CAMELLIA_context *ctx, unsigned char *out,
+                            const unsigned char *in)
+{
+  if (ctx->use_ppc9)
+    _gcry_camellia_ppc9_decrypt_blk16 (ctx->keytable, out, in,
+				       ctx->keybitlength / 8);
+  else
+    _gcry_camellia_ppc8_decrypt_blk16 (ctx->keytable, out, in,
+				       ctx->keybitlength / 8);
+}
+
+static const int ppc_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE + 16 +
+                                        2 * sizeof(void *);
+#endif /*USE_PPC_CRYPTO*/
+
+#ifdef USE_AARCH64_CE
+extern void _gcry_camellia_aarch64ce_encrypt_blk16(const void *key_table,
+						   void *out, const void *in,
+						   int key_length);
+
+extern void _gcry_camellia_aarch64ce_decrypt_blk16(const void *key_table,
+						   void *out, const void *in,
+						   int key_length);
+
+extern void _gcry_camellia_aarch64ce_keygen(void *key_table, const void *vkey,
+					    unsigned int keylen);
+
+void camellia_aarch64ce_enc_blk16(const CAMELLIA_context *ctx,
+				  unsigned char *out, const unsigned char *in)
+{
+  _gcry_camellia_aarch64ce_encrypt_blk16 (ctx->keytable, out, in,
+					  ctx->keybitlength / 8);
+}
+
+void camellia_aarch64ce_dec_blk16(const CAMELLIA_context *ctx,
+				  unsigned char *out, const unsigned char *in)
+{
+  _gcry_camellia_aarch64ce_decrypt_blk16 (ctx->keytable, out, in,
+					  ctx->keybitlength / 8);
+}
+
+static const int aarch64ce_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE + 16 +
+					      2 * sizeof(void *);
+#endif /*USE_AARCH64_CE*/
 
 static const char *selftest(void);
 
@@ -259,6 +525,15 @@ static void _gcry_camellia_cbc_dec (void *context, unsigned char *iv,
 static void _gcry_camellia_cfb_dec (void *context, unsigned char *iv,
 				    void *outbuf_arg, const void *inbuf_arg,
 				    size_t nblocks);
+static void _gcry_camellia_xts_crypt (void *context, unsigned char *tweak,
+				      void *outbuf_arg, const void *inbuf_arg,
+				      size_t nblocks, int encrypt);
+static void _gcry_camellia_ecb_crypt (void *context, void *outbuf_arg,
+				      const void *inbuf_arg, size_t nblocks,
+				      int encrypt);
+static void _gcry_camellia_ctr32le_enc (void *context, unsigned char *ctr,
+					void *outbuf_arg, const void *inbuf_arg,
+					size_t nblocks);
 static size_t _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 					const void *inbuf_arg, size_t nblocks,
 					int encrypt);
@@ -272,9 +547,9 @@ camellia_setkey(void *c, const byte *key, unsigned keylen,
   CAMELLIA_context *ctx=c;
   static int initialized=0;
   static const char *selftest_failed=NULL;
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2) || defined(USE_VAES_AVX2)
   unsigned int hwf = _gcry_get_hw_features ();
-#endif
+
+  (void)hwf;
 
   if(keylen!=16 && keylen!=24 && keylen!=32)
     return GPG_ERR_INV_KEYLEN;
@@ -296,9 +571,28 @@ camellia_setkey(void *c, const byte *key, unsigned keylen,
 #ifdef USE_AESNI_AVX2
   ctx->use_aesni_avx2 = (hwf & HWF_INTEL_AESNI) && (hwf & HWF_INTEL_AVX2);
   ctx->use_vaes_avx2 = 0;
+  ctx->use_gfni_avx2 = 0;
+  ctx->use_gfni_avx512 = 0;
+  ctx->use_avx2 = ctx->use_aesni_avx2;
 #endif
 #ifdef USE_VAES_AVX2
   ctx->use_vaes_avx2 = (hwf & HWF_INTEL_VAES_VPCLMUL) && (hwf & HWF_INTEL_AVX2);
+  ctx->use_avx2 |= ctx->use_vaes_avx2;
+#endif
+#ifdef USE_GFNI_AVX2
+  ctx->use_gfni_avx2 = (hwf & HWF_INTEL_GFNI) && (hwf & HWF_INTEL_AVX2);
+  ctx->use_avx2 |= ctx->use_gfni_avx2;
+#endif
+#ifdef USE_GFNI_AVX512
+  ctx->use_gfni_avx512 = (hwf & HWF_INTEL_GFNI) && (hwf & HWF_INTEL_AVX512);
+#endif
+#ifdef USE_PPC_CRYPTO
+  ctx->use_ppc8 = (hwf & HWF_PPC_VCRYPTO) != 0;
+  ctx->use_ppc9 = (hwf & HWF_PPC_VCRYPTO) && (hwf & HWF_PPC_ARCH_3_00);
+  ctx->use_ppc = ctx->use_ppc8 || ctx->use_ppc9;
+#endif
+#ifdef USE_AARCH64_CE
+  ctx->use_aarch64ce = (hwf & HWF_ARM_AES) != 0;
 #endif
 
   ctx->keybitlength=keylen*8;
@@ -310,14 +604,27 @@ camellia_setkey(void *c, const byte *key, unsigned keylen,
   bulk_ops->ctr_enc = _gcry_camellia_ctr_enc;
   bulk_ops->ocb_crypt = _gcry_camellia_ocb_crypt;
   bulk_ops->ocb_auth  = _gcry_camellia_ocb_auth;
+  bulk_ops->xts_crypt = _gcry_camellia_xts_crypt;
+  bulk_ops->ecb_crypt = _gcry_camellia_ecb_crypt;
+  bulk_ops->ctr32le_enc = _gcry_camellia_ctr32le_enc;
 
   if (0)
     { }
 #ifdef USE_AESNI_AVX
   else if (ctx->use_aesni_avx)
     _gcry_camellia_aesni_avx_keygen(ctx, key, keylen);
-  else
 #endif
+#ifdef USE_PPC_CRYPTO
+  else if (ctx->use_ppc9)
+    _gcry_camellia_ppc9_keygen(ctx->keytable, key, keylen);
+  else if (ctx->use_ppc8)
+    _gcry_camellia_ppc8_keygen(ctx->keytable, key, keylen);
+#endif
+#ifdef USE_AARCH64_CE
+  else if (ctx->use_aarch64ce)
+    _gcry_camellia_aarch64ce_keygen(ctx->keytable, key, keylen);
+#endif
+  else
     {
       Camellia_Ekeygen(ctx->keybitlength,key,ctx->keytable);
       _gcry_burn_stack
@@ -327,6 +634,23 @@ camellia_setkey(void *c, const byte *key, unsigned keylen,
          +3*2*sizeof(void*)                     /* Function calls.  */
          );
     }
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2)
+    {
+      /* Disable AESNI & VAES implementations when GFNI implementation is
+       * enabled. */
+#ifdef USE_AESNI_AVX
+      ctx->use_aesni_avx = 0;
+#endif
+#ifdef USE_AESNI_AVX2
+      ctx->use_aesni_avx2 = 0;
+#endif
+#ifdef USE_VAES_AVX2
+      ctx->use_vaes_avx2 = 0;
+#endif
+    }
+#endif
 
   return 0;
 }
@@ -422,6 +746,230 @@ camellia_decrypt(void *c, byte *outbuf, const byte *inbuf)
 
 #endif /*!USE_ARM_ASM*/
 
+
+static unsigned int
+camellia_encrypt_blk1_32 (void *priv, byte *outbuf, const byte *inbuf,
+			  size_t num_blks)
+{
+  const CAMELLIA_context *ctx = priv;
+  unsigned int stack_burn_size = 0;
+
+  gcry_assert (num_blks <= 32);
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2 && num_blks >= 2)
+    {
+      /* 2 or more parallel block GFNI processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_gfni_avx2_enc_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_VAES_AVX2
+  if (ctx->use_vaes_avx2 && num_blks >= 4)
+    {
+      /* 4 or more parallel block VAES processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_vaes_avx2_enc_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_AESNI_AVX2
+  if (ctx->use_aesni_avx2 && num_blks >= 5)
+    {
+      /* 5 or more parallel block AESNI processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_aesni_avx2_enc_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_AESNI_AVX
+  while (ctx->use_aesni_avx && num_blks >= 16)
+    {
+      _gcry_camellia_aesni_avx_ecb_enc (ctx, outbuf, inbuf);
+      stack_burn_size = avx_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+#ifdef USE_PPC_CRYPTO
+  while (ctx->use_ppc && num_blks >= 16)
+    {
+      camellia_ppc_enc_blk16 (ctx, outbuf, inbuf);
+      stack_burn_size = ppc_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+#ifdef USE_AARCH64_CE
+  while (ctx->use_aarch64ce && num_blks >= 16)
+    {
+      camellia_aarch64ce_enc_blk16 (ctx, outbuf, inbuf);
+      stack_burn_size = aarch64ce_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+
+  while (num_blks)
+    {
+      unsigned int nburn = camellia_encrypt((void *)ctx, outbuf, inbuf);
+      stack_burn_size = nburn > stack_burn_size ? nburn : stack_burn_size;
+      outbuf += CAMELLIA_BLOCK_SIZE;
+      inbuf += CAMELLIA_BLOCK_SIZE;
+      num_blks--;
+    }
+
+  return stack_burn_size;
+}
+
+static unsigned int
+camellia_encrypt_blk1_64 (void *priv, byte *outbuf, const byte *inbuf,
+			  size_t num_blks)
+{
+  CAMELLIA_context *ctx = priv;
+  unsigned int stack_burn_size = 0;
+  unsigned int nburn;
+
+  gcry_assert (num_blks <= 64);
+
+#ifdef USE_GFNI_AVX512
+  if (num_blks == 64 && ctx->use_gfni_avx512)
+    {
+      _gcry_camellia_gfni_avx512_enc_blk64 (ctx, outbuf, inbuf);
+      return avx512_burn_stack_depth;
+    }
+#endif
+
+  do
+    {
+      unsigned int curr_blks = num_blks > 32 ? 32 : num_blks;
+      nburn = camellia_encrypt_blk1_32 (ctx, outbuf, inbuf, curr_blks);
+      stack_burn_size = nburn > stack_burn_size ? nburn : stack_burn_size;
+      outbuf += curr_blks * 16;
+      inbuf += curr_blks * 16;
+      num_blks -= curr_blks;
+    }
+  while (num_blks > 0);
+
+  return stack_burn_size;
+}
+
+static unsigned int
+camellia_decrypt_blk1_32 (void *priv, byte *outbuf, const byte *inbuf,
+			  size_t num_blks)
+{
+  const CAMELLIA_context *ctx = priv;
+  unsigned int stack_burn_size = 0;
+
+  gcry_assert (num_blks <= 32);
+
+#ifdef USE_GFNI_AVX2
+  if (ctx->use_gfni_avx2 && num_blks >= 2)
+    {
+      /* 2 or more parallel block GFNI processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_gfni_avx2_dec_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_VAES_AVX2
+  if (ctx->use_vaes_avx2 && num_blks >= 4)
+    {
+      /* 4 or more parallel block VAES processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_vaes_avx2_dec_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_AESNI_AVX2
+  if (ctx->use_aesni_avx2 && num_blks >= 5)
+    {
+      /* 5 or more parallel block AESNI processing is faster than
+       * generic C implementation.  */
+      _gcry_camellia_aesni_avx2_dec_blk1_32 (ctx, outbuf, inbuf, num_blks);
+      return avx2_burn_stack_depth;
+    }
+#endif
+#ifdef USE_AESNI_AVX
+  while (ctx->use_aesni_avx && num_blks >= 16)
+    {
+      _gcry_camellia_aesni_avx_ecb_dec (ctx, outbuf, inbuf);
+      stack_burn_size = avx_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+#ifdef USE_PPC_CRYPTO
+  while (ctx->use_ppc && num_blks >= 16)
+    {
+      camellia_ppc_dec_blk16 (ctx, outbuf, inbuf);
+      stack_burn_size = ppc_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+#ifdef USE_AARCH64_CE
+  while (ctx->use_aarch64ce && num_blks >= 16)
+    {
+      camellia_aarch64ce_dec_blk16 (ctx, outbuf, inbuf);
+      stack_burn_size = aarch64ce_burn_stack_depth;
+      outbuf += CAMELLIA_BLOCK_SIZE * 16;
+      inbuf += CAMELLIA_BLOCK_SIZE * 16;
+      num_blks -= 16;
+    }
+#endif
+
+  while (num_blks)
+    {
+      unsigned int nburn = camellia_decrypt((void *)ctx, outbuf, inbuf);
+      stack_burn_size = nburn > stack_burn_size ? nburn : stack_burn_size;
+      outbuf += CAMELLIA_BLOCK_SIZE;
+      inbuf += CAMELLIA_BLOCK_SIZE;
+      num_blks--;
+    }
+
+  return stack_burn_size;
+}
+
+static unsigned int
+camellia_decrypt_blk1_64 (void *priv, byte *outbuf, const byte *inbuf,
+			  size_t num_blks)
+{
+  CAMELLIA_context *ctx = priv;
+  unsigned int stack_burn_size = 0;
+  unsigned int nburn;
+
+  gcry_assert (num_blks <= 64);
+
+#ifdef USE_GFNI_AVX512
+  if (num_blks == 64 && ctx->use_gfni_avx512)
+    {
+      _gcry_camellia_gfni_avx512_dec_blk64 (ctx, outbuf, inbuf);
+      return avx512_burn_stack_depth;
+    }
+#endif
+
+  do
+    {
+      unsigned int curr_blks = num_blks > 32 ? 32 : num_blks;
+      nburn = camellia_decrypt_blk1_32 (ctx, outbuf, inbuf, curr_blks);
+      stack_burn_size = nburn > stack_burn_size ? nburn : stack_burn_size;
+      outbuf += curr_blks * 16;
+      inbuf += curr_blks * 16;
+      num_blks -= curr_blks;
+    }
+  while (num_blks > 0);
+
+  return stack_burn_size;
+}
+
+
 /* Bulk encryption of complete blocks in CTR mode.  This function is only
    intended for the bulk encryption feature of cipher.c.  CTR is expected to be
    of size CAMELLIA_BLOCK_SIZE. */
@@ -433,27 +981,53 @@ _gcry_camellia_ctr_enc(void *context, unsigned char *ctr,
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
-  unsigned char tmpbuf[CAMELLIA_BLOCK_SIZE];
-  int burn_stack_depth = CAMELLIA_encrypt_stack_burn_size;
+  int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      int did_use_gfni_avx512 = 0;
+
+      /* Process data in 64 block chunks. */
+      while (nblocks >= 64)
+        {
+          _gcry_camellia_gfni_avx512_ctr_enc (ctx, outbuf, inbuf, ctr);
+          nblocks -= 64;
+          outbuf += 64 * CAMELLIA_BLOCK_SIZE;
+          inbuf  += 64 * CAMELLIA_BLOCK_SIZE;
+          did_use_gfni_avx512 = 1;
+        }
+
+      if (did_use_gfni_avx512)
+        {
+          if (burn_stack_depth < avx512_burn_stack_depth)
+            burn_stack_depth = avx512_burn_stack_depth;
+        }
+
+      /* Use generic code to handle smaller chunks... */
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
-  if (ctx->use_aesni_avx2)
+  if (ctx->use_avx2)
     {
       int did_use_aesni_avx2 = 0;
+      typeof (&_gcry_camellia_aesni_avx2_ctr_enc) bulk_ctr_fn =
+	  _gcry_camellia_aesni_avx2_ctr_enc;
+
 #ifdef USE_VAES_AVX2
-      int use_vaes = ctx->use_vaes_avx2;
+      if (ctx->use_vaes_avx2)
+	bulk_ctr_fn =_gcry_camellia_vaes_avx2_ctr_enc;
+#endif
+#ifdef USE_GFNI_AVX2
+      if (ctx->use_gfni_avx2)
+	bulk_ctr_fn =_gcry_camellia_gfni_avx2_ctr_enc;
 #endif
 
       /* Process data in 32 block chunks. */
       while (nblocks >= 32)
         {
-#ifdef USE_VAES_AVX2
-          if (use_vaes)
-            _gcry_camellia_vaes_avx2_ctr_enc(ctx, outbuf, inbuf, ctr);
-          else
-#endif
-            _gcry_camellia_aesni_avx2_ctr_enc(ctx, outbuf, inbuf, ctr);
-
+	  bulk_ctr_fn (ctx, outbuf, inbuf, ctr);
           nblocks -= 32;
           outbuf += 32 * CAMELLIA_BLOCK_SIZE;
           inbuf  += 32 * CAMELLIA_BLOCK_SIZE;
@@ -462,15 +1036,11 @@ _gcry_camellia_ctr_enc(void *context, unsigned char *ctr,
 
       if (did_use_aesni_avx2)
         {
-          int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE + 16 +
-                                        2 * sizeof(void *) + ASM_EXTRA_STACK;
-
           if (burn_stack_depth < avx2_burn_stack_depth)
             burn_stack_depth = avx2_burn_stack_depth;
         }
 
       /* Use generic code to handle smaller chunks... */
-      /* TODO: use caching instead? */
     }
 #endif
 
@@ -492,32 +1062,31 @@ _gcry_camellia_ctr_enc(void *context, unsigned char *ctr,
 
       if (did_use_aesni_avx)
         {
-          int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE +
-                                       2 * sizeof(void *) + ASM_EXTRA_STACK;
-
           if (burn_stack_depth < avx_burn_stack_depth)
             burn_stack_depth = avx_burn_stack_depth;
         }
 
       /* Use generic code to handle smaller chunks... */
-      /* TODO: use caching instead? */
     }
 #endif
 
-  for ( ;nblocks; nblocks-- )
+  /* Process remaining blocks. */
+  if (nblocks)
     {
-      /* Encrypt the counter. */
-      Camellia_EncryptBlock(ctx->keybitlength, ctr, ctx->keytable, tmpbuf);
-      /* XOR the input with the encrypted counter and store in output.  */
-      cipher_block_xor(outbuf, tmpbuf, inbuf, CAMELLIA_BLOCK_SIZE);
-      outbuf += CAMELLIA_BLOCK_SIZE;
-      inbuf  += CAMELLIA_BLOCK_SIZE;
-      /* Increment the counter.  */
-      cipher_block_add(ctr, 1, CAMELLIA_BLOCK_SIZE);
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 32];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_ctr_enc_128(ctx, camellia_encrypt_blk1_32, outbuf, inbuf,
+                               nblocks, ctr, tmpbuf,
+                               sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE, &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
     }
 
-  wipememory(tmpbuf, sizeof(tmpbuf));
-  _gcry_burn_stack(burn_stack_depth);
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
 }
 
 /* Bulk decryption of complete blocks in CBC mode.  This function is only
@@ -530,27 +1099,53 @@ _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
-  unsigned char savebuf[CAMELLIA_BLOCK_SIZE];
-  int burn_stack_depth = CAMELLIA_decrypt_stack_burn_size;
+  int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      int did_use_gfni_avx512 = 0;
+
+      /* Process data in 64 block chunks. */
+      while (nblocks >= 64)
+        {
+          _gcry_camellia_gfni_avx512_cbc_dec (ctx, outbuf, inbuf, iv);
+          nblocks -= 64;
+          outbuf += 64 * CAMELLIA_BLOCK_SIZE;
+          inbuf  += 64 * CAMELLIA_BLOCK_SIZE;
+          did_use_gfni_avx512 = 1;
+        }
+
+      if (did_use_gfni_avx512)
+        {
+          if (burn_stack_depth < avx512_burn_stack_depth)
+            burn_stack_depth = avx512_burn_stack_depth;
+        }
+
+      /* Use generic code to handle smaller chunks... */
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
-  if (ctx->use_aesni_avx2)
+  if (ctx->use_avx2)
     {
       int did_use_aesni_avx2 = 0;
+      typeof (&_gcry_camellia_aesni_avx2_cbc_dec) bulk_cbc_fn =
+	  _gcry_camellia_aesni_avx2_cbc_dec;
+
 #ifdef USE_VAES_AVX2
-      int use_vaes = ctx->use_vaes_avx2;
+      if (ctx->use_vaes_avx2)
+	bulk_cbc_fn =_gcry_camellia_vaes_avx2_cbc_dec;
+#endif
+#ifdef USE_GFNI_AVX2
+      if (ctx->use_gfni_avx2)
+	bulk_cbc_fn =_gcry_camellia_gfni_avx2_cbc_dec;
 #endif
 
       /* Process data in 32 block chunks. */
       while (nblocks >= 32)
         {
-#ifdef USE_VAES_AVX2
-          if (use_vaes)
-            _gcry_camellia_vaes_avx2_cbc_dec(ctx, outbuf, inbuf, iv);
-          else
-#endif
-            _gcry_camellia_aesni_avx2_cbc_dec(ctx, outbuf, inbuf, iv);
-
+	  bulk_cbc_fn (ctx, outbuf, inbuf, iv);
           nblocks -= 32;
           outbuf += 32 * CAMELLIA_BLOCK_SIZE;
           inbuf  += 32 * CAMELLIA_BLOCK_SIZE;
@@ -559,9 +1154,6 @@ _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
 
       if (did_use_aesni_avx2)
         {
-          int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE + 16 +
-                                        2 * sizeof(void *) + ASM_EXTRA_STACK;;
-
           if (burn_stack_depth < avx2_burn_stack_depth)
             burn_stack_depth = avx2_burn_stack_depth;
         }
@@ -588,9 +1180,6 @@ _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
 
       if (did_use_aesni_avx)
         {
-          int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE +
-                                       2 * sizeof(void *) + ASM_EXTRA_STACK;
-
           if (burn_stack_depth < avx_burn_stack_depth)
             burn_stack_depth = avx_burn_stack_depth;
         }
@@ -599,20 +1188,23 @@ _gcry_camellia_cbc_dec(void *context, unsigned char *iv,
     }
 #endif
 
-  for ( ;nblocks; nblocks-- )
+  /* Process remaining blocks. */
+  if (nblocks)
     {
-      /* INBUF is needed later and it may be identical to OUTBUF, so store
-         the intermediate result to SAVEBUF.  */
-      Camellia_DecryptBlock(ctx->keybitlength, inbuf, ctx->keytable, savebuf);
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 32];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
 
-      cipher_block_xor_n_copy_2(outbuf, savebuf, iv, inbuf,
-                                CAMELLIA_BLOCK_SIZE);
-      inbuf += CAMELLIA_BLOCK_SIZE;
-      outbuf += CAMELLIA_BLOCK_SIZE;
+      nburn = bulk_cbc_dec_128(ctx, camellia_decrypt_blk1_32, outbuf, inbuf,
+                               nblocks, iv, tmpbuf,
+                               sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE, &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
     }
 
-  wipememory(savebuf, sizeof(savebuf));
-  _gcry_burn_stack(burn_stack_depth);
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
 }
 
 /* Bulk decryption of complete blocks in CFB mode.  This function is only
@@ -625,26 +1217,53 @@ _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
   CAMELLIA_context *ctx = context;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
-  int burn_stack_depth = CAMELLIA_decrypt_stack_burn_size;
+  int burn_stack_depth = 0;
+
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      int did_use_gfni_avx512 = 0;
+
+      /* Process data in 64 block chunks. */
+      while (nblocks >= 64)
+        {
+          _gcry_camellia_gfni_avx512_cfb_dec (ctx, outbuf, inbuf, iv);
+          nblocks -= 64;
+          outbuf += 64 * CAMELLIA_BLOCK_SIZE;
+          inbuf  += 64 * CAMELLIA_BLOCK_SIZE;
+          did_use_gfni_avx512 = 1;
+        }
+
+      if (did_use_gfni_avx512)
+        {
+          if (burn_stack_depth < avx512_burn_stack_depth)
+            burn_stack_depth = avx512_burn_stack_depth;
+        }
+
+      /* Use generic code to handle smaller chunks... */
+    }
+#endif
 
 #ifdef USE_AESNI_AVX2
-  if (ctx->use_aesni_avx2)
+  if (ctx->use_avx2)
     {
       int did_use_aesni_avx2 = 0;
+      typeof (&_gcry_camellia_aesni_avx2_cfb_dec) bulk_cfb_fn =
+	  _gcry_camellia_aesni_avx2_cfb_dec;
+
 #ifdef USE_VAES_AVX2
-      int use_vaes = ctx->use_vaes_avx2;
+      if (ctx->use_vaes_avx2)
+	bulk_cfb_fn =_gcry_camellia_vaes_avx2_cfb_dec;
+#endif
+#ifdef USE_GFNI_AVX2
+      if (ctx->use_gfni_avx2)
+	bulk_cfb_fn =_gcry_camellia_gfni_avx2_cfb_dec;
 #endif
 
       /* Process data in 32 block chunks. */
       while (nblocks >= 32)
         {
-#ifdef USE_VAES_AVX2
-          if (use_vaes)
-            _gcry_camellia_vaes_avx2_cfb_dec(ctx, outbuf, inbuf, iv);
-          else
-#endif
-            _gcry_camellia_aesni_avx2_cfb_dec(ctx, outbuf, inbuf, iv);
-
+	  bulk_cfb_fn (ctx, outbuf, inbuf, iv);
           nblocks -= 32;
           outbuf += 32 * CAMELLIA_BLOCK_SIZE;
           inbuf  += 32 * CAMELLIA_BLOCK_SIZE;
@@ -653,9 +1272,6 @@ _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
 
       if (did_use_aesni_avx2)
         {
-          int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE + 16 +
-                                        2 * sizeof(void *) + ASM_EXTRA_STACK;
-
           if (burn_stack_depth < avx2_burn_stack_depth)
             burn_stack_depth = avx2_burn_stack_depth;
         }
@@ -682,9 +1298,6 @@ _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
 
       if (did_use_aesni_avx)
         {
-          int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE +
-                                       2 * sizeof(void *) + ASM_EXTRA_STACK;
-
           if (burn_stack_depth < avx_burn_stack_depth)
             burn_stack_depth = avx_burn_stack_depth;
         }
@@ -693,15 +1306,111 @@ _gcry_camellia_cfb_dec(void *context, unsigned char *iv,
     }
 #endif
 
-  for ( ;nblocks; nblocks-- )
+  /* Process remaining blocks. */
+  if (nblocks)
     {
-      Camellia_EncryptBlock(ctx->keybitlength, iv, ctx->keytable, iv);
-      cipher_block_xor_n_copy(outbuf, iv, inbuf, CAMELLIA_BLOCK_SIZE);
-      outbuf += CAMELLIA_BLOCK_SIZE;
-      inbuf  += CAMELLIA_BLOCK_SIZE;
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 32];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_cfb_dec_128(ctx, camellia_encrypt_blk1_32, outbuf, inbuf,
+                               nblocks, iv, tmpbuf,
+                               sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE, &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
     }
 
-  _gcry_burn_stack(burn_stack_depth);
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk encryption/decryption in ECB mode. */
+static void
+_gcry_camellia_ecb_crypt (void *context, void *outbuf_arg,
+			  const void *inbuf_arg, size_t nblocks, int encrypt)
+{
+  CAMELLIA_context *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      size_t nburn;
+
+      nburn = bulk_ecb_crypt_128(ctx, encrypt ? camellia_encrypt_blk1_64
+                                              : camellia_decrypt_blk1_64,
+                                 outbuf, inbuf, nblocks, 64);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk encryption/decryption of complete blocks in XTS mode. */
+static void
+_gcry_camellia_xts_crypt (void *context, unsigned char *tweak,
+                          void *outbuf_arg, const void *inbuf_arg,
+                          size_t nblocks, int encrypt)
+{
+  CAMELLIA_context *ctx = context;
+  unsigned char *outbuf = outbuf_arg;
+  const unsigned char *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 64];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_xts_crypt_128(ctx, encrypt ? camellia_encrypt_blk1_64
+                                              : camellia_decrypt_blk1_64,
+                                 outbuf, inbuf, nblocks, tweak, tmpbuf,
+                                 sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE,
+                                 &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack(burn_stack_depth);
+}
+
+/* Bulk encryption of complete blocks in CTR32LE mode (for GCM-SIV). */
+static void
+_gcry_camellia_ctr32le_enc(void *context, unsigned char *ctr,
+                           void *outbuf_arg, const void *inbuf_arg,
+                           size_t nblocks)
+{
+  CAMELLIA_context *ctx = context;
+  byte *outbuf = outbuf_arg;
+  const byte *inbuf = inbuf_arg;
+  int burn_stack_depth = 0;
+
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      byte tmpbuf[64 * CAMELLIA_BLOCK_SIZE];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_ctr32le_enc_128 (ctx, camellia_encrypt_blk1_64, outbuf,
+                                    inbuf, nblocks, ctr, tmpbuf,
+                                    sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE,
+                                    &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory (tmpbuf, tmp_used);
+    }
+
+  if (burn_stack_depth)
+    _gcry_burn_stack (burn_stack_depth);
 }
 
 /* Bulk encryption/decryption of complete blocks in OCB mode. */
@@ -709,15 +1418,13 @@ static size_t
 _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 			  const void *inbuf_arg, size_t nblocks, int encrypt)
 {
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+#if defined(USE_PPC_CRYPTO) || defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
   CAMELLIA_context *ctx = (void *)&c->context.c;
   unsigned char *outbuf = outbuf_arg;
   const unsigned char *inbuf = inbuf_arg;
-  int burn_stack_depth;
+  int burn_stack_depth = 0;
   u64 blkn = c->u_mode.ocb.data_nblocks;
 
-  burn_stack_depth = encrypt ? CAMELLIA_encrypt_stack_burn_size :
-			      CAMELLIA_decrypt_stack_burn_size;
 #else
   (void)c;
   (void)outbuf_arg;
@@ -725,38 +1432,69 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
   (void)encrypt;
 #endif
 
+#ifdef USE_GFNI_AVX512
+  if (ctx->use_gfni_avx512)
+    {
+      int did_use_gfni_avx512 = 0;
+      u64 Ls[64];
+      u64 *l;
+
+      if (nblocks >= 64)
+	{
+	  typeof (&_gcry_camellia_gfni_avx512_ocb_dec) bulk_ocb_fn =
+	      encrypt ? _gcry_camellia_gfni_avx512_ocb_enc
+		      : _gcry_camellia_gfni_avx512_ocb_dec;
+          l = bulk_ocb_prepare_L_pointers_array_blk64 (c, Ls, blkn);
+
+	  /* Process data in 64 block chunks. */
+	  while (nblocks >= 64)
+	    {
+	      blkn += 64;
+	      *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 64);
+
+	      bulk_ocb_fn (ctx, outbuf, inbuf, c->u_iv.iv, c->u_ctr.ctr, Ls);
+
+	      nblocks -= 64;
+	      outbuf += 64 * CAMELLIA_BLOCK_SIZE;
+	      inbuf  += 64 * CAMELLIA_BLOCK_SIZE;
+	      did_use_gfni_avx512 = 1;
+	    }
+	}
+
+      if (did_use_gfni_avx512)
+	{
+	  if (burn_stack_depth < avx2_burn_stack_depth)
+	    burn_stack_depth = avx2_burn_stack_depth;
+	}
+
+      /* Use generic code to handle smaller chunks... */
+    }
+#endif
+
 #ifdef USE_AESNI_AVX2
-  if (ctx->use_aesni_avx2)
+  if (ctx->use_avx2)
     {
       int did_use_aesni_avx2 = 0;
-#ifdef USE_VAES_AVX2
-      int encrypt_use_vaes = encrypt && ctx->use_vaes_avx2;
-      int decrypt_use_vaes = !encrypt && ctx->use_vaes_avx2;
-#endif
       u64 Ls[32];
-      unsigned int n = 32 - (blkn % 32);
       u64 *l;
-      int i;
 
       if (nblocks >= 32)
 	{
-	  for (i = 0; i < 32; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
+	  typeof (&_gcry_camellia_aesni_avx2_ocb_dec) bulk_ocb_fn =
+	      encrypt ? _gcry_camellia_aesni_avx2_ocb_enc
+		      : _gcry_camellia_aesni_avx2_ocb_dec;
 
-	  Ls[(7 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  Ls[(15 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[4];
-	  Ls[(23 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(31 + n) % 32];
+#ifdef USE_VAES_AVX2
+	  if (ctx->use_vaes_avx2)
+	    bulk_ocb_fn = encrypt ? _gcry_camellia_vaes_avx2_ocb_enc
+				  : _gcry_camellia_vaes_avx2_ocb_dec;
+#endif
+#ifdef USE_GFNI_AVX2
+	  if (ctx->use_gfni_avx2)
+	    bulk_ocb_fn = encrypt ? _gcry_camellia_gfni_avx2_ocb_enc
+				  : _gcry_camellia_gfni_avx2_ocb_dec;
+#endif
+          l = bulk_ocb_prepare_L_pointers_array_blk32 (c, Ls, blkn);
 
 	  /* Process data in 32 block chunks. */
 	  while (nblocks >= 32)
@@ -764,21 +1502,7 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 	      blkn += 32;
 	      *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 32);
 
-	      if (0) {}
-#ifdef USE_VAES_AVX2
-	      else if (encrypt_use_vaes)
-		_gcry_camellia_vaes_avx2_ocb_enc(ctx, outbuf, inbuf, c->u_iv.iv,
-                                                 c->u_ctr.ctr, Ls);
-	      else if (decrypt_use_vaes)
-		_gcry_camellia_vaes_avx2_ocb_dec(ctx, outbuf, inbuf, c->u_iv.iv,
-                                                 c->u_ctr.ctr, Ls);
-#endif
-	      else if (encrypt)
-		_gcry_camellia_aesni_avx2_ocb_enc(ctx, outbuf, inbuf, c->u_iv.iv,
-						  c->u_ctr.ctr, Ls);
-	      else
-		_gcry_camellia_aesni_avx2_ocb_dec(ctx, outbuf, inbuf, c->u_iv.iv,
-						  c->u_ctr.ctr, Ls);
+	      bulk_ocb_fn (ctx, outbuf, inbuf, c->u_iv.iv, c->u_ctr.ctr, Ls);
 
 	      nblocks -= 32;
 	      outbuf += 32 * CAMELLIA_BLOCK_SIZE;
@@ -789,9 +1513,6 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 
       if (did_use_aesni_avx2)
 	{
-	  int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE +
-				      2 * sizeof(void *) + ASM_EXTRA_STACK;
-
 	  if (burn_stack_depth < avx2_burn_stack_depth)
 	    burn_stack_depth = avx2_burn_stack_depth;
 	}
@@ -805,27 +1526,11 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
     {
       int did_use_aesni_avx = 0;
       u64 Ls[16];
-      unsigned int n = 16 - (blkn % 16);
       u64 *l;
-      int i;
 
       if (nblocks >= 16)
 	{
-	  for (i = 0; i < 16; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
-
-	  Ls[(7 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(15 + n) % 16];
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
 
 	  /* Process data in 16 block chunks. */
 	  while (nblocks >= 16)
@@ -849,9 +1554,6 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
 
       if (did_use_aesni_avx)
 	{
-	  int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE +
-				      2 * sizeof(void *) + ASM_EXTRA_STACK;
-
 	  if (burn_stack_depth < avx_burn_stack_depth)
 	    burn_stack_depth = avx_burn_stack_depth;
 	}
@@ -860,7 +1562,25 @@ _gcry_camellia_ocb_crypt (gcry_cipher_hd_t c, void *outbuf_arg,
     }
 #endif
 
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+#if defined(USE_PPC_CRYPTO) || defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 32];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_ocb_crypt_128 (c, ctx, encrypt ? camellia_encrypt_blk1_32
+                                                  : camellia_decrypt_blk1_32,
+                                  outbuf, inbuf, nblocks, &blkn, encrypt,
+                                  tmpbuf, sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE,
+                                  &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
+      nblocks = 0;
+    }
+
   c->u_mode.ocb.data_nblocks = blkn;
 
   if (burn_stack_depth)
@@ -875,49 +1595,38 @@ static size_t
 _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
 			 size_t nblocks)
 {
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+#if defined(USE_PPC_CRYPTO) || defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
   CAMELLIA_context *ctx = (void *)&c->context.c;
   const unsigned char *abuf = abuf_arg;
-  int burn_stack_depth;
+  int burn_stack_depth = 0;
   u64 blkn = c->u_mode.ocb.aad_nblocks;
-
-  burn_stack_depth = CAMELLIA_encrypt_stack_burn_size;
 #else
   (void)c;
   (void)abuf_arg;
 #endif
 
 #ifdef USE_AESNI_AVX2
-  if (ctx->use_aesni_avx2)
+  if (ctx->use_avx2)
     {
       int did_use_aesni_avx2 = 0;
-#ifdef USE_VAES_AVX2
-      int use_vaes = ctx->use_vaes_avx2;
-#endif
       u64 Ls[32];
-      unsigned int n = 32 - (blkn % 32);
       u64 *l;
-      int i;
 
       if (nblocks >= 32)
 	{
-	  for (i = 0; i < 32; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
+	  typeof (&_gcry_camellia_aesni_avx2_ocb_auth) bulk_auth_fn =
+	      _gcry_camellia_aesni_avx2_ocb_auth;
 
-	  Ls[(7 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  Ls[(15 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[4];
-	  Ls[(23 + n) % 32] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(31 + n) % 32];
+#ifdef USE_VAES_AVX2
+	  if (ctx->use_vaes_avx2)
+	    bulk_auth_fn = _gcry_camellia_vaes_avx2_ocb_auth;
+#endif
+#ifdef USE_GFNI_AVX2
+	  if (ctx->use_gfni_avx2)
+	    bulk_auth_fn = _gcry_camellia_gfni_avx2_ocb_auth;
+#endif
+
+          l = bulk_ocb_prepare_L_pointers_array_blk32 (c, Ls, blkn);
 
 	  /* Process data in 32 block chunks. */
 	  while (nblocks >= 32)
@@ -925,16 +1634,8 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
 	      blkn += 32;
 	      *l = (uintptr_t)(void *)ocb_get_l(c, blkn - blkn % 32);
 
-#ifdef USE_VAES_AVX2
-              if (use_vaes)
-                _gcry_camellia_vaes_avx2_ocb_auth(ctx, abuf,
-                                                  c->u_mode.ocb.aad_offset,
-                                                  c->u_mode.ocb.aad_sum, Ls);
-              else
-#endif
-                _gcry_camellia_aesni_avx2_ocb_auth(ctx, abuf,
-                                                   c->u_mode.ocb.aad_offset,
-                                                   c->u_mode.ocb.aad_sum, Ls);
+	      bulk_auth_fn (ctx, abuf, c->u_mode.ocb.aad_offset,
+			    c->u_mode.ocb.aad_sum, Ls);
 
 	      nblocks -= 32;
 	      abuf += 32 * CAMELLIA_BLOCK_SIZE;
@@ -944,9 +1645,6 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
 
       if (did_use_aesni_avx2)
 	{
-	  int avx2_burn_stack_depth = 32 * CAMELLIA_BLOCK_SIZE +
-				      2 * sizeof(void *) + ASM_EXTRA_STACK;
-
 	  if (burn_stack_depth < avx2_burn_stack_depth)
 	    burn_stack_depth = avx2_burn_stack_depth;
 	}
@@ -960,27 +1658,11 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
     {
       int did_use_aesni_avx = 0;
       u64 Ls[16];
-      unsigned int n = 16 - (blkn % 16);
       u64 *l;
-      int i;
 
       if (nblocks >= 16)
 	{
-	  for (i = 0; i < 16; i += 8)
-	    {
-	      /* Use u64 to store pointers for x32 support (assembly function
-	       * assumes 64-bit pointers). */
-	      Ls[(i + 0 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 1 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 2 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 3 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[2];
-	      Ls[(i + 4 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	      Ls[(i + 5 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[1];
-	      Ls[(i + 6 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[0];
-	    }
-
-	  Ls[(7 + n) % 16] = (uintptr_t)(void *)c->u_mode.ocb.L[3];
-	  l = &Ls[(15 + n) % 16];
+          l = bulk_ocb_prepare_L_pointers_array_blk16 (c, Ls, blkn);
 
 	  /* Process data in 16 block chunks. */
 	  while (nblocks >= 16)
@@ -1000,9 +1682,6 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
 
       if (did_use_aesni_avx)
 	{
-	  int avx_burn_stack_depth = 16 * CAMELLIA_BLOCK_SIZE +
-				      2 * sizeof(void *) + ASM_EXTRA_STACK;
-
 	  if (burn_stack_depth < avx_burn_stack_depth)
 	    burn_stack_depth = avx_burn_stack_depth;
 	}
@@ -1011,7 +1690,24 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
     }
 #endif
 
-#if defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+#if defined(USE_PPC_CRYPTO) || defined(USE_AESNI_AVX) || defined(USE_AESNI_AVX2)
+  /* Process remaining blocks. */
+  if (nblocks)
+    {
+      byte tmpbuf[CAMELLIA_BLOCK_SIZE * 32];
+      unsigned int tmp_used = CAMELLIA_BLOCK_SIZE;
+      size_t nburn;
+
+      nburn = bulk_ocb_auth_128 (c, ctx, camellia_encrypt_blk1_32,
+                                 abuf, nblocks, &blkn, tmpbuf,
+                                 sizeof(tmpbuf) / CAMELLIA_BLOCK_SIZE,
+                                 &tmp_used);
+      burn_stack_depth = nburn > burn_stack_depth ? nburn : burn_stack_depth;
+
+      wipememory(tmpbuf, tmp_used);
+      nblocks = 0;
+    }
+
   c->u_mode.ocb.aad_nblocks = blkn;
 
   if (burn_stack_depth)
@@ -1021,44 +1717,6 @@ _gcry_camellia_ocb_auth (gcry_cipher_hd_t c, const void *abuf_arg,
   return nblocks;
 }
 
-/* Run the self-tests for CAMELLIA-CTR-128, tests IV increment of bulk CTR
-   encryption.  Returns NULL on success. */
-static const char*
-selftest_ctr_128 (void)
-{
-  const int nblocks = 32+16+1;
-  const int blocksize = CAMELLIA_BLOCK_SIZE;
-  const int context_size = sizeof(CAMELLIA_context);
-
-  return _gcry_selftest_helper_ctr("CAMELLIA", &camellia_setkey,
-           &camellia_encrypt, nblocks, blocksize, context_size);
-}
-
-/* Run the self-tests for CAMELLIA-CBC-128, tests bulk CBC decryption.
-   Returns NULL on success. */
-static const char*
-selftest_cbc_128 (void)
-{
-  const int nblocks = 32+16+2;
-  const int blocksize = CAMELLIA_BLOCK_SIZE;
-  const int context_size = sizeof(CAMELLIA_context);
-
-  return _gcry_selftest_helper_cbc("CAMELLIA", &camellia_setkey,
-           &camellia_encrypt, nblocks, blocksize, context_size);
-}
-
-/* Run the self-tests for CAMELLIA-CFB-128, tests bulk CFB decryption.
-   Returns NULL on success. */
-static const char*
-selftest_cfb_128 (void)
-{
-  const int nblocks = 32+16+2;
-  const int blocksize = CAMELLIA_BLOCK_SIZE;
-  const int context_size = sizeof(CAMELLIA_context);
-
-  return _gcry_selftest_helper_cfb("CAMELLIA", &camellia_setkey,
-           &camellia_encrypt, nblocks, blocksize, context_size);
-}
 
 static const char *
 selftest(void)
@@ -1066,7 +1724,6 @@ selftest(void)
   CAMELLIA_context ctx;
   byte scratch[16];
   cipher_bulk_ops_t bulk_ops;
-  const char *r;
 
   /* These test vectors are from RFC-3713 */
   static const byte plaintext[]=
@@ -1129,15 +1786,6 @@ selftest(void)
   camellia_decrypt(&ctx,scratch,scratch);
   if(memcmp(scratch,plaintext,sizeof(plaintext))!=0)
     return "CAMELLIA-256 test decryption failed.";
-
-  if ( (r = selftest_ctr_128 ()) )
-    return r;
-
-  if ( (r = selftest_cbc_128 ()) )
-    return r;
-
-  if ( (r = selftest_cfb_128 ()) )
-    return r;
 
   return NULL;
 }

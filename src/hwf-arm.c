@@ -1,5 +1,5 @@
 /* hwf-arm.c - Detect hardware features - ARM part
- * Copyright (C) 2013,2019 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 2013,2019,2022 Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
  *
@@ -27,6 +27,10 @@
 #if defined(HAVE_SYS_AUXV_H) && (defined(HAVE_GETAUXVAL) || \
     defined(HAVE_ELF_AUX_INFO))
 #include <sys/auxv.h>
+#endif
+#if defined(__APPLE__) && defined(HAVE_SYS_SYSCTL_H) && \
+    defined(HAVE_SYSCTLBYNAME)
+#include <sys/sysctl.h>
 #endif
 
 #include "g10lib.h"
@@ -137,6 +141,37 @@ static const struct feature_map_s arm_features[] =
 #ifndef HWCAP_SHA2
 # define HWCAP_SHA2  64
 #endif
+#ifndef HWCAP_SHA3
+# define HWCAP_SHA3  (1 << 17)
+#endif
+#ifndef HWCAP_SM3
+# define HWCAP_SM3   (1 << 18)
+#endif
+#ifndef HWCAP_SM4
+# define HWCAP_SM4   (1 << 19)
+#endif
+#ifndef HWCAP_SHA512
+# define HWCAP_SHA512 (1 << 21)
+#endif
+#ifndef HWCAP_SVE
+# define HWCAP_SVE    (1 << 22)
+#endif
+
+#ifndef HWCAP2_SVE2
+# define HWCAP2_SVE2        (1 << 1)
+#endif
+#ifndef HWCAP2_SVEAES
+# define HWCAP2_SVEAES      (1 << 2)
+#endif
+#ifndef HWCAP2_SVEPMULL
+# define HWCAP2_SVEPMULL    (1 << 3)
+#endif
+#ifndef HWCAP2_SVESHA3
+# define HWCAP2_SVESHA3     (1 << 5)
+#endif
+#ifndef HWCAP2_SVESM4
+# define HWCAP2_SVESM4      (1 << 6)
+#endif
 
 static const struct feature_map_s arm_features[] =
   {
@@ -148,6 +183,18 @@ static const struct feature_map_s arm_features[] =
     { HWCAP_SHA1, 0, " sha1", HWF_ARM_SHA1 },
     { HWCAP_SHA2, 0, " sha2", HWF_ARM_SHA2 },
     { HWCAP_PMULL, 0, " pmull", HWF_ARM_PMULL },
+    { HWCAP_SHA3, 0, " sha3",  HWF_ARM_SHA3 },
+    { HWCAP_SM3, 0, " sm3",  HWF_ARM_SM3 },
+    { HWCAP_SM4, 0, " sm4",  HWF_ARM_SM4 },
+    { HWCAP_SHA512, 0, " sha512",  HWF_ARM_SHA512 },
+#endif
+#ifdef ENABLE_SVE_SUPPORT
+    { HWCAP_SVE, 0, " sve",  HWF_ARM_SVE },
+    { 0, HWCAP2_SVE2, " sve2",  HWF_ARM_SVE2 },
+    { 0, HWCAP2_SVEAES, " sveaes",  HWF_ARM_SVEAES },
+    { 0, HWCAP2_SVEPMULL, " svepmull",  HWF_ARM_SVEPMULL },
+    { 0, HWCAP2_SVESHA3, " svesha3",  HWF_ARM_SVESHA3 },
+    { 0, HWCAP2_SVESM4, " svesm4",  HWF_ARM_SVESM4 },
 #endif
   };
 
@@ -369,6 +416,128 @@ detect_arm_proc_cpuinfo(unsigned int *broken_hwfs)
 
 #endif /* __linux__ */
 
+
+#undef HAS_APPLE_SYSCTLBYNAME
+#if defined(__APPLE__) && defined(HAVE_SYS_SYSCTL_H) && \
+    defined(HAVE_SYSCTLBYNAME)
+#define HAS_APPLE_SYSCTLBYNAME 1
+
+static unsigned int
+detect_arm_apple_sysctlbyname (void)
+{
+  static const struct
+  {
+    const char *feat_name;
+    unsigned int hwf_flag;
+  } hw_optional_arm_features[] =
+    {
+#ifdef ENABLE_NEON_SUPPORT
+      { "hw.optional.neon",            HWF_ARM_NEON },
+      { "hw.optional.AdvSIMD",         HWF_ARM_NEON },
+#endif
+#ifdef ENABLE_ARM_CRYPTO_SUPPORT
+      { "hw.optional.arm.FEAT_AES",    HWF_ARM_AES },
+      { "hw.optional.arm.FEAT_SHA1",   HWF_ARM_SHA1 },
+      { "hw.optional.arm.FEAT_SHA256", HWF_ARM_SHA2 },
+      { "hw.optional.arm.FEAT_PMULL",  HWF_ARM_PMULL },
+      { "hw.optional.arm.FEAT_SHA3",   HWF_ARM_SHA3 },
+      { "hw.optional.armv8_2_sha3",    HWF_ARM_SHA3 },
+      { "hw.optional.arm.FEAT_SHA512", HWF_ARM_SHA512 },
+      { "hw.optional.armv8_2_sha512",  HWF_ARM_SHA512 },
+#endif
+    };
+  unsigned int i;
+  unsigned int hwf = 0;
+
+  for (i = 0; i < DIM(hw_optional_arm_features); i++)
+    {
+      const char *name = hw_optional_arm_features[i].feat_name;
+      int sysctl_value = 0;
+      size_t value_size = sizeof(sysctl_value);
+
+      if (sysctlbyname (name, &sysctl_value, &value_size, NULL, 0) != 0)
+        continue;
+
+      if (value_size != sizeof(sysctl_value))
+        continue;
+
+      if (sysctl_value == 1)
+        {
+          hwf |= hw_optional_arm_features[i].hwf_flag;
+        }
+    }
+
+  return hwf;
+}
+
+#endif /* __APPLE__ */
+
+
+static unsigned int
+detect_arm_hwf_by_toolchain (void)
+{
+  unsigned int ret = 0;
+
+  /* Detect CPU features required by toolchain.
+   * This allows detection of ARMv8 crypto extension support,
+   * for example, on macOS/aarch64.
+   */
+
+#if __GNUC__ >= 4
+
+#if defined(__ARM_NEON) && defined(ENABLE_NEON_SUPPORT)
+  ret |= HWF_ARM_NEON;
+
+#ifdef HAVE_GCC_INLINE_ASM_NEON
+  /* Early test for NEON instruction to detect faulty toolchain
+   * configuration. */
+  asm volatile ("veor q15, q15, q15":::"q15");
+#endif
+
+#ifdef HAVE_GCC_INLINE_ASM_AARCH64_NEON
+  /* Early test for NEON instruction to detect faulty toolchain
+   * configuration. */
+  asm volatile ("eor v31.16b, v31.16b, v31.16b":::"v31");
+#endif
+
+#endif /* __ARM_NEON */
+
+#if defined(__ARM_FEATURE_CRYPTO) && defined(ENABLE_ARM_CRYPTO_SUPPORT)
+  /* ARMv8 crypto extensions include support for PMULL, AES, SHA1 and SHA2
+   * instructions. */
+  ret |= HWF_ARM_PMULL;
+  ret |= HWF_ARM_AES;
+  ret |= HWF_ARM_SHA1;
+  ret |= HWF_ARM_SHA2;
+
+#ifdef HAVE_GCC_INLINE_ASM_AARCH32_CRYPTO
+  /* Early test for CE instructions to detect faulty toolchain
+   * configuration. */
+  asm volatile ("vmull.p64 q0, d0, d0;\n\t"
+		"aesimc.8 q7, q0;\n\t"
+		"sha1su1.32 q0, q0;\n\t"
+		"sha256su1.32 q0, q7, q15;\n\t"
+		:::
+		"q0", "q7", "q15");
+#endif
+
+#ifdef HAVE_GCC_INLINE_ASM_AARCH64_CRYPTO
+  /* Early test for CE instructions to detect faulty toolchain
+   * configuration. */
+  asm volatile ("pmull2 v0.1q, v0.2d, v31.2d;\n\t"
+		"aesimc v15.16b, v0.16b;\n\t"
+		"sha1su1 v0.4s, v0.4s;\n\t"
+		"sha256su1 v0.4s, v15.4s, v31.4s;\n\t"
+		:::
+		"v0", "v15", "v31");
+#endif
+#endif
+
+#endif
+
+  return ret;
+}
+
 unsigned int
 _gcry_hwf_detect_arm (void)
 {
@@ -383,9 +552,11 @@ _gcry_hwf_detect_arm (void)
   ret |= detect_arm_proc_cpuinfo (&broken_hwfs);
 #endif
 
-#if defined(__ARM_NEON) && defined(ENABLE_NEON_SUPPORT)
-  ret |= HWF_ARM_NEON;
+#if defined (HAS_APPLE_SYSCTLBYNAME)
+  ret |= detect_arm_apple_sysctlbyname ();
 #endif
+
+  ret |= detect_arm_hwf_by_toolchain ();
 
   ret &= ~broken_hwfs;
 

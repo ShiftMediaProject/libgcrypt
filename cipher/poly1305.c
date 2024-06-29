@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -40,7 +40,7 @@ static const char *selftest (void);
 
 #undef USE_MPI_64BIT
 #undef USE_MPI_32BIT
-#if BYTES_PER_MPI_LIMB == 8 && defined(HAVE_TYPE_U64)
+#if BYTES_PER_MPI_LIMB == 8 && defined(HAVE_U64)
 # define USE_MPI_64BIT 1
 #elif BYTES_PER_MPI_LIMB == 4
 # define USE_MPI_32BIT 1
@@ -57,6 +57,19 @@ static const char *selftest (void);
 #   define USE_S390X_ASM 1
 #  endif /* USE_S390X_ASM */
 # endif
+#endif
+
+
+/* AMD64 Assembly implementations use SystemV ABI, ABI conversion and
+ * additional stack to store XMM6-XMM15 needed on Win64. */
+#undef ASM_FUNC_ABI
+#undef ASM_FUNC_WRAPPER_ATTR
+#if defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS)
+# define ASM_FUNC_ABI __attribute__((sysv_abi))
+# define ASM_FUNC_WRAPPER_ATTR __attribute__((noinline))
+#else
+# define ASM_FUNC_ABI
+# define ASM_FUNC_WRAPPER_ATTR
 #endif
 
 
@@ -78,10 +91,51 @@ poly1305_blocks (poly1305_context_t *ctx, const byte *buf, size_t len,
 #endif /* USE_S390X_ASM */
 
 
+#ifdef POLY1305_USE_AVX512
+
+extern unsigned int
+_gcry_poly1305_amd64_avx512_blocks(const void *msg, const u64 msg_len,
+				   void *hash, const void *key) ASM_FUNC_ABI;
+
+ASM_FUNC_WRAPPER_ATTR static unsigned int
+poly1305_amd64_avx512_blocks(poly1305_context_t *ctx, const byte *buf,
+			     size_t len)
+{
+  POLY1305_STATE *st = &ctx->state;
+  return _gcry_poly1305_amd64_avx512_blocks(buf, len, st->h, st->r);
+}
+
+#endif /* POLY1305_USE_AVX512 */
+
+
+#ifdef POLY1305_USE_PPC_VEC
+
+extern unsigned int
+gcry_poly1305_p10le_4blocks(unsigned char *key, const byte *m, size_t len);
+
+#endif /* POLY1305_USE_PPC_VEC */
+
+
 static void poly1305_init (poly1305_context_t *ctx,
 			   const byte key[POLY1305_KEYLEN])
 {
   POLY1305_STATE *st = &ctx->state;
+  unsigned int features = _gcry_get_hw_features ();
+
+#ifdef POLY1305_USE_AVX512
+  ctx->use_avx512 = (features & HWF_INTEL_AVX512) != 0;
+#endif
+
+#ifdef POLY1305_USE_PPC_VEC
+  ctx->use_p10 = (features & HWF_PPC_ARCH_3_10) != 0;
+# ifdef ENABLE_FORCE_SOFT_HWFEATURES
+  /* HWF_PPC_ARCH_3_10 above is used as soft HW-feature indicator for P10.
+   * Actual implementation works with HWF_PPC_ARCH_3_00 also. */
+  ctx->use_p10 |= (features & HWF_PPC_ARCH_3_00) != 0;
+# endif
+#endif
+
+  (void)features;
 
   ctx->leftover = 0;
 
@@ -181,8 +235,8 @@ static void poly1305_init (poly1305_context_t *ctx,
 #ifndef HAVE_ASM_POLY1305_BLOCKS
 
 static unsigned int
-poly1305_blocks (poly1305_context_t *ctx, const byte *buf, size_t len,
-		 byte high_pad)
+poly1305_blocks_generic (poly1305_context_t *ctx, const byte *buf, size_t len,
+			 byte high_pad)
 {
   POLY1305_STATE *st = &ctx->state;
   u64 r0, r1, r1_mult5;
@@ -233,6 +287,18 @@ poly1305_blocks (poly1305_context_t *ctx, const byte *buf, size_t len,
   st->h[4] = h2;
 
   return 6 * sizeof (void *) + 18 * sizeof (u64);
+}
+
+static unsigned int
+poly1305_blocks (poly1305_context_t *ctx, const byte *buf, size_t len,
+		 byte high_pad)
+{
+#ifdef POLY1305_USE_AVX512
+  if ((high_pad & ctx->use_avx512) != 0)
+    return poly1305_amd64_avx512_blocks(ctx, buf, len);
+#endif
+
+  return poly1305_blocks_generic(ctx, buf, len, high_pad);
 }
 
 #endif /* !HAVE_ASM_POLY1305_BLOCKS */
@@ -533,6 +599,7 @@ _gcry_poly1305_update_burn (poly1305_context_t *ctx, const byte *m,
 			    size_t bytes)
 {
   unsigned int burn = 0;
+  unsigned int nburn;
 
   /* handle leftover */
   if (ctx->leftover)
@@ -546,15 +613,31 @@ _gcry_poly1305_update_burn (poly1305_context_t *ctx, const byte *m,
       ctx->leftover += want;
       if (ctx->leftover < POLY1305_BLOCKSIZE)
 	return 0;
-      burn = poly1305_blocks (ctx, ctx->buffer, POLY1305_BLOCKSIZE, 1);
+      nburn = poly1305_blocks (ctx, ctx->buffer, POLY1305_BLOCKSIZE, 1);
+      burn = nburn > burn ? nburn : burn;
       ctx->leftover = 0;
     }
+
+#ifdef POLY1305_USE_PPC_VEC
+  /* PPC-P10/little-endian: bulk process multiples of eight blocks */
+  if (ctx->use_p10 && bytes >= POLY1305_BLOCKSIZE * 8)
+    {
+      size_t nblks = bytes / (POLY1305_BLOCKSIZE * 8);
+      size_t len = nblks * (POLY1305_BLOCKSIZE * 8);
+      POLY1305_STATE *st = &ctx->state;
+      nburn = gcry_poly1305_p10le_4blocks ((unsigned char *) st, m, len);
+      burn = nburn > burn ? nburn : burn;
+      m += len;
+      bytes -= len;
+    }
+#endif /* POLY1305_USE_PPC_VEC */
 
   /* process full blocks */
   if (bytes >= POLY1305_BLOCKSIZE)
     {
       size_t nblks = bytes / POLY1305_BLOCKSIZE;
-      burn = poly1305_blocks (ctx, m, nblks * POLY1305_BLOCKSIZE, 1);
+      nburn = poly1305_blocks (ctx, m, nblks * POLY1305_BLOCKSIZE, 1);
+      burn = nburn > burn ? nburn : burn;
       m += nblks * POLY1305_BLOCKSIZE;
       bytes -= nblks * POLY1305_BLOCKSIZE;
     }

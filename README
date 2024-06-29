@@ -1,10 +1,10 @@
 		    Libgcrypt - The GNU Crypto Library
 		   ------------------------------------
-                             Version 1.10
+                             Version 1.11
 
        Copyright (C) 1989,1991-2018 Free Software Foundation, Inc.
-       Copyright (C) 2012-2023 g10 Code GmbH
-       Copyright (C) 2013-2023 Jussi Kivilinna
+       Copyright (C) 2012-2024 g10 Code GmbH
+       Copyright (C) 2013-2024 Jussi Kivilinna
 
     Libgcrypt is free software.  See the file AUTHORS for full copying
     notices, and LICENSES for notices about contributions that require
@@ -85,12 +85,6 @@
      --enable-large-data-tests
                      With this option a "make check" will take really
                      long due to extra checks for the hash algorithms.
-
-     --enable-m-guard
-                     Enable the integrated malloc checking code. Please
-                     note that this feature does not work on all CPUs
-                     (e.g. SunOS 5.7 on UltraSparc-2) and might give
-                     you a bus error.
 
      --disable-asm
                      Do not use assembler modules.  It is not possible
@@ -268,8 +262,12 @@
     Commercial grade support for Libgcrypt is available; for a listing
     of offers see https://www.gnupg.org/service.html .
 
-    Since 2001 maintenance and development of Libgcrypt is done by
-    g10 Code GmbH and until 2021 mostly financed by donations.
+    Since 2001 maintenance and development of Libgcrypt is done by g10
+    Code GmbH and was mostly financed by donations; since 2022 a raise
+    in revenues from support contracts allows to fully finance the
+    development without resorting to donations.  Many thanks to our
+    paid developers for their work and also a big thank you to Jussi
+    Kivilinna for all of his performance work.
 
   This file is Free Software; as a special exception the authors gives
   unlimited permission to copy and/or distribute it, with or without

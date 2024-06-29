@@ -4,7 +4,7 @@
  * This file is part of Libgcrypt.
  *
  * Libgcrypt is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser general Public License as
+ * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation; either version 2.1 of
  * the License, or (at your option) any later version.
  *
@@ -62,6 +62,16 @@
 #endif
 
 
+/* USE_64BIT_AVX512 indicates whether to compile with Intel AVX512 code. */
+#undef USE_64BIT_AVX512
+#if defined(USE_64BIT) && defined(__x86_64__) && \
+    defined(HAVE_GCC_INLINE_ASM_AVX512) && \
+    (defined(HAVE_COMPATIBLE_GCC_AMD64_PLATFORM_AS) || \
+     defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS))
+# define USE_64BIT_AVX512 1
+#endif
+
+
 /* USE_64BIT_ARM_NEON indicates whether to enable 64-bit ARM/NEON assembly
  * code. */
 #undef USE_64BIT_ARM_NEON
@@ -81,6 +91,16 @@
 #endif /* USE_S390X_CRYPTO */
 
 
+/* x86-64 vector register assembly implementations use SystemV ABI, ABI
+ * conversion needed on Win64 through function attribute. */
+#undef ASM_FUNC_ABI
+#if defined(USE_64BIT_AVX512) && defined(HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS)
+# define ASM_FUNC_ABI __attribute__((sysv_abi))
+#else
+# define ASM_FUNC_ABI
+#endif
+
+
 #if defined(USE_64BIT) || defined(USE_64BIT_ARM_NEON)
 # define NEED_COMMON64 1
 #endif
@@ -92,7 +112,7 @@
 
 #define SHA3_DELIMITED_SUFFIX 0x06
 #define SHAKE_DELIMITED_SUFFIX 0x1F
-
+#define CSHAKE_DELIMITED_SUFFIX 0x04
 
 typedef struct
 {
@@ -123,7 +143,9 @@ typedef struct KECCAK_CONTEXT_S
   unsigned int outlen;
   unsigned int blocksize;
   unsigned int count;
-  unsigned int suffix;
+  unsigned int suffix:8;
+  unsigned int shake_in_extract_mode:1;
+  unsigned int shake_in_read_mode:1;
   const keccak_ops_t *ops;
 #ifdef USE_S390X_CRYPTO
   unsigned int kimd_func;
@@ -426,6 +448,68 @@ static const keccak_ops_t keccak_bmi2_64_ops =
 };
 
 #endif /* USE_64BIT_BMI2 */
+
+
+/* 64-bit Intel AVX512 implementation. */
+#ifdef USE_64BIT_AVX512
+
+extern ASM_FUNC_ABI unsigned int
+_gcry_keccak_f1600_state_permute64_avx512(u64 *state, const u64 *rconst);
+
+extern ASM_FUNC_ABI unsigned int
+_gcry_keccak_absorb_blocks_avx512(u64 *state, const u64 *rconst,
+                                  const byte *lanes, u64 nlanes,
+                                  u64 blocklanes, u64 *new_lanes);
+
+static unsigned int
+keccak_f1600_state_permute64_avx512(KECCAK_STATE *hd)
+{
+  return _gcry_keccak_f1600_state_permute64_avx512 (
+                                hd->u.state64, _gcry_keccak_round_consts_64bit);
+}
+
+static unsigned int
+keccak_absorb_lanes64_avx512(KECCAK_STATE *hd, int pos, const byte *lanes,
+			     size_t nlanes, int blocklanes)
+{
+  while (nlanes)
+    {
+      if (pos == 0 && blocklanes > 0 && nlanes >= (size_t)blocklanes)
+        {
+          /* Get new pointer through u64 variable for "x32" compatibility. */
+          u64 new_lanes;
+          nlanes = _gcry_keccak_absorb_blocks_avx512 (
+                            hd->u.state64, _gcry_keccak_round_consts_64bit,
+                            lanes, nlanes, blocklanes, &new_lanes);
+          lanes = (const byte *)(uintptr_t)new_lanes;
+        }
+
+      while (nlanes)
+	{
+	  hd->u.state64[pos] ^= buf_get_le64 (lanes);
+	  lanes += 8;
+	  nlanes--;
+
+	  if (++pos == blocklanes)
+	    {
+	      keccak_f1600_state_permute64_avx512 (hd);
+	      pos = 0;
+	      break;
+	    }
+	}
+    }
+
+  return 0;
+}
+
+static const keccak_ops_t keccak_avx512_64_ops =
+{
+  .permute = keccak_f1600_state_permute64_avx512,
+  .absorb = keccak_absorb_lanes64_avx512,
+  .extract = keccak_extract64,
+};
+
+#endif /* USE_64BIT_AVX512 */
 
 
 /* 64-bit ARMv7/NEON implementation. */
@@ -884,6 +968,8 @@ keccak_init (int algo, void *context, unsigned int flags)
   memset (hd, 0, sizeof *hd);
 
   ctx->count = 0;
+  ctx->shake_in_extract_mode = 0;
+  ctx->shake_in_read_mode = 0;
 
   /* Select generic implementation. */
 #ifdef USE_64BIT
@@ -894,6 +980,10 @@ keccak_init (int algo, void *context, unsigned int flags)
 
   /* Select optimized implementation based in hw features. */
   if (0) {}
+#ifdef USE_64BIT_AVX512
+  else if (features & HWF_INTEL_AVX512)
+    ctx->ops = &keccak_avx512_64_ops;
+#endif
 #ifdef USE_64BIT_ARM_NEON
   else if (features & HWF_ARM_NEON)
     ctx->ops = &keccak_armv7_neon_64_ops;
@@ -935,15 +1025,17 @@ keccak_init (int algo, void *context, unsigned int flags)
       ctx->blocksize = 576 / 8;
       ctx->outlen = 512 / 8;
       break;
+    case GCRY_MD_CSHAKE128:
     case GCRY_MD_SHAKE128:
       ctx->suffix = SHAKE_DELIMITED_SUFFIX;
       ctx->blocksize = 1344 / 8;
-      ctx->outlen = 0;
+      ctx->outlen = 256 / 8;
       break;
+    case GCRY_MD_CSHAKE256:
     case GCRY_MD_SHAKE256:
       ctx->suffix = SHAKE_DELIMITED_SUFFIX;
       ctx->blocksize = 1088 / 8;
-      ctx->outlen = 0;
+      ctx->outlen = 512 / 8;
       break;
     default:
       BUG();
@@ -969,9 +1061,11 @@ keccak_init (int algo, void *context, unsigned int flags)
 	case GCRY_MD_SHA3_512:
 	  kimd_func = KMID_FUNCTION_SHA3_512;
 	  break;
+	case GCRY_MD_CSHAKE128:
 	case GCRY_MD_SHAKE128:
 	  kimd_func = KMID_FUNCTION_SHAKE128;
 	  break;
+	case GCRY_MD_CSHAKE256:
 	case GCRY_MD_SHAKE256:
 	  kimd_func = KMID_FUNCTION_SHAKE256;
 	  break;
@@ -1095,8 +1189,8 @@ keccak_read (void *context)
 }
 
 
-static void
-keccak_extract (void *context, void *out, size_t outlen)
+static gcry_err_code_t
+do_keccak_extract (void *context, void *out, size_t outlen)
 {
   KECCAK_CONTEXT *ctx = context;
   KECCAK_STATE *hd = &ctx->state;
@@ -1113,7 +1207,7 @@ keccak_extract (void *context, void *out, size_t outlen)
   if (ctx->kimd_func)
     {
       keccak_extract_s390x (context, out, outlen);
-      return;
+      return 0;
     }
 #endif
 
@@ -1218,6 +1312,52 @@ keccak_extract (void *context, void *out, size_t outlen)
 
   if (burn)
     _gcry_burn_stack (burn);
+
+  return 0;
+}
+
+
+static gcry_err_code_t
+keccak_extract (void *context, void *out, size_t outlen)
+{
+  KECCAK_CONTEXT *ctx = context;
+
+  if (ctx->shake_in_read_mode)
+    return GPG_ERR_INV_STATE;
+  if (!ctx->shake_in_extract_mode)
+    ctx->shake_in_extract_mode = 1;
+
+  return do_keccak_extract (context, out, outlen);
+}
+
+
+static byte *
+keccak_shake_read (void *context)
+{
+  KECCAK_CONTEXT *ctx = (KECCAK_CONTEXT *) context;
+  KECCAK_STATE *hd = &ctx->state;
+
+  if (ctx->shake_in_extract_mode)
+    {
+      /* Already in extract mode. */
+      return NULL;
+    }
+
+  if (!ctx->shake_in_read_mode)
+    {
+      byte tmpbuf[64];
+
+      gcry_assert(sizeof(tmpbuf) >= ctx->outlen);
+
+      ctx->shake_in_read_mode = 1;
+
+      do_keccak_extract (context, tmpbuf, ctx->outlen);
+      buf_cpy (&hd->u, tmpbuf, ctx->outlen);
+
+      wipememory(tmpbuf, sizeof(tmpbuf));
+    }
+
+  return (byte *)&hd->u;
 }
 
 
@@ -1232,10 +1372,10 @@ _gcry_sha3_hash_buffers (void *outbuf, size_t nbytes, const gcry_buffer_t *iov,
   for (;iovcnt > 0; iov++, iovcnt--)
     keccak_write (&hd, (const char*)iov[0].data + iov[0].off, iov[0].len);
   keccak_final (&hd);
-  if (spec->mdlen > 0)
+  if (hd.suffix == SHA3_DELIMITED_SUFFIX)
     memcpy (outbuf, keccak_read (&hd), spec->mdlen);
   else
-    keccak_extract (&hd, outbuf, nbytes);
+    do_keccak_extract (&hd, outbuf, nbytes);
 }
 
 
@@ -1287,6 +1427,146 @@ _gcry_shake256_hash_buffers (void *outbuf, size_t nbytes,
 			   &_gcry_digest_spec_shake256);
 }
 
+
+static unsigned int
+cshake_input_n (KECCAK_CONTEXT *ctx, const void *n, unsigned int n_len)
+{
+  unsigned char buf[3];
+
+  buf[0] = 1;
+  buf[1] = ctx->blocksize;
+  keccak_write (ctx, buf, 2);
+
+  /* Here, N_LEN must be less than 255 */
+  if (n_len < 32)
+    {
+      buf[0] = 1;
+      buf[1] = n_len * 8;
+    }
+  else
+    {
+      buf[0] = 2;
+      buf[1] = (n_len * 8) >> 8;
+      buf[2] = (n_len * 8) & 0xff;
+    }
+
+  keccak_write (ctx, buf, buf[0] + 1);
+  keccak_write (ctx, n, n_len);
+  return 2 + buf[0] + 1 + n_len;
+}
+
+static void
+cshake_input_s (KECCAK_CONTEXT *ctx, const void *s, unsigned int s_len,
+                unsigned int len_written)
+{
+  unsigned char buf[168];
+  unsigned int padlen;
+
+  /* Here, S_LEN must be less than 255 */
+  if (s_len < 32)
+    {
+      buf[0] = 1;
+      buf[1] = s_len * 8;
+    }
+  else
+    {
+      buf[0] = 2;
+      buf[1] = (s_len * 8) >> 8;
+      buf[2] = (s_len * 8) & 0xff;
+    }
+
+  keccak_write (ctx, buf, buf[0] + 1);
+  keccak_write (ctx, s, s_len);
+
+  len_written += buf[0] + 1 + s_len;
+  padlen = ctx->blocksize - (len_written % ctx->blocksize);
+  memset (buf, 0, padlen);
+  keccak_write (ctx, buf, padlen);
+}
+
+gpg_err_code_t
+_gcry_cshake_customize (void *context, struct gcry_cshake_customization *p)
+{
+  KECCAK_CONTEXT *ctx = (KECCAK_CONTEXT *) context;
+  unsigned int len_written;
+
+  if (p->n_len >= 255 || p->s_len >= 255)
+    return GPG_ERR_TOO_LARGE;
+
+  if (p->n_len == 0 && p->s_len == 0)
+    /* No customization */
+    return 0;
+
+  len_written = cshake_input_n (ctx, p->n, p->n_len);
+  cshake_input_s (ctx, p->s, p->s_len, len_written);
+  ctx->suffix = CSHAKE_DELIMITED_SUFFIX;
+  return 0;
+}
+
+
+static void
+cshake128_init (void *context, unsigned int flags)
+{
+  keccak_init (GCRY_MD_CSHAKE128, context, flags);
+}
+
+static void
+cshake256_init (void *context, unsigned int flags)
+{
+  keccak_init (GCRY_MD_CSHAKE256, context, flags);
+}
+
+static void
+cshake_hash_buffers (const gcry_md_spec_t *spec, void *outbuf, size_t nbytes,
+                     const gcry_buffer_t *iov, int iovcnt)
+{
+  KECCAK_CONTEXT ctx;
+
+  spec->init (&ctx, 0);
+
+  if (iovcnt < 2)
+    ; /* No customization, do same as SHAKE does.  */
+  else
+    {
+      if (iov[0].len != 0 || iov[1].len != 0)
+        {
+          const void *n = (unsigned char *)iov[0].data + iov[0].off;
+          size_t n_len = iov[0].len;
+          const void *s = (unsigned char *)iov[1].data + iov[1].off;
+          size_t s_len = iov[1].len;
+          size_t len;
+
+          len = cshake_input_n (&ctx, n, n_len);
+          cshake_input_s (&ctx, s, s_len, len);
+          ctx.suffix = CSHAKE_DELIMITED_SUFFIX;
+        }
+      iovcnt -= 2;
+      iov += 2;
+    }
+
+  for (;iovcnt > 0; iov++, iovcnt--)
+    keccak_write (&ctx, (const char*)iov[0].data + iov[0].off, iov[0].len);
+  keccak_final (&ctx);
+  do_keccak_extract (&ctx, outbuf, nbytes);
+}
+
+static void
+_gcry_cshake128_hash_buffers (void *outbuf, size_t nbytes,
+                              const gcry_buffer_t *iov, int iovcnt)
+{
+  const gcry_md_spec_t *spec = &_gcry_digest_spec_shake128;
+
+  cshake_hash_buffers (spec, outbuf, nbytes, iov, iovcnt);
+}
+
+static void
+_gcry_cshake256_hash_buffers (void *outbuf, size_t nbytes,
+                              const gcry_buffer_t *iov, int iovcnt)
+{
+  const gcry_md_spec_t *spec = &_gcry_digest_spec_shake256;
+
+  cshake_hash_buffers (spec, outbuf, nbytes, iov, iovcnt);
+}
 
 /*
      Self-test section.
@@ -1369,6 +1649,7 @@ selftests_keccak (int algo, int extended, selftest_report_func_t report)
       hash_len = 64;
       break;
 
+    case GCRY_MD_CSHAKE128:
     case GCRY_MD_SHAKE128:
       short_hash =
 	"\x58\x81\x09\x2d\xd8\x18\xbf\x5c\xf8\xa3\xdd\xb7\x93\xfb\xcb\xa7"
@@ -1382,6 +1663,7 @@ selftests_keccak (int algo, int extended, selftest_report_func_t report)
       hash_len = 32;
       break;
 
+    case GCRY_MD_CSHAKE256:
     case GCRY_MD_SHAKE256:
       short_hash =
 	"\x48\x33\x66\x60\x13\x60\xa8\x77\x1c\x68\x63\x08\x0c\xc4\x11\x4d"
@@ -1441,7 +1723,9 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
     case GCRY_MD_SHA3_256:
     case GCRY_MD_SHA3_384:
     case GCRY_MD_SHA3_512:
+    case GCRY_MD_CSHAKE128:
     case GCRY_MD_SHAKE128:
+    case GCRY_MD_CSHAKE256:
     case GCRY_MD_SHAKE256:
       ec = selftests_keccak (algo, extended, report);
       break;
@@ -1456,52 +1740,91 @@ run_selftests (int algo, int extended, selftest_report_func_t report)
 
 
 
-static const byte sha3_224_asn[] = { 0x30 };
+/* Object IDs obtained from
+ * https://csrc.nist.gov/projects/computer-security-objects-register/algorithm-registration#Hash
+ */
+static const byte sha3_224_asn[] =
+  { 0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x07, 0x05, 0x00, 0x04,
+    0x1c
+  };
 static const gcry_md_oid_spec_t oid_spec_sha3_224[] =
   {
     { "2.16.840.1.101.3.4.2.7" },
-    /* PKCS#1 sha3_224WithRSAEncryption */
-    { "?" },
+    /* id-rsassa-pkcs1-v1-5-with-sha3-224 */
+    { "2.16.840.1.101.3.4.3.13" },
+    /* id-ecdsa-with-sha3-224 */
+    { "2.16.840.1.101.3.4.3.9" },
     { NULL }
   };
-static const byte sha3_256_asn[] = { 0x30 };
+static const byte sha3_256_asn[] =
+  { 0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x08, 0x05, 0x00, 0x04,
+    0x20
+  };
 static const gcry_md_oid_spec_t oid_spec_sha3_256[] =
   {
     { "2.16.840.1.101.3.4.2.8" },
-    /* PKCS#1 sha3_256WithRSAEncryption */
-    { "?" },
+    /* id-rsassa-pkcs1-v1-5-with-sha3-256 */
+    { "2.16.840.1.101.3.4.3.14" },
+    /* id-ecdsa-with-sha3-256 */
+    { "2.16.840.1.101.3.4.3.10" },
     { NULL }
   };
-static const byte sha3_384_asn[] = { 0x30 };
+static const byte sha3_384_asn[] =
+  { 0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x09, 0x05, 0x00, 0x04,
+    0x30
+  };
 static const gcry_md_oid_spec_t oid_spec_sha3_384[] =
   {
     { "2.16.840.1.101.3.4.2.9" },
-    /* PKCS#1 sha3_384WithRSAEncryption */
-    { "?" },
+    /* id-rsassa-pkcs1-v1-5-with-sha3-384 */
+    { "2.16.840.1.101.3.4.3.15" },
+    /* id-ecdsa-with-sha3-384 */
+    { "2.16.840.1.101.3.4.3.11" },
     { NULL }
   };
-static const byte sha3_512_asn[] = { 0x30 };
+static const byte sha3_512_asn[] =
+  { 0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x0a, 0x05, 0x00, 0x04,
+    0x40
+  };
 static const gcry_md_oid_spec_t oid_spec_sha3_512[] =
   {
     { "2.16.840.1.101.3.4.2.10" },
-    /* PKCS#1 sha3_512WithRSAEncryption */
-    { "?" },
+    /* id-rsassa-pkcs1-v1-5-with-sha3-512 */
+    { "2.16.840.1.101.3.4.3.16" },
+    /* id-ecdsa-with-sha3-512 */
+    { "2.16.840.1.101.3.4.3.12" },
     { NULL }
   };
-static const byte shake128_asn[] = { 0x30 };
+static const byte shake128_asn[] =
+  { 0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x0b, 0x05, 0x00, 0x04,
+    0x20
+  };
 static const gcry_md_oid_spec_t oid_spec_shake128[] =
   {
     { "2.16.840.1.101.3.4.2.11" },
-    /* PKCS#1 shake128WithRSAEncryption */
-    { "?" },
+    /* RFC 8692 id-RSASSA-PSS-SHAKE128 */
+    { "1.3.6.1.5.5.7.6.30" },
+    /* RFC 8692 id-ecdsa-with-shake128 */
+    { "1.3.6.1.5.5.7.6.32" },
     { NULL }
   };
-static const byte shake256_asn[] = { 0x30 };
+static const byte shake256_asn[] =
+  { 0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+    0x01, 0x65, 0x03, 0x04, 0x02, 0x0c, 0x05, 0x00, 0x04,
+    0x40
+  };
 static const gcry_md_oid_spec_t oid_spec_shake256[] =
   {
     { "2.16.840.1.101.3.4.2.12" },
-    /* PKCS#1 shake256WithRSAEncryption */
-    { "?" },
+    /* RFC 8692 id-RSASSA-PSS-SHAKE256 */
+    { "1.3.6.1.5.5.7.6.31" },
+    /* RFC 8692 id-ecdsa-with-shake256 */
+    { "1.3.6.1.5.5.7.6.33" },
     { NULL }
   };
 
@@ -1544,8 +1867,9 @@ const gcry_md_spec_t _gcry_digest_spec_sha3_512 =
 const gcry_md_spec_t _gcry_digest_spec_shake128 =
   {
     GCRY_MD_SHAKE128, {0, 1},
-    "SHAKE128", shake128_asn, DIM (shake128_asn), oid_spec_shake128, 0,
-    shake128_init, keccak_write, keccak_final, NULL, keccak_extract,
+    "SHAKE128", shake128_asn, DIM (shake128_asn), oid_spec_shake128, 32,
+    shake128_init, keccak_write, keccak_final, keccak_shake_read,
+    keccak_extract,
     _gcry_shake128_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
@@ -1553,9 +1877,28 @@ const gcry_md_spec_t _gcry_digest_spec_shake128 =
 const gcry_md_spec_t _gcry_digest_spec_shake256 =
   {
     GCRY_MD_SHAKE256, {0, 1},
-    "SHAKE256", shake256_asn, DIM (shake256_asn), oid_spec_shake256, 0,
-    shake256_init, keccak_write, keccak_final, NULL, keccak_extract,
+    "SHAKE256", shake256_asn, DIM (shake256_asn), oid_spec_shake256, 64,
+    shake256_init, keccak_write, keccak_final, keccak_shake_read,
+    keccak_extract,
     _gcry_shake256_hash_buffers,
+    sizeof (KECCAK_CONTEXT),
+    run_selftests
+  };
+const gcry_md_spec_t _gcry_digest_spec_cshake128 =
+  {
+    GCRY_MD_CSHAKE128, {0, 1},
+    "CSHAKE128", NULL, 0, NULL, 32,
+    cshake128_init, keccak_write, keccak_final, keccak_shake_read,
+    keccak_extract, _gcry_cshake128_hash_buffers,
+    sizeof (KECCAK_CONTEXT),
+    run_selftests
+  };
+const gcry_md_spec_t _gcry_digest_spec_cshake256 =
+  {
+    GCRY_MD_CSHAKE256, {0, 1},
+    "CSHAKE256", NULL, 0, NULL, 64,
+    cshake256_init, keccak_write, keccak_final, keccak_shake_read,
+    keccak_extract, _gcry_cshake256_hash_buffers,
     sizeof (KECCAK_CONTEXT),
     run_selftests
   };

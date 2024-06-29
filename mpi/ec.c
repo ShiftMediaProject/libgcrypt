@@ -587,14 +587,9 @@ ec_pow2_448 (gcry_mpi_t w, const gcry_mpi_t b, mpi_ec_t ctx)
 static void
 ec_secp256k1_mod (gcry_mpi_t w, mpi_ec_t ctx)
 {
-  mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
-#if defined(_MSC_VER)
-  mpi_limb_t* n = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
-  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
-#else
-  mpi_limb_t n[wsize + 1];
-  mpi_limb_t s[wsize + 1];
-#endif
+  mpi_limb_t s[(256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB + 1];
+  mpi_limb_t n[DIM(s)];
+  const mpi_size_t wsize = DIM(s) - 1;
   mpi_limb_t cy, borrow;
   mpi_ptr_t wp;
 
@@ -868,7 +863,7 @@ ec_p_init (mpi_ec_t ctx, enum gcry_mpi_ec_models model,
           if (!match_p)
             continue;
 
-          for (j=0; i< DIM(ctx->t.scratch) && bad_points_table[i][j]; j++)
+          for (j=0; j < DIM(ctx->t.scratch) && bad_points_table[i][j]; j++)
             ctx->t.scratch[j] = scanval (bad_points_table[i][j]);
         }
     }
@@ -1036,7 +1031,7 @@ _gcry_mpi_ec_p_new (gcry_ctx_t *r_ctx,
   if (!p || !a)
     return GPG_ERR_EINVAL;
 
-  ctx = _gcry_ctx_alloc (CONTEXT_TYPE_EC, sizeof *ec, ec_deinit);
+  ctx = _gcry_ctx_alloc (CONTEXT_TYPE_EC, sizeof *ec, ec_deinit, NULL);
   if (!ctx)
     return gpg_err_code_from_syserror ();
   ec = _gcry_ctx_get_pointer (ctx, CONTEXT_TYPE_EC);
