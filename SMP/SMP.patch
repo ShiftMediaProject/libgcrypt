@@ -1,3 +1,16 @@
+diff --git a/NEWS b/NEWS
+index a06199e7..745dd5b4 100644
+--- a/NEWS
++++ b/NEWS
+@@ -397,7 +397,7 @@ Noteworthy changes in version 1.9.3 (2021-04-19)  [C23/A3/R3]
+ 
+    - Make keygrip computation work for compressed points.  [#4961]
+ 
+-* Performance:
++ * Performance:
+ 
+    - Add x86_64 VAES/AVX2 accelerated implementation of Camellia.
+      [0e7e60241a]
 diff --git a/autogen.sh b/autogen.sh
 index 9b361581..8aaa998b 100755
 --- a/autogen.sh
@@ -13,6 +26,21 @@ index 9b361581..8aaa998b 100755
  info "Running autoconf${FORCE} ..."
  $AUTOCONF${FORCE}
  
+diff --git a/build-aux/ltmain.sh b/build-aux/ltmain.sh
+index 859599aa..bafa8fbb 100644
+--- a/build-aux/ltmain.sh
++++ b/build-aux/ltmain.sh
+@@ -5686,8 +5686,8 @@ func_mode_link ()
+ 	*-*-cygwin* | *-*-mingw* | *-*-pw32* | *-*-os2* | *-*-darwin* | *-cegcc*)
+ 	  # The PATH hackery in wrapper scripts is required on Windows
+ 	  # and Darwin in order for the loader to find any dlls it needs.
+-	  func_warning "\`-no-install' is ignored for $host"
+-	  func_warning "assuming \`-no-fast-install' instead"
++	  # func_warning "\`-no-install' is ignored for $host"
++	  # func_warning "assuming \`-no-fast-install' instead"
+ 	  fast_install=no
+ 	  ;;
+ 	*) no_install=yes ;;
 diff --git a/cipher/bithelp.h b/cipher/bithelp.h
 index 7793ce7c..78578768 100644
 --- a/cipher/bithelp.h
@@ -63,21 +91,8 @@ index 7793ce7c..78578768 100644
  #else
    if ((x & 0xffffffff))
      return _gcry_ctz (x);
-diff --git a/cipher/cipher-ccm.c b/cipher/cipher-ccm.c
-index dcb268d0..2ee202ac 100644
---- a/cipher/cipher-ccm.c
-+++ b/cipher/cipher-ccm.c
-@@ -38,7 +38,7 @@ static unsigned int
- do_cbc_mac (gcry_cipher_hd_t c, const unsigned char *inbuf, size_t inlen,
-             int do_padding)
- {
--  const unsigned int blocksize = 16;
-+#define blocksize 16
-   gcry_cipher_encrypt_t enc_fn = c->spec->encrypt;
-   unsigned char tmp[blocksize];
-   unsigned int burn = 0;
 diff --git a/cipher/cipher-internal.h b/cipher/cipher-internal.h
-index c8a1097a..4b2eccf3 100644
+index cd8ff788..dac54ec1 100644
 --- a/cipher/cipher-internal.h
 +++ b/cipher/cipher-internal.h
 @@ -66,7 +66,7 @@
@@ -90,7 +105,7 @@ index c8a1097a..4b2eccf3 100644
  #  endif
  # endif
 diff --git a/cipher/cipher-poly1305.c b/cipher/cipher-poly1305.c
-index 9abd8b0c..3d136b88 100644
+index c76dd9a4..0c28e652 100644
 --- a/cipher/cipher-poly1305.c
 +++ b/cipher/cipher-poly1305.c
 @@ -71,7 +71,7 @@ poly1305_fill_bytecounts (gcry_cipher_hd_t c)
@@ -103,10 +118,10 @@ index 9abd8b0c..3d136b88 100644
  
    /* Padding to 16 byte boundary. */
 diff --git a/cipher/des.c b/cipher/des.c
-index 51116fcf..d3e3b739 100644
+index 4b3f9a1e..fc17c8af 100644
 --- a/cipher/des.c
 +++ b/cipher/des.c
-@@ -140,7 +140,7 @@
+@@ -139,7 +139,7 @@
  # define ATTR_ALIGNED_16
  #endif
  
@@ -115,6 +130,86 @@ index 51116fcf..d3e3b739 100644
  # define working_memcmp memcmp
  #else
  /*
+diff --git a/cipher/pubkey-util.c b/cipher/pubkey-util.c
+index 68defea6..244dd5d4 100644
+--- a/cipher/pubkey-util.c
++++ b/cipher/pubkey-util.c
+@@ -957,7 +957,10 @@ _gcry_pk_util_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
+       void *random_override = NULL;
+       size_t random_override_len = 0;
+ 
+-      if ( !(value=sexp_nth_data (lvalue, 1, &valuelen)) || !valuelen )
++      /* The RSA PKCS#1.5 encryption is no longer supported by FIPS */
++      if (fips_mode ())
++        rc = GPG_ERR_INV_FLAG;
++      else if ( !(value=sexp_nth_data (lvalue, 1, &valuelen)) || !valuelen )
+         rc = GPG_ERR_INV_OBJ;
+       else
+         {
+@@ -1089,7 +1092,10 @@ _gcry_pk_util_data_to_mpi (gcry_sexp_t input, gcry_mpi_t *ret_mpi,
+       const void * value;
+       size_t valuelen;
+ 
+-      if ( !(value=sexp_nth_data (lvalue, 1, &valuelen)) || !valuelen )
++      /* The RSA OAEP encryption requires some more assurances in FIPS */
++      if (fips_mode ())
++        rc = GPG_ERR_INV_FLAG;
++      else if ( !(value=sexp_nth_data (lvalue, 1, &valuelen)) || !valuelen )
+ 	rc = GPG_ERR_INV_OBJ;
+       else
+ 	{
+diff --git a/cipher/pubkey.c b/cipher/pubkey.c
+index 214bd611..f4c17d2d 100644
+--- a/cipher/pubkey.c
++++ b/cipher/pubkey.c
+@@ -672,6 +672,30 @@ _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl, gcry_md_hd_t hd_orig,
+   gcry_sexp_t s_data = NULL;
+   gcry_error_t err;
+   gcry_md_hd_t hd;
++  const char *s;
++  char *hash_name;
++
++  /* Check if it has fixed hash name or %s */
++  s = strstr (tmpl, "(hash ");
++  if (s == NULL)
++    return GPG_ERR_DIGEST_ALGO;
++
++  s += 6;
++  if (!strncmp (s, "%s", 2))
++    hash_name = NULL;
++  else
++    {
++      const char *p;
++
++      for (p = s; *p && *p != ' '; p++)
++        ;
++
++      hash_name = xtrymalloc (p - s + 1);
++      if (!hash_name)
++        return gpg_error_from_syserror ();
++      memcpy (hash_name, s, p - s);
++      hash_name[p - s] = 0;
++    }
+ 
+   if (!hd_orig)
+     hd = NULL;
+diff --git a/cipher/rsa.c b/cipher/rsa.c
+index c7a809f4..bbf7eaed 100644
+--- a/cipher/rsa.c
++++ b/cipher/rsa.c
+@@ -1468,6 +1468,12 @@ rsa_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
+       rc = GPG_ERR_INV_DATA;
+       goto leave;
+     }
++  if (fips_mode () && (ctx.encoding == PUBKEY_ENC_PKCS1 ||
++                       ctx.encoding == PUBKEY_ENC_OAEP))
++    {
++      rc = GPG_ERR_INV_FLAG;
++      goto leave;
++    }
+ 
+   /* Extract the key.  */
+   rc = sexp_extract_param (keyparms, NULL, "nedp?q?u?",
 diff --git a/cipher/stribog.c b/cipher/stribog.c
 index 21e385ae..f894bcf6 100644
 --- a/cipher/stribog.c
@@ -128,88 +223,35 @@ index 21e385ae..f894bcf6 100644
    int i;
  
    /* PAD. It does not count towards message length */
-diff --git a/mpi/ec-nist.c b/mpi/ec-nist.c
-index f792405c..6766e382 100644
---- a/mpi/ec-nist.c
-+++ b/mpi/ec-nist.c
-@@ -89,8 +89,13 @@ _gcry_mpi_ec_nist192_mod (gcry_mpi_t w, mpi_ec_t ctx)
-   const mpi_limb64_t zero = LIMB_TO64(0);
-   mpi_ptr_t wp;
-   mpi_size_t wsize = 192 / BITS_PER_MPI_LIMB64;
-+#if defined(_MSC_VER)
-+  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* o = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+#else
-   mpi_limb64_t s[wsize + 1];
-   mpi_limb64_t o[wsize + 1];
-+#endif
-   mpi_limb_t mask1;
-   mpi_limb_t mask2;
-   mpi_limb_t s_is_negative;
-@@ -182,8 +187,13 @@ _gcry_mpi_ec_nist224_mod (gcry_mpi_t w, mpi_ec_t ctx)
-   mpi_ptr_t wp;
-   mpi_size_t wsize = (224 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
-   mpi_size_t psize = ctx->p->nlimbs;
-+#if defined(_MSC_VER)
-+  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize) * sizeof(mpi_limb64_t));
-+#else
-   mpi_limb64_t s[wsize];
-   mpi_limb64_t d[wsize];
-+#endif
-   mpi_limb_t mask1;
-   mpi_limb_t mask2;
-   mpi_limb_t s_is_negative;
-@@ -341,10 +351,17 @@ _gcry_mpi_ec_nist256_mod (gcry_mpi_t w, mpi_ec_t ctx)
-   mpi_ptr_t wp;
-   mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB64 - 1) / BITS_PER_MPI_LIMB64;
-   mpi_size_t psize = ctx->p->nlimbs;
-+#if defined(_MSC_VER)
-+  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* e = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+#else
-   mpi_limb64_t s[wsize + 1];
-   mpi_limb64_t t[wsize + 1];
-   mpi_limb64_t d[wsize + 1];
-   mpi_limb64_t e[wsize + 1];
-+#endif
-   mpi_limb_t mask1;
-   mpi_limb_t mask2;
-   mpi_limb_t mask3;
-@@ -594,10 +611,17 @@ _gcry_mpi_ec_nist384_mod (gcry_mpi_t w, mpi_ec_t ctx)
- #if (BITS_PER_MPI_LIMB64 == BITS_PER_MPI_LIMB) && defined(WORDS_BIGENDIAN)
-   mpi_limb_t wp_shr32[wsize * LIMBS_PER_LIMB64];
- #endif
-+#if defined(_MSC_VER)
-+  mpi_limb64_t* s = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* t = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* d = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+  mpi_limb64_t* x = (mpi_limb64_t*)_alloca((wsize + 1) * sizeof(mpi_limb64_t));
-+#else
-   mpi_limb64_t s[wsize + 1];
-   mpi_limb64_t t[wsize + 1];
-   mpi_limb64_t d[wsize + 1];
-   mpi_limb64_t x[wsize + 1];
-+#endif
-   mpi_limb_t mask1;
-   mpi_limb_t mask2;
-   mpi_limb_t s_is_negative;
-@@ -786,7 +810,11 @@ void
- _gcry_mpi_ec_nist521_mod (gcry_mpi_t w, mpi_ec_t ctx)
- {
-   mpi_size_t wsize = (521 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
-+#if defined(_MSC_VER)
-+  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize) * sizeof(mpi_limb_t));
-+#else
-   mpi_limb_t s[wsize];
-+#endif
-   mpi_limb_t cy;
-   mpi_ptr_t wp;
- 
+diff --git a/compat/compat.c b/compat/compat.c
+index 7684e4f3..86745fc6 100644
+--- a/compat/compat.c
++++ b/compat/compat.c
+@@ -30,6 +30,8 @@ _gcry_compat_identification (void)
+   static const char blurb[] =
+     "\n\n"
+     "This is Libgcrypt " PACKAGE_VERSION " - The GNU Crypto Library\n"
++    "Copyright (C) 2012-2022 g10 Code GmbH\n"
++    "Copyright (C) 2013-2022 Jussi Kivilinna\n"
+     "Copyright (C) 2000-2018 Free Software Foundation, Inc.\n"
+     "Copyright (C) 2012-2024 g10 Code GmbH\n"
+     "Copyright (C) 2013-2024 Jussi Kivilinna\n"
+diff --git a/configure.ac b/configure.ac
+index 1d06ca3b..43ad0712 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1281,7 +1281,8 @@ AC_CACHE_CHECK([whether GCC assembler supports for CFI directives],
+                 ".cfi_restore_state\n\t"
+                 ".long 0\n\t"
+                 ".cfi_endproc\n\t"
+-            );]])],
++            );
++            void asmfunc(void)]])],
+           [gcry_cv_gcc_asm_cfi_directives=yes])])
+ if test "$gcry_cv_gcc_asm_cfi_directives" = "yes" ; then
+    AC_DEFINE(HAVE_GCC_ASM_CFI_DIRECTIVES,1,
 diff --git a/mpi/ec.c b/mpi/ec.c
-index e8233ae8..c9081e9d 100644
+index 2f8a25a4..11100fa4 100644
 --- a/mpi/ec.c
 +++ b/mpi/ec.c
 @@ -30,6 +30,12 @@
@@ -225,20 +267,6 @@ index e8233ae8..c9081e9d 100644
  extern void reverse_buffer (unsigned char *buffer, unsigned int length);
  
  #define point_init(a)  _gcry_mpi_point_init ((a))
-@@ -582,8 +588,13 @@ static void
- ec_secp256k1_mod (gcry_mpi_t w, mpi_ec_t ctx)
- {
-   mpi_size_t wsize = (256 + BITS_PER_MPI_LIMB - 1) / BITS_PER_MPI_LIMB;
-+#if defined(_MSC_VER)
-+  mpi_limb_t* n = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
-+  mpi_limb_t* s = (mpi_limb_t*)_alloca((wsize + 1) * sizeof(mpi_limb_t));
-+#else
-   mpi_limb_t n[wsize + 1];
-   mpi_limb_t s[wsize + 1];
-+#endif
-   mpi_limb_t cy, borrow;
-   mpi_ptr_t wp;
- 
 diff --git a/mpi/generic/mpi-asm-defs.h b/mpi/generic/mpi-asm-defs.h
 index e607806e..111859c3 100644
 --- a/mpi/generic/mpi-asm-defs.h
@@ -253,10 +281,10 @@ index e607806e..111859c3 100644
  #else
  #define BYTES_PER_MPI_LIMB  (SIZEOF_UNSIGNED_LONG)
 diff --git a/mpi/longlong.h b/mpi/longlong.h
-index c299534c..32e05ad1 100644
+index 21bd1a7e..ceed070d 100644
 --- a/mpi/longlong.h
 +++ b/mpi/longlong.h
-@@ -98,7 +98,7 @@ MA 02111-1307, USA. */
+@@ -108,7 +108,7 @@ SPDX-License-Identifier: LGPL-2.1-or-later
  #ifdef __riscos__
  #pragma continue_after_hash_error
  #else /* !__riscos__ */
@@ -265,7 +293,7 @@ index c299534c..32e05ad1 100644
  
  /* We sometimes need to clobber "cc" with gcc2, but that would not be
     understood by gcc1.	Use cpp to avoid major code duplication.  */
-@@ -1736,6 +1736,14 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
+@@ -1745,6 +1745,14 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
  #  elif defined (HAVE_BUILTIN_CLZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
  #    define count_leading_zeros(count, x) (count = __builtin_clz(x))
  #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
@@ -280,7 +308,7 @@ index c299534c..32e05ad1 100644
  #  endif
  #endif
  
-@@ -1746,6 +1754,12 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
+@@ -1755,6 +1763,12 @@ typedef unsigned int UTItype __attribute__ ((mode (TI)));
  #  elif defined (HAVE_BUILTIN_CTZ) && SIZEOF_UNSIGNED_INT * 8 == W_TYPE_SIZE
  #    define count_trailing_zeros(count, x) (count = __builtin_ctz(x))
  #    undef COUNT_LEADING_ZEROS_0 /* Input X=0 is undefined for the builtin. */
@@ -294,7 +322,7 @@ index c299534c..32e05ad1 100644
  #endif
  
 diff --git a/random/rand-internal.h b/random/rand-internal.h
-index 2d2b8909..eef6dc27 100644
+index 3d7a582f..3bfa695c 100644
 --- a/random/rand-internal.h
 +++ b/random/rand-internal.h
 @@ -129,6 +129,15 @@ int _gcry_rndw32ce_gather_random (void (*add) (const void *, size_t,
@@ -314,7 +342,7 @@ index 2d2b8909..eef6dc27 100644
  /*-- rndjent.c --*/
  size_t _gcry_rndjent_poll (void (*add)(const void*,
 diff --git a/random/random-csprng.c b/random/random-csprng.c
-index 85d11789..12cf6409 100644
+index 4f34acc0..6c3e2a08 100644
 --- a/random/random-csprng.c
 +++ b/random/random-csprng.c
 @@ -37,10 +37,14 @@
@@ -381,7 +409,7 @@ index 85d11789..12cf6409 100644
  #if USE_RNDW32CE
    return _gcry_rndw32ce_gather_random_fast;
 diff --git a/random/random-drbg.c b/random/random-drbg.c
-index af49a5a5..028e3000 100644
+index cad364ab..7ed75682 100644
 --- a/random/random-drbg.c
 +++ b/random/random-drbg.c
 @@ -149,7 +149,9 @@
@@ -513,7 +541,7 @@ index 0468c7cb..09413425 100644
  #ifndef EOPNOTSUPP
  # define EOPNOTSUPP ENOSYS
 diff --git a/random/rndw32.c b/random/rndw32.c
-index b3f63d20..9407306b 100644
+index fd979ab9..81fec61d 100644
 --- a/random/rndw32.c
 +++ b/random/rndw32.c
 @@ -141,8 +141,8 @@ typedef DWORD (WINAPI *NTPOWERINFORMATION)
@@ -674,7 +702,7 @@ index 00000000..4741a13f
 +}
 \ No newline at end of file
 diff --git a/src/context.c b/src/context.c
-index da9948a6..257578d0 100644
+index de0a183d..f95c8e6d 100644
 --- a/src/context.c
 +++ b/src/context.c
 @@ -22,7 +22,9 @@
@@ -689,7 +717,7 @@ index da9948a6..257578d0 100644
  #include "g10lib.h"
  #include "mpi.h"
 diff --git a/src/fips.c b/src/fips.c
-index 5d71b208..deab6d76 100644
+index cf91baa8..2271e374 100644
 --- a/src/fips.c
 +++ b/src/fips.c
 @@ -21,7 +21,9 @@
@@ -716,11 +744,26 @@ index 5d71b208..deab6d76 100644
  
  /* The name of the file used to force libgcrypt into fips mode. */
  #define FIPS_FORCE_FILE "/etc/gcrypt/fips_enabled"
+@@ -365,7 +373,6 @@ _gcry_fips_indicator_cipher (va_list arg_ptr)
+         case GCRY_CIPHER_MODE_OFB:
+         case GCRY_CIPHER_MODE_CTR:
+         case GCRY_CIPHER_MODE_CCM:
+-        case GCRY_CIPHER_MODE_GCM:
+         case GCRY_CIPHER_MODE_XTS:
+         case GCRY_CIPHER_MODE_AESWRAP:
+           return GPG_ERR_NO_ERROR;
 diff --git a/src/gcrypt.h.in b/src/gcrypt.h.in
-index 58581daa..8d3b43c0 100644
+index 9cad7a46..0e96998b 100644
 --- a/src/gcrypt.h.in
 +++ b/src/gcrypt.h.in
-@@ -34,7 +34,8 @@
+@@ -1,4 +1,6 @@
+ /* gcrypt.h -  GNU Cryptographic Library Interface              -*- c -*-
++ * Copyright (C) 2012-2023 g10 Code GmbH
++ * Copyright (C) 2013-2023 Jussi Kivilinna
+  * Copyright (C) 1998-2018 Free Software Foundation, Inc.
+  * Copyright (C) 2012-2024 g10 Code GmbH
+  *
+@@ -34,7 +36,8 @@
  
  #if defined _WIN32 || defined __WIN32__
  # ifndef __GNUC__
@@ -731,7 +774,7 @@ index 58581daa..8d3b43c0 100644
  # endif /*!__GNUC__*/
  #endif /*_WIN32*/
 diff --git a/src/global.c b/src/global.c
-index 9a356a04..d54c122f 100644
+index 593ea406..bd5055ae 100644
 --- a/src/global.c
 +++ b/src/global.c
 @@ -29,7 +29,9 @@
@@ -746,7 +789,7 @@ index 9a356a04..d54c122f 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/hwf-x86.c b/src/hwf-x86.c
-index a1aa02e7..54a6b611 100644
+index bda14d9d..04137c5f 100644
 --- a/src/hwf-x86.c
 +++ b/src/hwf-x86.c
 @@ -23,7 +23,9 @@
@@ -768,10 +811,10 @@ index a1aa02e7..54a6b611 100644
 +#if defined (__i386__) && SIZEOF_UNSIGNED_LONG == 4 && ( defined (__GNUC__) || defined(__INTEL_COMPILER) )
  # define HAS_X86_CPUID 1
  
- #if _GCRY_GCC_VERSION >= 40700 /* 4.7 */
-@@ -65,9 +67,9 @@ is_cpuid_available(void)
-      "pushl %%ecx\n\t"           /* Restore flags from ECX.  */
+ #ifdef HAVE_GCC_ASM_CFI_DIRECTIVES
+@@ -76,9 +78,9 @@ is_cpuid_available(void)
       "popf\n\t"
+      CFI_POP4
       "xorl %%eax, %%ecx\n\t"     /* Compare flags against saved flags.  */
 -     "jz .Lno_cpuid%=\n\t"       /* Toggling did not work, thus no CPUID.  */
 +     "jz 1f\n\t"       /* Toggling did not work, thus no CPUID.  */
@@ -781,7 +824,7 @@ index a1aa02e7..54a6b611 100644
       : "+r" (has_cpuid)
       :
       : "%eax", "%ecx", "cc", "memory"
-@@ -120,7 +122,7 @@ get_xgetbv(void)
+@@ -131,7 +133,7 @@ get_xgetbv(void)
  #endif /* i386 && GNUC */
  
  
@@ -791,7 +834,7 @@ index a1aa02e7..54a6b611 100644
  
  static int
 diff --git a/src/hwfeatures.c b/src/hwfeatures.c
-index 97e67b3c..dbc581ee 100644
+index b11cadef..2afa6168 100644
 --- a/src/hwfeatures.c
 +++ b/src/hwfeatures.c
 @@ -24,7 +24,9 @@
@@ -806,7 +849,7 @@ index 97e67b3c..dbc581ee 100644
  # include <syslog.h>
  #endif /*HAVE_SYSLOG*/
 diff --git a/src/misc.c b/src/misc.c
-index 4db2d9a4..a8eb41b7 100644
+index b1e8eb1c..5cc4ae20 100644
 --- a/src/misc.c
 +++ b/src/misc.c
 @@ -24,7 +24,12 @@
@@ -823,8 +866,105 @@ index 4db2d9a4..a8eb41b7 100644
  
  #include "g10lib.h"
  #include "secmem.h"
+diff --git a/src/mpicalc.c b/src/mpicalc.c
+index 0903e0a4..ca413cf4 100644
+--- a/src/mpicalc.c
++++ b/src/mpicalc.c
+@@ -85,26 +85,40 @@ print_mpi (gcry_mpi_t a)
+ 
+ 
+ static void
+-do_add (void)
++do_add (int usemod)
+ {
+-  if (stackidx < 2)
++  if (stackidx < (usemod?3:2))
+     {
+       fputs ("stack underflow\n", stderr);
+       return;
+     }
+-  mpi_add (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
++  if (usemod)
++    {
++      mpi_addm (stack[stackidx - 3], stack[stackidx - 3],
++                stack[stackidx - 2], stack[stackidx - 1]);
++      stackidx--;
++    }
++  else
++    mpi_add (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
+   stackidx--;
+ }
+ 
+ static void
+-do_sub (void)
++do_sub (int usemod)
+ {
+-  if (stackidx < 2)
++  if (stackidx < (usemod?3:2))
+     {
+       fputs ("stack underflow\n", stderr);
+       return;
+     }
+-  mpi_sub (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
++  if (usemod)
++    {
++      mpi_subm (stack[stackidx - 3], stack[stackidx - 3],
++                stack[stackidx - 2], stack[stackidx - 1]);
++      stackidx--;
++    }
++  else
++    mpi_sub (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
+   stackidx--;
+ }
+ 
+@@ -328,6 +342,7 @@ print_help (void)
+          "r   reverse       [0] := [1], [1] := [0]    {0}\n"
+          "b   # of bits     [0] := nbits([0])         {0}\n"
+          "P   prime check   [0] := is_prime([0])?1:0  {0}\n"
++         "M   use mod for next '+' and '-'\n"
+          "c   clear stack\n"
+          "p   print top item\n"
+          "f   print the stack\n"
+@@ -348,6 +363,7 @@ main (int argc, char **argv)
+   int state = 0;
+   char strbuf[4096];
+   int stridx = 0;
++  int usemod = 0;
+ 
+   if (argc)
+     {
+@@ -460,7 +476,8 @@ main (int argc, char **argv)
+ 		  else
+ 		    {
+ 		      ungetc (c, stdin);
+-		      do_add ();
++		      do_add (usemod);
++                      usemod = 0;
+ 		    }
+ 		  break;
+                 case '-':
+@@ -480,7 +497,8 @@ main (int argc, char **argv)
+ 		  else
+ 		    {
+ 		      ungetc (c, stdin);
+-		      do_sub ();
++		      do_sub (usemod);
++                      usemod = 0;
+ 		    }
+ 		  break;
+ 		case '*':
+@@ -547,6 +565,9 @@ main (int argc, char **argv)
+                 case 'P':
+                   do_primecheck ();
+                   break;
++                case 'M':
++                  usemod = 1;
++                  break;
+ 		case 'c':
+ 		  for (i = 0; i < stackidx; i++)
+                     {
 diff --git a/src/secmem.c b/src/secmem.c
-index b36c44f6..fa6bfab4 100644
+index 4e1d2991..b7232a22 100644
 --- a/src/secmem.c
 +++ b/src/secmem.c
 @@ -25,7 +25,9 @@
@@ -838,3 +978,205 @@ index b36c44f6..fa6bfab4 100644
  #include <stddef.h>
  
  #if defined(HAVE_MLOCK) || defined(HAVE_MMAP)
+diff --git a/src/versioninfo.rc.in b/src/versioninfo.rc.in
+index f87d0d05..929f9ccc 100644
+--- a/src/versioninfo.rc.in
++++ b/src/versioninfo.rc.in
+@@ -39,7 +39,7 @@ BEGIN
+             VALUE "FileDescription", "Libgcrypt - The GNU Crypto Library\0"
+             VALUE "FileVersion", "@LIBGCRYPT_LT_CURRENT@.@LIBGCRYPT_LT_AGE@.@LIBGCRYPT_LT_REVISION@.@BUILD_REVISION@\0"
+             VALUE "InternalName", "libgcrypt\0"
+-            VALUE "LegalCopyright", "Copyright © 2021 g10 Code GmbH\0"
++            VALUE "LegalCopyright", "Copyright © 2023 g10 Code GmbH\0"
+             VALUE "LegalTrademarks", "\0"
+             VALUE "OriginalFilename", "libgcrypt.dll\0"
+             VALUE "PrivateBuild", "\0"
+diff --git a/tests/basic.c b/tests/basic.c
+index 72c65b58..999d5001 100644
+--- a/tests/basic.c
++++ b/tests/basic.c
+@@ -17441,35 +17441,40 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
+ 	NULL,
+ 	0,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       {	GCRY_PK_RSA,
+         "(data\n (flags pkcs1)\n"
+ 	" (value #11223344556677889900AA#))\n",
+ 	"(flags pkcs1)",
+ 	1,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       { GCRY_PK_RSA,
+         "(data\n (flags oaep)\n"
+ 	" (value #11223344556677889900AA#))\n",
+ 	"(flags oaep)",
+ 	1,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       { GCRY_PK_RSA,
+         "(data\n (flags oaep)\n (hash-algo sha1)\n"
+ 	" (value #11223344556677889900AA#))\n",
+ 	"(flags oaep)(hash-algo sha1)",
+ 	1,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       { GCRY_PK_RSA,
+         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
+ 	" (value #11223344556677889900AA#))\n",
+ 	"(flags oaep)(hash-algo sha1)(label \"test\")",
+ 	1,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       { GCRY_PK_RSA,
+         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
+ 	" (value #11223344556677889900AA#)\n"
+@@ -17477,7 +17482,8 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
+ 	"(flags oaep)(hash-algo sha1)(label \"test\")",
+ 	1,
+ 	0,
+-	0 },
++	0,
++	FLAG_NOFIPS },
+       {	0,
+         "(data\n (flags )\n" " (value #11223344556677889900AA#))\n",
+ 	NULL,
+@@ -17550,7 +17556,8 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
+ 	die ("converting data failed: %s\n", gpg_strerror (rc));
+ 
+       rc = gcry_pk_encrypt (&ciph, data, pkey);
+-      if (in_fips_mode && (flags & FLAG_NOFIPS))
++      if (in_fips_mode && ((flags & FLAG_NOFIPS) ||
++                           (datas[dataidx].flags & FLAG_NOFIPS)))
+         {
+           if (!rc)
+             fail ("gcry_pk_encrypt did not fail as expected in FIPS mode\n");
+diff --git a/tests/pkcs1v2.c b/tests/pkcs1v2.c
+index f26e779b..2fd495d5 100644
+--- a/tests/pkcs1v2.c
++++ b/tests/pkcs1v2.c
+@@ -186,11 +186,24 @@ check_oaep (void)
+           err = gcry_pk_encrypt (&ciph, plain, pub_key);
+           if (err)
+             {
++              if (in_fips_mode)
++                {
++                  gcry_sexp_release (plain);
++                  plain = NULL;
++                  continue;
++                }
+               show_sexp ("plain:\n", ciph);
+               fail ("gcry_pk_encrypt failed: %s\n", gpg_strerror (err));
+             }
+           else
+             {
++              if (in_fips_mode)
++                {
++                  fail ("The OAEP encryption unexpectedly worked in FIPS mode\n");
++                  gcry_sexp_release (plain);
++                  plain = NULL;
++                  continue;
++                }
+               if (extract_cmp_data (ciph, "a", tbl[tno].m[mno].encr,
+                                     tbl[tno].m[mno].desc))
+                 {
+@@ -454,7 +467,19 @@ check_v15crypt (void)
+           gcry_free (seed);
+ 
+           err = gcry_pk_encrypt (&ciph, plain, pub_key);
+-          if (err)
++          if (in_fips_mode)
++            {
++              if (!err)
++                {
++                  fail ("gcry_pk_encrypt should have failed in FIPS mode:\n");
++                }
++              gcry_sexp_release (plain);
++              plain = NULL;
++              gcry_sexp_release (ciph);
++              ciph = NULL;
++              continue;
++            }
++          else if (err)
+             {
+               show_sexp ("plain:\n", ciph);
+               fail ("gcry_pk_encrypt failed: %s\n", gpg_strerror (err));
+diff --git a/tests/t-kdf.c b/tests/t-kdf.c
+index 10f64a7c..a6df57e1 100644
+--- a/tests/t-kdf.c
++++ b/tests/t-kdf.c
+@@ -1927,6 +1927,64 @@ check_fips_indicators (void)
+ }
+ 
+ 
++static void
++check_fips_indicators (void)
++{
++  enum gcry_kdf_algos fips_kdf_algos[] = {
++    GCRY_KDF_PBKDF2,
++  };
++  enum gcry_kdf_algos kdf_algos[] = {
++    GCRY_KDF_SIMPLE_S2K,
++    GCRY_KDF_SALTED_S2K,
++    GCRY_KDF_ITERSALTED_S2K,
++    GCRY_KDF_PBKDF1,
++    GCRY_KDF_PBKDF2,
++    GCRY_KDF_SCRYPT,
++    GCRY_KDF_ARGON2
++  };
++  size_t i, j;
++
++  for (i = 0; i < sizeof(kdf_algos) / sizeof(*kdf_algos); i++)
++    {
++      int is_fips_kdf_algo = 0;
++      gcry_error_t err = gcry_control (GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, kdf_algos[i]);
++
++      if (verbose)
++        fprintf (stderr, "checking FIPS indicator for KDF %d: %s\n",
++                 kdf_algos[i], gcry_strerror (err));
++
++      for (j = 0; j < sizeof(fips_kdf_algos) / sizeof(*fips_kdf_algos); j++)
++        {
++          if (kdf_algos[i] == fips_kdf_algos[j])
++            {
++              is_fips_kdf_algo = 1;
++              break;
++            }
++        }
++
++      switch (err & GPG_ERR_CODE_MASK)
++        {
++          case GPG_ERR_NO_ERROR:
++            if (!is_fips_kdf_algo)
++              fail ("KDF algorithm %d is marked as approved by"
++                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but only PBKDF2 should"
++                    " be marked as approved.", kdf_algos[i]);
++            break;
++          case GPG_ERR_NOT_SUPPORTED:
++            if (is_fips_kdf_algo)
++              fail ("KDF algorithm %d is marked as not approved by"
++                    " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF, but it should be"
++                    " approved", kdf_algos[i]);
++            break;
++          default:
++            fail ("Unexpected error '%s' (%d) returned by"
++                  " GCRYCTL_FIPS_SERVICE_INDICATOR_KDF for KDF algorithm %d",
++                  gcry_strerror (err), err, kdf_algos[i]);
++        }
++    }
++}
++
++
+ int
+ main (int argc, char **argv)
+ {

@@ -14,6 +14,9 @@
 /* Enable support for Intel AES-NI instructions. */
 #define ENABLE_AESNI_SUPPORT 1
 
+/* Enable support for Intel AVX512 instructions. */
+#define ENABLE_AVX512_SUPPORT 1
+
 /* Enable support for Intel AVX2 instructions. */
 #define ENABLE_AVX2_SUPPORT 1
 
@@ -46,6 +49,9 @@
 
 /* Disable support for the Intel SHAEXT instructions. */
 #define ENABLE_SHAEXT_SUPPORT 1
+
+/* Disable support for the Intel GFNI instructions. */
+#define ENABLE_GFNI_SUPPORT 1
 
 /* Define to use the GNU C visibility attribute. */
 /* #undef GCRY_USE_VISIBILITY */
@@ -99,6 +105,9 @@ implementations */
 implementations */
 #define HAVE_COMPATIBLE_GCC_WIN64_PLATFORM_AS 1
 #endif
+
+/* Defined if underlying compiler supports x86/AVX512 intrinsics */
+/* #undef HAVE_COMPATIBLE_CC_X86_AVX512_INTRINSICS */
 
 /* Defined for Alpha platforms */
 /* #undef HAVE_CPU_ARCH_ALPHA */
@@ -387,7 +396,7 @@ implementations */
 /* #undef IS_DEVELOPMENT_VERSION */
 
 /* List of available cipher algorithms */
-#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20:sm4"
+#define LIBGCRYPT_CIPHERS "arcfour:blowfish:cast5:des:aes:twofish:serpent:rfc2268:seed:camellia:idea:salsa20:gost28147:chacha20:sm4:aria"
 
 /* List of available digest algorithms */
 #define LIBGCRYPT_DIGESTS "crc:gostr3411-94::md4:md5:rmd160:sha1:sha256:sha512:sha3:tiger:whirlpool:stribog:blake2:sm3"

@@ -397,7 +397,7 @@ Noteworthy changes in version 1.9.3 (2021-04-19)  [C23/A3/R3]
 
    - Make keygrip computation work for compressed points.  [#4961]
 
- * Performance:
+* Performance:
 
    - Add x86_64 VAES/AVX2 accelerated implementation of Camellia.
      [0e7e60241a]

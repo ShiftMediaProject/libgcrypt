@@ -17441,40 +17441,35 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	NULL,
 	0,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       {	GCRY_PK_RSA,
         "(data\n (flags pkcs1)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags pkcs1)",
 	1,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)",
 	1,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)(hash-algo sha1)",
 	1,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
 	" (value #11223344556677889900AA#))\n",
 	"(flags oaep)(hash-algo sha1)(label \"test\")",
 	1,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       { GCRY_PK_RSA,
         "(data\n (flags oaep)\n (hash-algo sha1)\n (label \"test\")\n"
 	" (value #11223344556677889900AA#)\n"
@@ -17482,8 +17477,7 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	"(flags oaep)(hash-algo sha1)(label \"test\")",
 	1,
 	0,
-	0,
-	FLAG_NOFIPS },
+	0 },
       {	0,
         "(data\n (flags )\n" " (value #11223344556677889900AA#))\n",
 	NULL,
@@ -17556,8 +17550,7 @@ check_pubkey_crypt (int n, gcry_sexp_t skey, gcry_sexp_t pkey, int algo,
 	die ("converting data failed: %s\n", gpg_strerror (rc));
 
       rc = gcry_pk_encrypt (&ciph, data, pkey);
-      if (in_fips_mode && ((flags & FLAG_NOFIPS) ||
-                           (datas[dataidx].flags & FLAG_NOFIPS)))
+      if (in_fips_mode && (flags & FLAG_NOFIPS))
         {
           if (!rc)
             fail ("gcry_pk_encrypt did not fail as expected in FIPS mode\n");

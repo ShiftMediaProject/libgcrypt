@@ -93,9 +93,6 @@
     <ClInclude Include="..\cipher\cipher-internal.h">
       <Filter>Header Files\cipher</Filter>
     </ClInclude>
-    <ClInclude Include="..\cipher\cipher-selftest.h">
-      <Filter>Header Files\cipher</Filter>
-    </ClInclude>
     <ClInclude Include="..\cipher\hash-common.h">
       <Filter>Header Files\cipher</Filter>
     </ClInclude>
@@ -183,6 +180,21 @@
     <ClInclude Include="..\src\const-time.h">
       <Filter>Header Files\src</Filter>
     </ClInclude>
+    <ClInclude Include="..\cipher\bulkhelp.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\kem-ecc.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\kyber.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\mceliece6688128f.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cipher\sntrup761.h">
+      <Filter>Header Files\cipher</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\context.c">
@@ -252,9 +264,6 @@
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
     <ClCompile Include="..\cipher\cipher-ofb.c">
-      <Filter>Source Files\cipher</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cipher\cipher-selftest.c">
       <Filter>Source Files\cipher</Filter>
     </ClCompile>
     <ClCompile Include="..\cipher\dsa-common.c">
@@ -571,6 +580,30 @@
     </ClCompile>
     <ClCompile Include="..\src\const-time.c">
       <Filter>Source Files\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\serpent-avx512-x86.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\aria.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\kem.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\kem-ecc.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\kyber.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\mceliece6688128f.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\rijndael-vaes-i386.c">
+      <Filter>Source Files\cipher</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cipher\sntrup761.c">
+      <Filter>Source Files\cipher</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

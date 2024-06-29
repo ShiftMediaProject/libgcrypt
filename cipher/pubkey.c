@@ -672,30 +672,6 @@ _gcry_pk_verify_md (gcry_sexp_t s_sig, const char *tmpl, gcry_md_hd_t hd_orig,
   gcry_sexp_t s_data = NULL;
   gcry_error_t err;
   gcry_md_hd_t hd;
-  const char *s;
-  char *hash_name;
-
-  /* Check if it has fixed hash name or %s */
-  s = strstr (tmpl, "(hash ");
-  if (s == NULL)
-    return GPG_ERR_DIGEST_ALGO;
-
-  s += 6;
-  if (!strncmp (s, "%s", 2))
-    hash_name = NULL;
-  else
-    {
-      const char *p;
-
-      for (p = s; *p && *p != ' '; p++)
-        ;
-
-      hash_name = xtrymalloc (p - s + 1);
-      if (!hash_name)
-        return gpg_error_from_syserror ();
-      memcpy (hash_name, s, p - s);
-      hash_name[p - s] = 0;
-    }
 
   if (!hd_orig)
     hd = NULL;

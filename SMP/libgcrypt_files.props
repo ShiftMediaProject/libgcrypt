@@ -3,21 +3,25 @@
   <ItemGroup>
     <ClInclude Include="..\cipher\bithelp.h" />
     <ClInclude Include="..\cipher\bufhelp.h" />
+    <ClInclude Include="..\cipher\bulkhelp.h" />
     <ClInclude Include="..\cipher\camellia.h" />
     <ClInclude Include="..\cipher\cipher-internal.h" />
-    <ClInclude Include="..\cipher\cipher-selftest.h" />
     <ClInclude Include="..\cipher\ecc-common.h" />
     <ClInclude Include="..\cipher\gost.h" />
     <ClInclude Include="..\cipher\hash-common.h" />
     <ClInclude Include="..\cipher\kdf-internal.h" />
+    <ClInclude Include="..\cipher\kem-ecc.h" />
     <ClInclude Include="..\cipher\keccak_permute_32.h" />
     <ClInclude Include="..\cipher\keccak_permute_64.h" />
+    <ClInclude Include="..\cipher\kyber.h" />
     <ClInclude Include="..\cipher\mac-internal.h" />
+    <ClInclude Include="..\cipher\mceliece6688128f.h" />
     <ClInclude Include="..\cipher\poly1305-internal.h" />
     <ClInclude Include="..\cipher\pubkey-internal.h" />
     <ClInclude Include="..\cipher\rijndael-internal.h" />
     <ClInclude Include="..\cipher\rijndael-tables.h" />
     <ClInclude Include="..\cipher\sha1.h" />
+    <ClInclude Include="..\cipher\sntrup761.h" />
     <ClInclude Include="..\compat\libcompat.h" />
     <ClInclude Include="..\mpi\ec-inline.h" />
     <ClInclude Include="..\mpi\ec-internal.h" />
@@ -51,6 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\cipher\arcfour.c" />
+    <ClCompile Include="..\cipher\aria.c" />
     <ClCompile Include="..\cipher\blake2.c" />
     <ClCompile Include="..\cipher\blowfish.c" />
     <ClCompile Include="..\cipher\camellia-glue.c" />
@@ -70,7 +75,6 @@
     <ClCompile Include="..\cipher\cipher-ocb.c" />
     <ClCompile Include="..\cipher\cipher-ofb.c" />
     <ClCompile Include="..\cipher\cipher-poly1305.c" />
-    <ClCompile Include="..\cipher\cipher-selftest.c" />
     <ClCompile Include="..\cipher\cipher-siv.c" />
     <ClCompile Include="..\cipher\cipher-xts.c" />
     <ClCompile Include="..\cipher\cipher.c" />
@@ -94,11 +98,15 @@
     <ClCompile Include="..\cipher\idea.c" />
     <ClCompile Include="..\cipher\kdf.c" />
     <ClCompile Include="..\cipher\keccak.c" />
+    <ClCompile Include="..\cipher\kem.c" />
+    <ClCompile Include="..\cipher\kem-ecc.c" />
+    <ClCompile Include="..\cipher\kyber.c" />
     <ClCompile Include="..\cipher\mac-cmac.c" />
     <ClCompile Include="..\cipher\mac-gmac.c" />
     <ClCompile Include="..\cipher\mac-hmac.c" />
     <ClCompile Include="..\cipher\mac-poly1305.c" />
     <ClCompile Include="..\cipher\mac.c" />
+    <ClCompile Include="..\cipher\mceliece6688128f.c" />
     <ClCompile Include="..\cipher\md.c" />
     <ClCompile Include="..\cipher\md4.c" />
     <ClCompile Include="..\cipher\md5.c" />
@@ -112,6 +120,7 @@
     <ClCompile Include="..\cipher\rijndael-p10le.c" />
     <ClCompile Include="..\cipher\rijndael-ssse3-amd64.c" />
     <ClCompile Include="..\cipher\rijndael-vaes.c" />
+    <ClCompile Include="..\cipher\rijndael-vaes-i386.c" />
     <ClCompile Include="..\cipher\rijndael.c" />
     <ClCompile Include="..\cipher\rmd160.c" />
     <ClCompile Include="..\cipher\rsa-common.c" />
@@ -120,11 +129,13 @@
     <ClCompile Include="..\cipher\scrypt.c" />
     <ClCompile Include="..\cipher\seed.c" />
     <ClCompile Include="..\cipher\serpent.c" />
+    <ClCompile Include="..\cipher\serpent-avx512-x86.c" />
     <ClCompile Include="..\cipher\sha1.c" />
     <ClCompile Include="..\cipher\sha256.c" />
     <ClCompile Include="..\cipher\sha512.c" />
     <ClCompile Include="..\cipher\sm3.c" />
     <ClCompile Include="..\cipher\sm4.c" />
+    <ClCompile Include="..\cipher\sntrup761.c" />
     <ClCompile Include="..\cipher\stribog.c" />
     <ClCompile Include="..\cipher\tiger.c" />
     <ClCompile Include="..\cipher\twofish.c" />

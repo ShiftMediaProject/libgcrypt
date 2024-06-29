@@ -85,40 +85,26 @@ print_mpi (gcry_mpi_t a)
 
 
 static void
-do_add (int usemod)
+do_add (void)
 {
-  if (stackidx < (usemod?3:2))
+  if (stackidx < 2)
     {
       fputs ("stack underflow\n", stderr);
       return;
     }
-  if (usemod)
-    {
-      mpi_addm (stack[stackidx - 3], stack[stackidx - 3],
-                stack[stackidx - 2], stack[stackidx - 1]);
-      stackidx--;
-    }
-  else
-    mpi_add (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
+  mpi_add (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
   stackidx--;
 }
 
 static void
-do_sub (int usemod)
+do_sub (void)
 {
-  if (stackidx < (usemod?3:2))
+  if (stackidx < 2)
     {
       fputs ("stack underflow\n", stderr);
       return;
     }
-  if (usemod)
-    {
-      mpi_subm (stack[stackidx - 3], stack[stackidx - 3],
-                stack[stackidx - 2], stack[stackidx - 1]);
-      stackidx--;
-    }
-  else
-    mpi_sub (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
+  mpi_sub (stack[stackidx - 2], stack[stackidx - 2], stack[stackidx - 1]);
   stackidx--;
 }
 
@@ -342,7 +328,6 @@ print_help (void)
          "r   reverse       [0] := [1], [1] := [0]    {0}\n"
          "b   # of bits     [0] := nbits([0])         {0}\n"
          "P   prime check   [0] := is_prime([0])?1:0  {0}\n"
-         "M   use mod for next '+' and '-'\n"
          "c   clear stack\n"
          "p   print top item\n"
          "f   print the stack\n"
@@ -363,7 +348,6 @@ main (int argc, char **argv)
   int state = 0;
   char strbuf[4096];
   int stridx = 0;
-  int usemod = 0;
 
   if (argc)
     {
@@ -476,8 +460,7 @@ main (int argc, char **argv)
 		  else
 		    {
 		      ungetc (c, stdin);
-		      do_add (usemod);
-                      usemod = 0;
+		      do_add ();
 		    }
 		  break;
                 case '-':
@@ -497,8 +480,7 @@ main (int argc, char **argv)
 		  else
 		    {
 		      ungetc (c, stdin);
-		      do_sub (usemod);
-                      usemod = 0;
+		      do_sub ();
 		    }
 		  break;
 		case '*':
@@ -564,9 +546,6 @@ main (int argc, char **argv)
                   break;
                 case 'P':
                   do_primecheck ();
-                  break;
-                case 'M':
-                  usemod = 1;
                   break;
 		case 'c':
 		  for (i = 0; i < stackidx; i++)
