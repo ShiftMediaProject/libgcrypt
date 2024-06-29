@@ -1909,8 +1909,14 @@ static void layer(int16_t *p, const unsigned char *cb, int s, int n)
 /* output position pos is by definition 1&(out[pos/8]>>(pos&7)) */
 static void controlbitsfrompermutation(unsigned char *out,const int16 *pi,long long w,long long n)
 {
+#ifdef _MSC_VER
+  int32* temp = (int32*)_alloca((2 * n) * sizeof(int32));
+  int16* pi_test = (int16*)_alloca(n * sizeof(int16));
+  int16 diff;
+#else
   int32 temp[2*n];
   int16 pi_test[n], diff;
+#endif
   int i;
   unsigned char *ptr;
 
@@ -3328,7 +3334,11 @@ static int pk_gen(unsigned char * pk, const unsigned char * irr, uint32_t * perm
 	int i, j, k;
 	int row, c;
 
+#ifdef _MSC_VER
+	uint64_t** mat = (uint64_t**)_alloca((PK_NROWS * nblocks_H) * sizeof(uint64_t));
+#else
 	uint64_t mat[ PK_NROWS ][ nblocks_H ];
+#endif
 
 	uint64_t mask;
 
