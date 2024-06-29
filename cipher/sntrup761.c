@@ -267,10 +267,17 @@ Decode (uint16_t * out, const unsigned char *S, const uint16_t * M,
     }
   if (len > 1)
     {
+#ifndef _MSC_VER
       uint16_t R2[(len + 1) / 2];
       uint16_t M2[(len + 1) / 2];
       uint16_t bottomr[len / 2];
       uint32_t bottomt[len / 2];
+#else
+      uint16_t* R2 = (uint16_t*)_alloca(((len + 1) / 2) * sizeof(uint16_t));
+      uint16_t* M2 = (uint16_t*)_alloca(((len + 1) / 2) * sizeof(uint16_t));
+      uint16_t* bottomr = (uint16_t*)_alloca((len / 2) * sizeof(uint16_t));
+      uint32_t* bottomt = (uint32_t*)_alloca((len / 2) * sizeof(uint32_t));
+#endif
       long long i;
       for (i = 0; i < len - 1; i += 2)
 	{
@@ -340,8 +347,13 @@ Encode (unsigned char *out, const uint16_t * R, const uint16_t * M,
     }
   if (len > 1)
     {
+#ifndef _MSC_VER
       uint16_t R2[(len + 1) / 2];
       uint16_t M2[(len + 1) / 2];
+#else
+      uint16_t* R2 = (uint16_t*)_alloca(((len + 1) / 2) * sizeof(uint16_t));
+      uint16_t* M2 = (uint16_t*)_alloca(((len + 1) / 2) * sizeof(uint16_t));
+#endif
       long long i;
       for (i = 0; i < len - 1; i += 2)
 	{
@@ -696,7 +708,11 @@ Short_fromlist (small * out, const uint32_t * in)
 static void
 Hash_prefix (unsigned char *out, int b, const unsigned char *in, int inlen)
 {
+#ifndef _MSC_VER
   unsigned char x[inlen + 1];
+#else
+    unsigned char* x = (unsigned char* )_alloca((inlen + 1) * sizeof(unsigned char));
+#endif
   unsigned char h[64];
   int i;
 
