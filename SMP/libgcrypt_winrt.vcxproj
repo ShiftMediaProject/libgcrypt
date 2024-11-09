@@ -128,6 +128,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>gpg-errord_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
@@ -184,6 +185,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>gpg-errord_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
@@ -350,6 +352,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>gpg-error_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
@@ -406,6 +409,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
@@ -462,6 +466,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>gpg-error_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
@@ -518,6 +523,7 @@ del /f /q $(OutDir)\licenses\libgcrypt.txt
       <ModuleDefinitionFile>..\src\libgcrypt.def</ModuleDefinitionFile>
       <AdditionalDependencies>libgpg-error_winrt.lib;vccorlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4006,4221,4264  %(AdditionalOptions)</AdditionalOptions>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(OutDir)"\include
